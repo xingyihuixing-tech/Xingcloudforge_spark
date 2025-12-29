@@ -120,12 +120,12 @@ export function UserLogin() {
       <div className="relative z-10 w-full h-full flex flex-col items-center justify-center px-4">
 
         {/* 标题区 - 品牌升级 */}
-        <div className="mb-12 text-center animate-in fade-in slide-in-from-top-10 duration-700">
-          <h1 className="text-6xl md:text-7xl mb-4 drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-white via-cyan-100 to-white"
+        <div className="mb-12 text-center animate-in fade-in slide-in-from-top-10 duration-700 pt-8 pb-4">
+          <h1 className="text-6xl md:text-8xl mb-6 drop-shadow-[0_0_25px_rgba(0,255,255,0.4)] bg-clip-text text-transparent bg-gradient-to-r from-blue-100 via-cyan-100 to-blue-100 leading-normal py-2"
             style={{ fontFamily: '"Great Vibes", cursive' }}>
             Xingstar Space
           </h1>
-          <p className="text-cyan-200/60 text-sm tracking-[0.3em] uppercase font-light" style={{ fontFamily: '"Orbitron", sans-serif' }}>
+          <p className="text-cyan-200/60 text-sm md:text-base tracking-[0.4em] uppercase font-light" style={{ fontFamily: '"Orbitron", sans-serif' }}>
             Particle Visualization Engine
           </p>
         </div>

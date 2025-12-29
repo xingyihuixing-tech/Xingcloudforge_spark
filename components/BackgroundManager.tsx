@@ -1,19 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { StarBackground } from './StarBackground'; // 原有的，改名 NebulaStorm?
-// 将来导入其他背景组件
-// import { WarpSpeed } from './backgrounds/WarpSpeed';
-// import { CyberRain } from './backgrounds/CyberRain';
-// ...
+import React, { useState, useEffect, useRef } from 'react';
+import * as THREE from 'three';
+import { StarBackground } from './StarBackground'; // Keep the original Nebula
 
-// 临时占位背景组件
-const WarpSpeed = () => <div className="absolute inset-0 bg-black"><canvas id="bg-warp" className="w-full h-full" /></div>;
-const QuantumField = () => <div className="absolute inset-0 bg-gray-900"><div className="w-full h-full flex items-center justify-center text-white/20">Quantum Field Loading...</div></div>;
-// ...
+export type BackgroundType = 'nebula' | 'warp' | 'galaxy' | 'blackhole' | 'cyber';
 
-export type BackgroundType = 'nebula' | 'warp' | 'quantum' | 'blackhole' | 'rain';
-
-export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?: (type: BackgroundType) => void }> = ({ activeBg = 'nebula', onChange }) => {
-    const [current, setCurrent] = useState<BackgroundType>(activeBg);
+export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?: (type: BackgroundType) => void }> = ({ activeBg, onChange }) => {
+    // 默认使用 warp 作为初始显示（更震撼）
+    const [current, setCurrent] = useState<BackgroundType>(activeBg || 'warp');
 
     useEffect(() => {
         if (activeBg) setCurrent(activeBg);
@@ -27,27 +20,27 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
     const renderBackground = () => {
         switch (current) {
             case 'nebula': return <StarBackground />;
-            case 'warp': return <WarpBackground />;
-            case 'quantum': return <QuantumBackground />;
-            case 'blackhole': return <BlackHoleBackground />;
-            case 'rain': return <RainBackground />;
-            default: return <StarBackground />;
+            case 'warp': return <ThreeWarpBackground />;
+            case 'galaxy': return <ThreeGalaxyBackground />;
+            case 'blackhole': return <ThreeBlackHoleBackground />;
+            case 'cyber': return <ThreeCyberGridBackground />;
+            default: return <ThreeWarpBackground />;
         }
     };
 
     return (
         <>
-            <div className="fixed inset-0 z-0">
+            <div className="fixed inset-0 z-0 bg-black transition-opacity duration-1000">
                 {renderBackground()}
             </div>
 
             {/* 切换器 UI */}
-            <div className="fixed bottom-4 right-4 z-[60] flex gap-2 p-2 rounded-full bg-white/5 backdrop-blur-md border border-white/10 shadow-xl transition-opacity hover:opacity-100 opacity-60">
+            <div className="fixed bottom-6 right-6 z-[60] flex gap-3 p-3 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all hover:bg-black/60">
                 <BgBtn type="nebula" icon="cloud" label="Nebula" active={current === 'nebula'} onClick={() => handleChange('nebula')} />
                 <BgBtn type="warp" icon="space-shuttle" label="Warp" active={current === 'warp'} onClick={() => handleChange('warp')} />
-                <BgBtn type="quantum" icon="atom" label="Quantum" active={current === 'quantum'} onClick={() => handleChange('quantum')} />
+                <BgBtn type="galaxy" icon="globe-asia" label="Galaxy" active={current === 'galaxy'} onClick={() => handleChange('galaxy')} />
                 <BgBtn type="blackhole" icon="circle" label="Void" active={current === 'blackhole'} onClick={() => handleChange('blackhole')} />
-                <BgBtn type="rain" icon="code" label="Matrix" active={current === 'rain'} onClick={() => handleChange('rain')} />
+                <BgBtn type="cyber" icon="cube" label="Cyber" active={current === 'cyber'} onClick={() => handleChange('cyber')} />
             </div>
         </>
     );
@@ -56,141 +49,304 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
 const BgBtn = ({ type, icon, label, active, onClick }: any) => (
     <button
         onClick={onClick}
-        className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all ${active ? 'bg-cyan-500 text-white shadow-lg shadow-cyan-500/50 scale-110' : 'bg-white/10 text-white/50 hover:bg-white/20 hover:text-white'
+        className={`group relative w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${active
+                ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
+                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
             }`}
         title={label}
     >
-        <i className={`fas fa-${icon} text-xs md:text-sm`} />
+        <i className={`fas fa-${icon} text-sm md:text-lg`} />
+        {/* Tooltip */}
+        <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+            {label}
+        </span>
     </button>
 );
 
-// --- Sub Components (Will be moved to separate files later) ---
+// --- Three.js Components ---
 
-const WarpBackground = () => {
+const useThreeSetup = (initScene: (scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer) => (() => void)) => {
+    const mountRef = useRef<HTMLDivElement>(null);
+
     useEffect(() => {
-        const canvas = document.getElementById('warp-canvas') as HTMLCanvasElement;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (!mountRef.current) return;
+        const w = window.innerWidth;
+        const h = window.innerHeight;
 
-        let stars: any[] = [];
-        let w = canvas.width = window.innerWidth;
-        let h = canvas.height = window.innerHeight;
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x000000, 0.0005); // Global fog for depth
 
-        // Init stars
-        for (let i = 0; i < 400; i++) stars.push({ x: (Math.random() - 0.5) * w, y: (Math.random() - 0.5) * h, z: Math.random() * w });
+        const camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 2000);
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
 
-        let animId = 0;
-        const draw = () => {
-            ctx.fillStyle = 'rgba(0,0,0,0.4)'; // trail key
-            ctx.fillRect(0, 0, w, h);
-            ctx.fillStyle = '#fff';
+        renderer.setSize(w, h);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        mountRef.current.appendChild(renderer.domElement);
 
-            stars.forEach(s => {
-                s.z -= 15; // speed
-                if (s.z <= 0) {
-                    s.x = (Math.random() - 0.5) * w;
-                    s.y = (Math.random() - 0.5) * h;
-                    s.z = w;
-                }
-
-                const k = 128.0 / s.z;
-                const px = s.x * k + w / 2;
-                const py = s.y * k + h / 2;
-
-                if (px >= 0 && px <= w && py >= 0 && py <= h) {
-                    const size = (1 - s.z / w) * 3;
-                    ctx.beginPath();
-                    ctx.arc(px, py, size, 0, Math.PI * 2);
-                    ctx.fill();
-                }
-            });
-            animId = requestAnimationFrame(draw);
+        const handleResize = () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         };
-
-        draw();
-
-        const handleResize = () => { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; };
         window.addEventListener('resize', handleResize);
-        return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', handleResize); };
+
+        // Custom Init Logic
+        const cleanup = initScene(scene, camera, renderer);
+
+        return () => {
+            window.removeEventListener('resize', handleResize);
+            cleanup();
+            if (mountRef.current) mountRef.current.innerHTML = '';
+            renderer.dispose();
+        };
     }, []);
 
-    return <canvas id="warp-canvas" className="absolute inset-0 w-full h-full bg-black" />;
+    return <div ref={mountRef} className="absolute inset-0 w-full h-full" />;
 };
 
-const RainBackground = () => {
-    useEffect(() => {
-        const canvas = document.getElementById('rain-canvas') as HTMLCanvasElement;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+// 1. Warp Speed
+const ThreeWarpBackground = () => {
+    return useThreeSetup((scene, camera, renderer) => {
+        const starCount = 6000;
+        const geom = new THREE.BufferGeometry();
+        const positions = new Float32Array(starCount * 3);
+        const velocities = []; // store z-speed
 
-        let w = canvas.width = window.innerWidth;
-        let h = canvas.height = window.innerHeight;
-        const cols = Math.floor(w / 20) + 1;
-        const ypos = Array(cols).fill(0);
+        for (let i = 0; i < starCount; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 2000;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 2000;
+            positions[i * 3 + 2] = Math.random() * 2000; // depth
+            velocities.push(Math.random() * 5 + 2);
+        }
+        geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, w, h);
+        const mat = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 2,
+            transparent: true,
+            opacity: 0.8,
+            sizeAttenuation: true
+        });
 
-        let animId = 0;
-        const matrix = () => {
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
-            ctx.fillRect(0, 0, w, h);
+        const stars = new THREE.Points(geom, mat);
+        scene.add(stars);
 
-            ctx.fillStyle = '#0f0';
-            ctx.font = '15pt monospace';
+        let frameId = 0;
+        const animate = () => {
+            const pos = stars.geometry.attributes.position.array as Float32Array;
+            for (let i = 0; i < starCount; i++) {
+                // Move Z towards camera
+                pos[i * 3 + 2] -= 10; // Speed constant or variable
+                // Reset if behind camera
+                if (pos[i * 3 + 2] < -50) {
+                    pos[i * 3 + 2] = 2000;
+                    pos[i * 3] = (Math.random() - 0.5) * 1000; // Warp toward center slightly logic?
+                    pos[i * 3 + 1] = (Math.random() - 0.5) * 1000;
+                }
+            }
+            stars.geometry.attributes.position.needsUpdate = true;
 
-            ypos.forEach((y, ind) => {
-                const text = String.fromCharCode(Math.random() * 128);
-                const x = ind * 20;
-                ctx.fillText(text, x, y);
-                if (y > 100 + Math.random() * 10000) ypos[ind] = 0;
-                else ypos[ind] = y + 20;
-            });
-            animId = requestAnimationFrame(matrix);
+            // Slight rotation
+            stars.rotation.z += 0.002;
+
+            renderer.render(scene, camera);
+            frameId = requestAnimationFrame(animate);
         };
-        matrix();
-        const handleResize = () => { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; };
-        window.addEventListener('resize', handleResize);
-        return () => { cancelAnimationFrame(animId); window.removeEventListener('resize', handleResize); };
-    }, []);
+        animate();
 
-    return <canvas id="rain-canvas" className="absolute inset-0 w-full h-full bg-black" />;
+        return () => cancelAnimationFrame(frameId);
+    });
 };
 
-const QuantumBackground = () => {
-    // Simple CSS Gradient Animation for now
-    return (
-        <div className="absolute inset-0 w-full h-full bg-black overflow-hidden">
-            <div className="absolute top-0 left-0 w-[200%] h-[200%] animate-spin-slow opacity-30" style={{
-                background: 'conic-gradient(from 0deg, #ff0080, #7928ca, #ff0080)',
-                filter: 'blur(100px)',
-                animationDuration: '20s'
-            }} />
-            <div className="absolute bottom-0 right-0 w-[150%] h-[150%] animate-spin-reverse-slow opacity-30" style={{
-                background: 'conic-gradient(from 180deg, #0070f3, #00dfd8, #0070f3)',
-                filter: 'blur(80px)',
-                animationDuration: '30s'
-            }} />
-            <div className="absolute inset-0 backdrop-blur-3xl" />
-        </div>
-    );
+// 2. Galaxy Spiral
+const ThreeGalaxyBackground = () => {
+    return useThreeSetup((scene, camera, renderer) => {
+        camera.position.z = 100;
+        camera.position.y = 30;
+        camera.lookAt(0, 0, 0);
+
+        const particles = new THREE.BufferGeometry();
+        const count = 10000;
+        const posArray = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+
+        for (let i = 0; i < count; i++) {
+            // Spiral Logic
+            const angle = Math.random() * Math.PI * 2 * 3; // 3 turns
+            const radius = Math.random() * 50 + 10;
+            const spread = (Math.random() - 0.5) * 10; // random offset
+
+            // Spiral Arm 1 & 2
+            const armOffset = i % 2 === 0 ? 0 : Math.PI;
+
+            const x = Math.cos(angle + armOffset) * radius + (Math.random() - 0.5) * radius * 0.5;
+            const y = (Math.random() - 0.5) * 5; // Flat galaxy
+            const z = Math.sin(angle + armOffset) * radius + (Math.random() - 0.5) * radius * 0.5;
+
+            posArray[i * 3] = x;
+            posArray[i * 3 + 1] = y;
+            posArray[i * 3 + 2] = z;
+
+            // Color (Center: Yellow/White, Edge: Blue/Purple)
+            const dist = Math.sqrt(x * x + z * z);
+            const color = new THREE.Color();
+            if (dist < 20) color.setHSL(0.1 + Math.random() * 0.1, 0.8, 0.6); // Yellowish
+            else color.setHSL(0.6 + Math.random() * 0.2, 0.8, 0.5); // Blueish
+
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
+        }
+
+        particles.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        particles.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const mat = new THREE.PointsMaterial({
+            size: 0.5,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false
+        });
+
+        const galaxy = new THREE.Points(particles, mat);
+        scene.add(galaxy);
+
+        let frameId = 0;
+        const animate = () => {
+            galaxy.rotation.y += 0.001;
+            camera.position.z = 100 + Math.sin(Date.now() * 0.0005) * 20; // Breathe
+            renderer.render(scene, camera);
+            frameId = requestAnimationFrame(animate);
+        };
+        animate();
+        return () => cancelAnimationFrame(frameId);
+    });
 };
 
-const BlackHoleBackground = () => {
-    // 模拟黑洞吸积盘
-    return (
-        <div className="absolute inset-0 bg-black overflow-hidden flex items-center justify-center">
-            {/* 吸积盘 */}
-            <div className="relative w-[600px] h-[600px] rounded-full" style={{
-                background: 'radial-gradient(circle, #000 40%, transparent 42%), conic-gradient(from 0deg, transparent 0%, #ff6b6b 10%, #feca57 20%, transparent 30%, transparent 70%, #48dbfb 80%, #ff9ff3 90%, transparent 100%)',
-                animation: 'spin 10s linear infinite',
-                filter: 'blur(20px) brightness(1.5)'
-            }}></div>
-            {/* 事件视界 */}
-            <div className="absolute w-[200px] h-[200px] bg-black rounded-full shadow-[0_0_50px_rgba(255,100,50,0.5)] z-10" />
-            <div className="absolute inset-0 bg-black/20" />
-        </div>
-    );
+// 3. Black Hole (Accretion Disk)
+const ThreeBlackHoleBackground = () => {
+    return useThreeSetup((scene, camera, renderer) => {
+        camera.position.z = 30;
+
+        // Black Sphere
+        const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(4, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0x000000 })
+        );
+        scene.add(sphere);
+
+        // Accretion Disk (Particles)
+        const diskGeom = new THREE.BufferGeometry();
+        const count = 5000;
+        const pos = new Float32Array(count * 3);
+        const colors = new Float32Array(count * 3);
+
+        for (let i = 0; i < count; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const radius = 6 + Math.random() * 15;
+
+            pos[i * 3] = Math.cos(angle) * radius;
+            pos[i * 3 + 1] = (Math.random() - 0.5) * 0.5; // Thin disk
+            pos[i * 3 + 2] = Math.sin(angle) * radius;
+
+            // Color gradient (Hot inner: White/Orange -> Cool outer: Red/Dark)
+            const color = new THREE.Color();
+            const t = (radius - 6) / 15;
+            if (t < 0.2) color.setHex(0xffffff); // Inner edge white
+            else if (t < 0.5) color.setHex(0xffaa00); // Orange
+            else color.setHex(0xcc0000); // Red
+
+            colors[i * 3] = color.r;
+            colors[i * 3 + 1] = color.g;
+            colors[i * 3 + 2] = color.b;
+        }
+        diskGeom.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        diskGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const diskMat = new THREE.PointsMaterial({
+            size: 0.3,
+            vertexColors: true,
+            blending: THREE.AdditiveBlending,
+            transparent: true,
+            opacity: 0.8
+        });
+        const disk = new THREE.Points(diskGeom, diskMat);
+        // Tilt disk
+        disk.rotation.x = Math.PI * 0.2;
+        scene.add(disk);
+
+        // Glow Sprite? (Optional, skip for perf/simplicity, using fog instead)
+
+        let frameId = 0;
+        const animate = () => {
+            // Rotate disk
+            disk.rotation.y -= 0.005;
+            // Rotate particles inside? (Shader needed for true fluid)
+
+            // Wobble camera
+            camera.position.y = Math.sin(Date.now() * 0.0005) * 5;
+            camera.lookAt(0, 0, 0);
+
+            renderer.render(scene, camera);
+            frameId = requestAnimationFrame(animate);
+        };
+        animate();
+        return () => cancelAnimationFrame(frameId);
+    });
+};
+
+// 4. Cyber Grid
+const ThreeCyberGridBackground = () => {
+    return useThreeSetup((scene, camera, renderer) => {
+        camera.position.z = 50;
+        camera.position.y = 10;
+
+        // Rolling Grid (Plane)
+        const planeGeom = new THREE.PlaneGeometry(200, 200, 40, 40);
+        // Deform to make mountains
+        const pos = planeGeom.attributes.position.array as Float32Array;
+        for (let i = 0; i < pos.length; i += 3) {
+            const x = pos[i];
+            const y = pos[i + 1]; // Actually local y, which will be Z in world
+            // Make edges higher
+            const dist = Math.abs(x);
+            if (dist > 30) {
+                pos[i + 2] = Math.random() * (dist - 30) * 0.5; // Z height (mountains)
+            }
+        }
+        planeGeom.computeVertexNormals();
+
+        const mat = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.3
+        });
+        const grid = new THREE.Mesh(planeGeom, mat);
+        grid.rotation.x = -Math.PI / 2;
+        scene.add(grid);
+
+        // Top Sun
+        const sun = new THREE.Mesh(
+            new THREE.CircleGeometry(20, 32),
+            new THREE.MeshBasicMaterial({ color: 0xff00ff })
+        );
+        sun.position.set(0, 10, -50);
+        scene.add(sun);
+
+        // Grid lines on Sun (Scanline effect) - simplified using Stripes?
+        // Just simple sun for now.
+
+        let frameId = 0;
+        const animate = () => {
+            // Move grid towards camera simulation
+            grid.position.z += 0.2;
+            if (grid.position.z > 5) grid.position.z = 0;
+
+            renderer.render(scene, camera);
+            frameId = requestAnimationFrame(animate);
+        };
+        animate();
+        return () => cancelAnimationFrame(frameId);
+    });
 };
