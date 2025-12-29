@@ -477,7 +477,7 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   const [applyModal, setApplyModal] = useState<{ isOpen: boolean; presetName: string; data: any }>({ isOpen: false, presetName: '', data: null });
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; presetId: string; presetName: string }>({ isOpen: false, presetId: '', presetName: '' });
   const [saveModal, setSaveModal] = useState<{ isOpen: boolean; presetId: string; presetName: string }>({ isOpen: false, presetId: '', presetName: '' });
-  // const [importConfirmModal, setImportConfirmModal] = useState ... (keep existing)
+  const [importConfirmModal, setImportConfirmModal] = useState<{ isOpen: boolean; moduleName: string; onConfirm: () => void }>({ isOpen: false, moduleName: '', onConfirm: () => { } });
 
   // 加载云端配置
   useEffect(() => {
