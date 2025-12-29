@@ -1,537 +1,272 @@
 /**
- * 用户登录/选择界面组件
+ * 用户登录/选择界面组件 V2
  * 
  * input: UserContext (用户状态)
- * output: 用户选择/登录/注册界面
- * pos: 应用入口组件，未登录时显示此界面
+ * output: 极简星空风格登录界面，支持本机记忆模式
  * 
- * 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
+ * update: 一旦我被更新，务必更新我的开头注释
  */
 
 import React, { useState, useEffect } from 'react';
-import { useUser, User } from '../contexts/UserContext';
+import { useUser, SavedUser } from '../contexts/UserContext';
+import { StarBackground } from './StarBackground';
+import { PlanetAvatar } from './PlanetAvatar';
 
-// 可选头像列表
-const AVATAR_OPTIONS = ['👨', '👩', '👧', '👦', '👴', '👵', '🧑', '👤', '🦸', '🧙', '👽', '🤖', '🌟', '🔮', '🚀', '🌙'];
+export function UserLogin() {
+  const { savedUsers, login, register, removeSavedUser, isLoading, isOnline } = useUser();
 
-interface UserLoginProps {
-    onLoginSuccess?: () => void;
-}
+  // 视图模式：'saved-list' (记忆列表) | 'auth-form' (账号登录)
+  // 如果没有保存的用户，默认进入 auth-form
+  const [viewMode, setViewMode] = useState<'saved-list' | 'auth-form'>(
+    savedUsers.length > 0 ? 'saved-list' : 'auth-form'
+  );
 
-export function UserLogin({ onLoginSuccess }: UserLoginProps) {
-    const { users, login, register, refreshUsers, isLoading, isOnline } = useUser();
+  // 表单状态
+  const [isRegistering, setIsRegistering] = useState(false); // 登录 vs 注册
+  const [userId, setUserId] = useState('');
+  const [password, setPassword] = useState('');
+  const [nickname, setNickname] = useState(''); // 仅注册用
 
-    const [mode, setMode] = useState<'select' | 'login' | 'register'>('select');
-    const [selectedUser, setSelectedUser] = useState<User | null>(null);
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // 注册表单
-    const [newUserId, setNewUserId] = useState('');
-    const [newUserName, setNewUserName] = useState('');
-    const [newPassword, setNewPassword] = useState('');
-    const [selectedAvatar, setSelectedAvatar] = useState('👤');
+  // 监听保存列表变化，如果清空了自动跳到表单
+  useEffect(() => {
+    if (savedUsers.length === 0 && viewMode === 'saved-list') {
+      setViewMode('auth-form');
+    }
+  }, [savedUsers, viewMode]);
 
-    useEffect(() => {
-        refreshUsers();
-    }, [refreshUsers]);
-
-    const handleUserSelect = (user: User) => {
-        setSelectedUser(user);
-        setMode('login');
-        setPassword('');
-        setError('');
-    };
-
-    const handleLogin = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!selectedUser) return;
-
-        setIsSubmitting(true);
-        setError('');
-
-        const success = await login(selectedUser.id, password || undefined);
-
-        if (success) {
-            onLoginSuccess?.();
-        } else {
-            setError('密码错误，请重试');
-        }
-
-        setIsSubmitting(false);
-    };
-
-    const handleRegister = async (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (!newUserId.trim()) {
-            setError('请输入用户ID');
-            return;
-        }
-        if (!newUserName.trim()) {
-            setError('请输入显示名称');
-            return;
-        }
-
-        setIsSubmitting(true);
-        setError('');
-
-        const success = await register(
-            newUserId.trim().toLowerCase(),
-            newUserName.trim(),
-            newPassword || undefined,
-            selectedAvatar
-        );
-
-        if (success) {
-            onLoginSuccess?.();
-        } else {
-            setError('注册失败，用户ID可能已存在');
-        }
-
-        setIsSubmitting(false);
-    };
-
-    if (isLoading) {
-        return (
-            <div className="user-login-container">
-                <div className="user-login-card">
-                    <div className="loading-spinner" />
-                    <p>加载中...</p>
-                </div>
-            </div>
-        );
+  // 处理登录提交
+  const handleAuthSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId.trim()) {
+      setError('请输入User ID');
+      return;
     }
 
+    setIsSubmitting(true);
+    setError('');
+
+    let res;
+    if (isRegistering) {
+      if (!nickname.trim()) {
+        setError('请输入昵称');
+        setIsSubmitting(false);
+        return;
+      }
+      if (password && password.length < 6) {
+        setError('密码至少6位');
+        setIsSubmitting(false);
+        return;
+      }
+      // 注册：生成默认星球头像 (以userId为seed)
+      res = await register(
+        userId.trim().toLowerCase(),
+        nickname.trim(),
+        password || undefined,
+        undefined // 让后端或Context处理默认头像逻辑，或者这里传空
+      );
+    } else {
+      res = await login(userId.trim().toLowerCase(), password || undefined);
+    }
+
+    if (!res.success) {
+      setError(res.error || '操作失败');
+    }
+
+    setIsSubmitting(false);
+  };
+
+  // 处理快捷登录
+  const handleQuickLogin = async (user: SavedUser) => {
+    // 尝试直接登录（假设无密码或需要密码框）
+    // 这里简化逻辑：直接尝试登录。如果失败（需要密码），API会返回错误，然后我们在界面提示
+    // 由于我们没有把加密密码存在本地（也不应该），所以每次还是需要输密码？
+    // 为了体验，通常会用Refresh Token。但这里没有。
+    // 这种情况下，点击快捷头像 -> 弹出密码框（如果用户设置了密码）
+    // 简单起见：先把ID填入，跳转到登录表单
+    setUserId(user.id);
+    setViewMode('auth-form');
+    // 如果知道它没密码，可以直接调 login，但前端不知道。
+    // 留给用户输入密码
+  };
+
+  if (isLoading) {
     return (
-        <div className="user-login-container">
-            <div className="user-login-card">
-                {/* 标题 */}
-                <div className="login-header">
-                    <h1>🌌 星云粒子可视化</h1>
-                    <p className="login-subtitle">
-                        {!isOnline && <span className="offline-badge">离线模式</span>}
-                        {mode === 'select' && '选择用户或创建新用户'}
-                        {mode === 'login' && `欢迎回来，${selectedUser?.name}`}
-                        {mode === 'register' && '创建新用户'}
-                    </p>
+      <div className="fixed inset-0 flex items-center justify-center bg-black text-white">
+        <div className="animate-spin text-4xl">🌌</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 overflow-hidden font-sans text-white select-none">
+      {/* 动态星空背景 */}
+      <StarBackground />
+
+      <div className="relative z-10 w-full h-full flex flex-col items-center justify-center px-4">
+
+        {/* 标题区 */}
+        <div className="mb-12 text-center animate-in fade-in slide-in-from-top-10 duration-700">
+          <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-cyan-300 to-purple-400 mb-2 drop-shadow-lg">
+            Nebula Space
+          </h1>
+          <p className="text-white/40 text-sm tracking-widest uppercase">Particle Visualization Engine</p>
+        </div>
+
+        {/* 错误提示 */}
+        {error && (
+          <div className="absolute top-20 bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-2 rounded-lg backdrop-blur text-sm animate-in fade-in zoom-in-95">
+            {error}
+          </div>
+        )}
+
+        {/* 场景 A: 记忆列表 */}
+        {viewMode === 'saved-list' && (
+          <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+            <div className="flex flex-wrap justify-center gap-6 md:gap-10 mb-10">
+              {savedUsers.map(user => (
+                <div key={user.id} className="group relative flex flex-col items-center">
+                  <button
+                    onClick={() => handleQuickLogin(user)}
+                    className="relative w-24 h-24 md:w-32 md:h-32 rounded-full transition-transform duration-300 group-hover:scale-110 focus:outline-none"
+                  >
+                    <PlanetAvatar userId={user.id} imageUrl={user.avatar} size="xl" className="w-full h-full shadow-2xl shadow-cyan-500/20" />
+                    <div className="absolute inset-0 rounded-full ring-4 ring-transparent group-hover:ring-cyan-500/30 transition-all duration-500" />
+                  </button>
+
+                  <span className="mt-4 text-lg font-medium text-white/90 group-hover:text-cyan-300 transition-colors">
+                    {user.name}
+                  </span>
+
+                  {/* 删除按钮 */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (confirm(`确定要忘记 "${user.name}" 吗？\n这也将清除该账号在本机的登录记录。`)) {
+                        removeSavedUser(user.id);
+                      }
+                    }}
+                    className="absolute -top-1 -right-1 w-7 h-7 bg-white/10 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md"
+                    title="忘记此账号"
+                  >
+                    <i className="fas fa-times text-xs" />
+                  </button>
                 </div>
+              ))}
 
-                {/* 错误提示 */}
-                {error && <div className="login-error">{error}</div>}
-
-                {/* 用户选择模式 */}
-                {mode === 'select' && (
-                    <div className="user-select-grid">
-                        {users.length > 0 ? (
-                            users.map(user => (
-                                <button
-                                    key={user.id}
-                                    className="user-avatar-button"
-                                    onClick={() => handleUserSelect(user)}
-                                >
-                                    <span className="avatar">{user.avatar}</span>
-                                    <span className="name">{user.name}</span>
-                                </button>
-                            ))
-                        ) : (
-                            <p className="no-users-hint">暂无用户，请创建一个</p>
-                        )}
-
-                        <button
-                            className="user-avatar-button add-user"
-                            onClick={() => setMode('register')}
-                            disabled={!isOnline}
-                        >
-                            <span className="avatar">➕</span>
-                            <span className="name">新建用户</span>
-                        </button>
-                    </div>
-                )}
-
-                {/* 登录模式 */}
-                {mode === 'login' && selectedUser && (
-                    <form onSubmit={handleLogin} className="login-form">
-                        <div className="selected-user-display">
-                            <span className="big-avatar">{selectedUser.avatar}</span>
-                            <span className="user-name">{selectedUser.name}</span>
-                        </div>
-
-                        <div className="form-group">
-                            <label>密码（如果设置了）</label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                placeholder="输入4位密码，没有则留空"
-                                maxLength={4}
-                                className="password-input"
-                                autoFocus
-                            />
-                        </div>
-
-                        <div className="form-actions">
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                onClick={() => {
-                                    setMode('select');
-                                    setSelectedUser(null);
-                                }}
-                            >
-                                返回
-                            </button>
-                            <button
-                                type="submit"
-                                className="btn-primary"
-                                disabled={isSubmitting}
-                            >
-                                {isSubmitting ? '登录中...' : '进入'}
-                            </button>
-                        </div>
-                    </form>
-                )}
-
-                {/* 注册模式 */}
-                {mode === 'register' && (
-                    <form onSubmit={handleRegister} className="login-form">
-                        <div className="avatar-picker">
-                            <label>选择头像</label>
-                            <div className="avatar-grid">
-                                {AVATAR_OPTIONS.map(avatar => (
-                                    <button
-                                        key={avatar}
-                                        type="button"
-                                        className={`avatar-option ${selectedAvatar === avatar ? 'selected' : ''}`}
-                                        onClick={() => setSelectedAvatar(avatar)}
-                                    >
-                                        {avatar}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="form-group">
-                            <label>用户ID（英文/数字）</label>
-                            <input
-                                type="text"
-                                value={newUserId}
-                                onChange={e => setNewUserId(e.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
-                                placeholder="例如: dad, mom, xiaoming"
-                                maxLength={20}
-                                className="text-input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>显示名称</label>
-                            <input
-                                type="text"
-                                value={newUserName}
-                                onChange={e => setNewUserName(e.target.value)}
-                                placeholder="例如: 爸爸, 妈妈, 小明"
-                                maxLength={20}
-                                className="text-input"
-                            />
-                        </div>
-
-                        <div className="form-group">
-                            <label>密码（可选，4位数字）</label>
-                            <input
-                                type="password"
-                                value={newPassword}
-                                onChange={e => setNewPassword(e.target.value.replace(/\D/g, ''))}
-                                placeholder="留空则无需密码"
-                                maxLength={4}
-                                className="password-input"
-                            />
-                        </div>
-
-                        <div className="form-actions">
-                            <button
-                                type="button"
-                                className="btn-secondary"
-                                onClick={() => {
-                                    setMode('select');
-                                    setNewUserId('');
-                                    setNewUserName('');
-                                    setNewPassword('');
-                                }}
-                            >
-                                返回
-                            </button>
-                            <button
-                                type="submit"
-                                className="btn-primary"
-                                disabled={isSubmitting || !isOnline}
-                            >
-                                {isSubmitting ? '创建中...' : '创建用户'}
-                            </button>
-                        </div>
-                    </form>
-                )}
+              {/* 添加账号按钮 */}
+              <button
+                onClick={() => {
+                  setUserId('');
+                  setPassword('');
+                  setViewMode('auth-form');
+                }}
+                className="flex flex-col items-center justify-center gap-4 w-24 h-24 md:w-32 md:h-32 rounded-full border-2 border-dashed border-white/10 text-white/30 hover:border-white/30 hover:text-white/60 hover:bg-white/5 transition-all duration-300"
+              >
+                <i className="fas fa-plus text-2xl" />
+                <span className="text-xs">Add Account</span>
+              </button>
             </div>
 
-            <style>{`
-        .user-login-container {
-          position: fixed;
-          inset: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 50%, #0a0a2a 100%);
-          z-index: 9999;
-        }
+            <button
+              onClick={() => {
+                // 清除所有
+                if (confirm('确定要清除所有本机记录吗？')) {
+                  savedUsers.forEach(u => removeSavedUser(u.id));
+                }
+              }}
+              className="text-white/20 hover:text-white/40 text-xs mt-8 transition-colors"
+            >
+              Clear All History
+            </button>
+          </div>
+        )}
 
-        .user-login-card {
-          background: rgba(20, 20, 40, 0.95);
-          border-radius: 20px;
-          padding: 40px;
-          min-width: 400px;
-          max-width: 500px;
-          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5),
-                      0 0 100px rgba(100, 100, 255, 0.1);
-          border: 1px solid rgba(100, 100, 200, 0.2);
-          backdrop-filter: blur(20px);
-        }
+        {/* 场景 B: 登录表单 */}
+        {viewMode === 'auth-form' && (
+          <div className="w-full max-w-sm bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-500">
 
-        .login-header {
-          text-align: center;
-          margin-bottom: 30px;
-        }
+            {/* 头像预览 */}
+            <div className="flex justify-center -mt-16 mb-6">
+              <div className="bg-[#0f172a] p-2 rounded-full">
+                <PlanetAvatar userId={userId || 'guest'} size="lg" />
+              </div>
+            </div>
 
-        .login-header h1 {
-          font-size: 28px;
-          color: #fff;
-          margin: 0 0 10px 0;
-          background: linear-gradient(135deg, #a8edea, #fed6e3);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
+            <form onSubmit={handleAuthSubmit} className="space-y-4">
+              <div className="space-y-1">
+                <input
+                  type="text"
+                  value={userId}
+                  onChange={e => setUserId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} // 仅允许英文数字
+                  placeholder="User ID (e.g. alex)"
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
+                  maxLength={20}
+                  autoFocus
+                />
+              </div>
 
-        .login-subtitle {
-          color: rgba(255, 255, 255, 0.6);
-          font-size: 14px;
-          margin: 0;
-        }
+              {isRegistering && (
+                <div className="space-y-1 animate-in fade-in height-auto">
+                  <input
+                    type="text"
+                    value={nickname}
+                    onChange={e => setNickname(e.target.value)}
+                    placeholder="Nickname"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
+                    maxLength={20}
+                  />
+                </div>
+              )}
 
-        .offline-badge {
-          display: inline-block;
-          background: rgba(255, 150, 0, 0.2);
-          color: #ffa500;
-          padding: 2px 8px;
-          border-radius: 10px;
-          font-size: 12px;
-          margin-right: 8px;
-        }
+              <div className="space-y-1">
+                <div className="relative">
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder={isRegistering ? "Password (6+ chars)" : "Password (optional)"}
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center tracking-widest"
+                    maxLength={10}
+                  />
+                </div>
+              </div>
 
-        .login-error {
-          background: rgba(255, 100, 100, 0.1);
-          border: 1px solid rgba(255, 100, 100, 0.3);
-          color: #ff6b6b;
-          padding: 10px 15px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          font-size: 14px;
-        }
+              <button
+                type="submit"
+                disabled={isSubmitting || (!userId && !isRegistering)}
+                className="w-full py-3.5 mt-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-cyan-900/20 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98] transition-all"
+              >
+                {isSubmitting ? 'Processing...' : (isRegistering ? 'Sign Up' : 'Log In')}
+              </button>
+            </form>
 
-        .user-select-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-          gap: 15px;
-        }
+            <div className="mt-6 flex justify-between items-center text-sm">
+              {savedUsers.length > 0 && (
+                <button
+                  onClick={() => setViewMode('saved-list')}
+                  className="text-white/40 hover:text-white transition-colors flex items-center gap-1"
+                >
+                  <i className="fas fa-arrow-left" /> Back
+                </button>
+              )}
 
-        .user-avatar-button {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          padding: 20px 15px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
-          border-radius: 15px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
+              <button
+                onClick={() => {
+                  setIsRegistering(!isRegistering);
+                  setError('');
+                }}
+                className={`ml-auto ${savedUsers.length === 0 ? 'w-full text-center' : ''} text-cyan-400/80 hover:text-cyan-300 transition-colors`}
+              >
+                {isRegistering ? 'Have an account? Log In' : 'New User? Sign Up'}
+              </button>
+            </div>
+          </div>
+        )}
 
-        .user-avatar-button:hover {
-          background: rgba(255, 255, 255, 0.1);
-          border-color: rgba(100, 200, 255, 0.5);
-          transform: translateY(-3px);
-        }
-
-        .user-avatar-button .avatar {
-          font-size: 40px;
-        }
-
-        .user-avatar-button .name {
-          font-size: 14px;
-          color: rgba(255, 255, 255, 0.8);
-        }
-
-        .user-avatar-button.add-user {
-          border-style: dashed;
-        }
-
-        .user-avatar-button.add-user:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .no-users-hint {
-          grid-column: 1 / -1;
-          text-align: center;
-          color: rgba(255, 255, 255, 0.4);
-          padding: 20px;
-        }
-
-        .login-form {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
-
-        .selected-user-display {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 10px;
-          padding: 20px;
-        }
-
-        .big-avatar {
-          font-size: 60px;
-        }
-
-        .user-name {
-          font-size: 20px;
-          color: #fff;
-        }
-
-        .form-group {
-          display: flex;
-          flex-direction: column;
-          gap: 8px;
-        }
-
-        .form-group label {
-          font-size: 13px;
-          color: rgba(255, 255, 255, 0.6);
-        }
-
-        .text-input,
-        .password-input {
-          background: rgba(255, 255, 255, 0.08);
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          border-radius: 10px;
-          padding: 12px 15px;
-          font-size: 16px;
-          color: #fff;
-          outline: none;
-          transition: all 0.3s ease;
-        }
-
-        .text-input:focus,
-        .password-input:focus {
-          border-color: rgba(100, 200, 255, 0.5);
-          background: rgba(255, 255, 255, 0.1);
-        }
-
-        .password-input {
-          letter-spacing: 8px;
-          text-align: center;
-        }
-
-        .avatar-picker label {
-          display: block;
-          font-size: 13px;
-          color: rgba(255, 255, 255, 0.6);
-          margin-bottom: 10px;
-        }
-
-        .avatar-grid {
-          display: grid;
-          grid-template-columns: repeat(8, 1fr);
-          gap: 8px;
-        }
-
-        .avatar-option {
-          aspect-ratio: 1;
-          font-size: 24px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 2px solid transparent;
-          border-radius: 10px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .avatar-option:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-
-        .avatar-option.selected {
-          border-color: #64c8ff;
-          background: rgba(100, 200, 255, 0.2);
-        }
-
-        .form-actions {
-          display: flex;
-          gap: 15px;
-          margin-top: 10px;
-        }
-
-        .btn-primary,
-        .btn-secondary {
-          flex: 1;
-          padding: 14px 20px;
-          border: none;
-          border-radius: 10px;
-          font-size: 16px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .btn-primary {
-          background: linear-gradient(135deg, #667eea, #764ba2);
-          color: #fff;
-        }
-
-        .btn-primary:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 5px 20px rgba(100, 100, 200, 0.4);
-        }
-
-        .btn-primary:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .btn-secondary {
-          background: rgba(255, 255, 255, 0.1);
-          color: rgba(255, 255, 255, 0.8);
-        }
-
-        .btn-secondary:hover {
-          background: rgba(255, 255, 255, 0.15);
-        }
-
-        .loading-spinner {
-          width: 40px;
-          height: 40px;
-          border: 3px solid rgba(255, 255, 255, 0.1);
-          border-top-color: #64c8ff;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-          margin: 0 auto 20px;
-        }
-
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-        </div>
-    );
+      </div>
+    </div>
+  );
 }
-
-export default UserLogin;
