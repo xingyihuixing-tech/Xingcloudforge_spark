@@ -1,13 +1,15 @@
+```
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { StarBackground } from './StarBackground'; // Keep the original Nebula
 import { ThreePlanetScene, PlanetPreset } from './ThreePlanetScene';
+import { ThreeParticleJourney } from './ThreeParticleJourney';
 
-export type BackgroundType = 'nebula' | 'warp' | 'galaxy' | 'blackhole' | 'cyber' | PlanetPreset;
+export type BackgroundType = 'nebula' | 'warp' | 'galaxy' | 'blackhole' | 'cyber' | 'journey' | PlanetPreset;
 
 export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?: (type: BackgroundType) => void }> = ({ activeBg, onChange }) => {
-    // 默认使用 gaia 作为初始显示（更震撼）
-    const [current, setCurrent] = useState<BackgroundType>(activeBg || 'gaia');
+    // 默认使用 journey (极致体验)
+    const [current, setCurrent] = useState<BackgroundType>(activeBg || 'journey');
 
     useEffect(() => {
         if (activeBg) setCurrent(activeBg);
@@ -25,6 +27,7 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
             case 'galaxy': return <ThreeGalaxyBackground />;
             case 'blackhole': return <ThreeBlackHoleBackground />;
             case 'cyber': return <ThreeCyberGridBackground />;
+            case 'journey': return <ThreeParticleJourney />;
             // Planets
             case 'gaia':
             case 'inferno':
@@ -32,7 +35,7 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
             case 'storm':
             case 'synth':
                 return <ThreePlanetScene preset={current as PlanetPreset} />;
-            default: return <ThreePlanetScene preset="gaia" />;
+            default: return <ThreeParticleJourney />;
         }
     };
 
@@ -44,6 +47,7 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
 
             {/* 切换器 UI - 底部两行 */}
             <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-3 items-end">
+
                 {/* Planet Series */}
                 <div className="flex gap-2 p-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg">
                     <BgBtn type="gaia" icon="globe-americas" label="Gaia" active={current === 'gaia'} onClick={() => handleChange('gaia')} />
@@ -55,8 +59,12 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
 
                 {/* Space Series */}
                 <div className="flex gap-2 p-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg">
+                    {/* Journey button included here or separate? Let's add it as a primary option or keep separate.
+              Let's put Journey as the first item in Space Series? Or keep separate for emphasis.
+              Actually, let's put it in the Space Series to keep UI clean. */}
+                    <BgBtn type="journey" icon="star" label="Journey" active={current === 'journey'} onClick={() => handleChange('journey')} />
+                    <div className="w-px h-8 bg-white/10 mx-1"></div>
                     <BgBtn type="nebula" icon="cloud" label="Nebula" active={current === 'nebula'} onClick={() => handleChange('nebula')} />
-                    <BgBtn type="warp" icon="space-shuttle" label="Warp" active={current === 'warp'} onClick={() => handleChange('warp')} />
                     <BgBtn type="galaxy" icon="globe-asia" label="Galaxy" active={current === 'galaxy'} onClick={() => handleChange('galaxy')} />
                     <BgBtn type="blackhole" icon="circle" label="Void" active={current === 'blackhole'} onClick={() => handleChange('blackhole')} />
                     <BgBtn type="cyber" icon="cube" label="Grid" active={current === 'cyber'} onClick={() => handleChange('cyber')} />
@@ -69,13 +77,14 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
 const BgBtn = ({ type, icon, label, active, onClick }: any) => (
     <button
         onClick={onClick}
-        className={`group relative w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${active
-            ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
-            : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
-            }`}
+        className={`group relative w - 10 h - 10 md: w - 12 md: h - 12 rounded - xl flex items - center justify - center transition - all duration - 300 ${
+    active
+        ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
+        : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
+} `}
         title={label}
     >
-        <i className={`fas fa-${icon} text-sm md:text-lg`} />
+        <i className={`fas fa - ${ icon } text - sm md: text - lg`} />
         {/* Tooltip */}
         <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
             {label}
