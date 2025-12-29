@@ -46,7 +46,10 @@ export const PlanetAvatar: React.FC<PlanetAvatarProps> = ({
             ) : null}
 
             {/* 预设星球层 (总是存在，作为背景或 fallback) */}
-            <div className={`absolute inset-0 w-full h-full -z-10 bg-black ${PRESET_CLASSES[planetIndex]}`}>
+            <div
+                className="absolute inset-0 w-full h-full -z-10 bg-black transition-all duration-300"
+                style={PRESET_STYLES[planetIndex]}
+            >
                 {/* 纹理/光照层 - 通用 */}
                 <div className="absolute inset-0 rounded-full shadow-[inset_-30%_-30%_50%_rgba(0,0,0,0.8),inset_10%_10%_20%_rgba(255,255,255,0.3)]" />
                 {/* 环 (部分星球有) */}
@@ -58,30 +61,29 @@ export const PlanetAvatar: React.FC<PlanetAvatarProps> = ({
     );
 };
 
-// 8种预设样式 (Tailwind + CSS)
-// 1. Ice, 2. Lava, 3. Gas(Ring), 4. Earth-like, 5. Toxic, 6. Sun, 7. Cyber(Ring), 8. Void
-const PRESET_CLASSES = [
+// 8种预设样式 (Inline CSS for reliability)
+const PRESET_STYLES = [
     // 1. Ice World
-    "bg-gradient-to-br from-cyan-100 via-cyan-500 to-blue-900",
+    { background: 'linear-gradient(135deg, #cffafe 0%, #06b6d4 50%, #1e3a8a 100%)' },
 
     // 2. Lava Planet
-    "bg-[radial-gradient(circle_at_30%_30%,#fbbf24, #ea580c, #7f1d1d)]",
+    { background: 'radial-gradient(circle at 30% 30%, #fbbf24, #ea580c, #7f1d1d)' },
 
     // 3. Gas Giant (Banded)
-    "bg-[linear-gradient(135deg,#fcd34d_0%,#d97706_20%,#b45309_40%,#fcd34d_60%,#78350f_100%)]",
+    { background: 'linear-gradient(135deg, #fcd34d 0%, #d97706 20%, #b45309 40%, #fcd34d 60%, #78350f 100%)' },
 
     // 4. Terrestrial (Blue/Green)
-    "bg-gradient-to-br from-green-300 via-blue-500 to-indigo-900",
+    { background: 'linear-gradient(135deg, #86efac 0%, #3b82f6 50%, #1e1b4b 100%)' },
 
     // 5. Toxic (Purple/Green)
-    "bg-[radial-gradient(circle_at_70%_20%,#a7f3d0, #8b5cf6, #4c1d95)]",
+    { background: 'radial-gradient(circle at 70% 20%, #a7f3d0, #8b5cf6, #4c1d95)' },
 
     // 6. Star (Glowing)
-    "bg-gradient-to-tr from-yellow-100 via-orange-400 to-red-600 shadow-[0_0_20px_#f59e0b]",
+    { background: 'linear-gradient(45deg, #fef3c7, #f97316, #dc2626)', boxShadow: '0 0 20px #f59e0b' },
 
     // 7. Cyber (Neon)
-    "bg-gray-900 border border-cyan-400/50 shadow-[inset_0_0_20px_#06b6d4]",
+    { background: '#111827', border: '1px solid rgba(34,211,238,0.5)', boxShadow: 'inset 0 0 20px #06b6d4' },
 
     // 8. Midnight (Dark)
-    "bg-gradient-to-b from-slate-700 via-slate-900 to-black"
+    { background: 'linear-gradient(to bottom, #334155, #0f172a, #000000)' }
 ];

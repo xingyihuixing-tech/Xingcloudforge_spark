@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { StarBackground } from './StarBackground'; // Keep the original Nebula
+import { ThreePlanetScene, PlanetPreset } from './ThreePlanetScene';
 
-export type BackgroundType = 'nebula' | 'warp' | 'galaxy' | 'blackhole' | 'cyber';
+export type BackgroundType = 'nebula' | 'warp' | 'galaxy' | 'blackhole' | 'cyber' | PlanetPreset;
 
 export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?: (type: BackgroundType) => void }> = ({ activeBg, onChange }) => {
-    // 默认使用 warp 作为初始显示（更震撼）
-    const [current, setCurrent] = useState<BackgroundType>(activeBg || 'warp');
+    // 默认使用 gaia 作为初始显示（更震撼）
+    const [current, setCurrent] = useState<BackgroundType>(activeBg || 'gaia');
 
     useEffect(() => {
         if (activeBg) setCurrent(activeBg);
@@ -24,7 +25,14 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
             case 'galaxy': return <ThreeGalaxyBackground />;
             case 'blackhole': return <ThreeBlackHoleBackground />;
             case 'cyber': return <ThreeCyberGridBackground />;
-            default: return <ThreeWarpBackground />;
+            // Planets
+            case 'gaia':
+            case 'inferno':
+            case 'glacial':
+            case 'storm':
+            case 'synth':
+                return <ThreePlanetScene preset={current as PlanetPreset} />;
+            default: return <ThreePlanetScene preset="gaia" />;
         }
     };
 
@@ -34,13 +42,25 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
                 {renderBackground()}
             </div>
 
-            {/* 切换器 UI */}
-            <div className="fixed bottom-6 right-6 z-[60] flex gap-3 p-3 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all hover:bg-black/60">
-                <BgBtn type="nebula" icon="cloud" label="Nebula" active={current === 'nebula'} onClick={() => handleChange('nebula')} />
-                <BgBtn type="warp" icon="space-shuttle" label="Warp" active={current === 'warp'} onClick={() => handleChange('warp')} />
-                <BgBtn type="galaxy" icon="globe-asia" label="Galaxy" active={current === 'galaxy'} onClick={() => handleChange('galaxy')} />
-                <BgBtn type="blackhole" icon="circle" label="Void" active={current === 'blackhole'} onClick={() => handleChange('blackhole')} />
-                <BgBtn type="cyber" icon="cube" label="Cyber" active={current === 'cyber'} onClick={() => handleChange('cyber')} />
+            {/* 切换器 UI - 底部两行 */}
+            <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-3 items-end">
+                {/* Planet Series */}
+                <div className="flex gap-2 p-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg">
+                    <BgBtn type="gaia" icon="globe-americas" label="Gaia" active={current === 'gaia'} onClick={() => handleChange('gaia')} />
+                    <BgBtn type="glacial" icon="snowflake" label="Ice" active={current === 'glacial'} onClick={() => handleChange('glacial')} />
+                    <BgBtn type="inferno" icon="fire" label="Lava" active={current === 'inferno'} onClick={() => handleChange('inferno')} />
+                    <BgBtn type="storm" icon="bolt" label="Storm" active={current === 'storm'} onClick={() => handleChange('storm')} />
+                    <BgBtn type="synth" icon="microchip" label="Synth" active={current === 'synth'} onClick={() => handleChange('synth')} />
+                </div>
+
+                {/* Space Series */}
+                <div className="flex gap-2 p-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg">
+                    <BgBtn type="nebula" icon="cloud" label="Nebula" active={current === 'nebula'} onClick={() => handleChange('nebula')} />
+                    <BgBtn type="warp" icon="space-shuttle" label="Warp" active={current === 'warp'} onClick={() => handleChange('warp')} />
+                    <BgBtn type="galaxy" icon="globe-asia" label="Galaxy" active={current === 'galaxy'} onClick={() => handleChange('galaxy')} />
+                    <BgBtn type="blackhole" icon="circle" label="Void" active={current === 'blackhole'} onClick={() => handleChange('blackhole')} />
+                    <BgBtn type="cyber" icon="cube" label="Grid" active={current === 'cyber'} onClick={() => handleChange('cyber')} />
+                </div>
             </div>
         </>
     );
@@ -50,8 +70,8 @@ const BgBtn = ({ type, icon, label, active, onClick }: any) => (
     <button
         onClick={onClick}
         className={`group relative w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${active
-                ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
-                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
+            ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
+            : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
             }`}
         title={label}
     >
@@ -187,11 +207,17 @@ const ThreeGalaxyBackground = () => {
             posArray[i * 3 + 1] = y;
             posArray[i * 3 + 2] = z;
 
-            // Color (Center: Yellow/White, Edge: Blue/Purple)
+            // Color (Center: Gold/White, Edge: Pink/Cyan/Purple)
             const dist = Math.sqrt(x * x + z * z);
             const color = new THREE.Color();
-            if (dist < 20) color.setHSL(0.1 + Math.random() * 0.1, 0.8, 0.6); // Yellowish
-            else color.setHSL(0.6 + Math.random() * 0.2, 0.8, 0.5); // Blueish
+            if (dist < 15) {
+                color.setHex(0xffaa00); // Core Gold
+            } else {
+                // Gradient from inner to outer
+                const t = (dist - 15) / 50;
+                if (Math.random() > 0.5) color.setHSL(0.8 + t * 0.1, 0.9, 0.6); // Magenta/Pink
+                else color.setHSL(0.5 + t * 0.1, 0.9, 0.6); // Cyan/Blue
+            }
 
             colors[i * 3] = color.r;
             colors[i * 3 + 1] = color.g;

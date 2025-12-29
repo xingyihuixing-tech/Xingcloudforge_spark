@@ -120,168 +120,163 @@ export function UserLogin() {
       <div className="relative z-10 w-full h-full flex flex-col items-center justify-center px-4">
 
         {/* 标题区 - 品牌升级 */}
-        <div className="mb-12 text-center animate-in fade-in slide-in-from-top-10 duration-700 pt-8 pb-4">
-          <h1 className="text-6xl md:text-8xl mb-6 drop-shadow-[0_0_25px_rgba(0,255,255,0.4)] bg-clip-text text-transparent bg-gradient-to-r from-blue-100 via-cyan-100 to-blue-100 leading-normal py-2"
+        <div className="mb-12 text-center animate-in fade-in slide-in-from-top-10 duration-700 pt-12 pb-6">
+          <h1 className="text-7xl md:text-8xl mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-200 via-cyan-200 to-purple-200 animate-pulse leading-relaxed py-4 drop-shadow-[0_0_30px_rgba(100,200,255,0.6)]"
             style={{ fontFamily: '"Great Vibes", cursive' }}>
             Xingstar Space
           </h1>
-          <p className="text-cyan-200/60 text-sm md:text-base tracking-[0.4em] uppercase font-light" style={{ fontFamily: '"Orbitron", sans-serif' }}>
+          <p className="text-cyan-100/60 text-sm md:text-base tracking-[0.5em] uppercase font-light" style={{ fontFamily: '"Orbitron", sans-serif' }}>
             Particle Visualization Engine
           </p>
         </div>
 
-        {/* 错误提示 */}
+        {/* 错误提示 - 修复背景 */}
         {error && (
-          <div className="absolute top-20 bg-red-500/10 border border-red-500/20 text-red-200 px-4 py-2 rounded-lg backdrop-blur text-sm animate-in fade-in zoom-in-95">
+          <div className="mb-6 px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-200 rounded-xl backdrop-blur-md animate-in slide-in-from-top-5 max-w-md text-center shadow-lg">
+            <i className="fas fa-exclamation-triangle mr-2"></i>
             {error}
           </div>
         )}
 
         {/* 场景 A: 记忆列表 */}
         {viewMode === 'saved-list' && (
-          <div className="w-full max-w-4xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
-            <div className="flex flex-wrap justify-center gap-6 md:gap-10 mb-10">
+          <div className="w-full max-w-5xl flex flex-col items-center animate-in fade-in zoom-in-95 duration-500">
+            <div className="flex flex-wrap justify-center items-center gap-8 mb-10">
               {savedUsers.map(user => (
                 <div key={user.id} className="group relative flex flex-col items-center">
                   <button
                     onClick={() => handleQuickLogin(user)}
-                    className="relative w-24 h-24 md:w-32 md:h-32 rounded-full transition-transform duration-300 group-hover:scale-110 focus:outline-none"
+                    className="relative w-28 h-28 md:w-32 md:h-32 rounded-full transition-transform duration-300 group-hover:scale-110 focus:outline-none"
                   >
                     <PlanetAvatar userId={user.id} imageUrl={user.avatar} size="xl" className="w-full h-full shadow-2xl shadow-cyan-500/20" />
                     <div className="absolute inset-0 rounded-full ring-4 ring-transparent group-hover:ring-cyan-500/30 transition-all duration-500" />
                   </button>
-
-                  <span className="mt-4 text-lg font-medium text-white/90 group-hover:text-cyan-300 transition-colors">
+                  <span className="mt-4 text-lg font-medium text-white/90 group-hover:text-cyan-300 transition-colors drop-shadow-md">
                     {user.name}
                   </span>
 
-                  {/* 删除按钮 */}
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      if (confirm(`确定要忘记 "${user.name}" 吗？\n这也将清除该账号在本机的登录记录。`)) {
-                        removeSavedUser(user.id);
-                      }
+                      if (confirm(`确定要忘记 "${user.name}" 吗？`)) removeSavedUser(user.id);
                     }}
                     className="absolute -top-1 -right-1 w-7 h-7 bg-white/10 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md"
-                    title="忘记此账号"
                   >
                     <i className="fas fa-times text-xs" />
                   </button>
                 </div>
               ))}
 
-              {/* 添加账号按钮 */}
+              {/* Add Account Button */}
               <button
                 onClick={() => {
                   setUserId('');
                   setPassword('');
                   setViewMode('auth-form');
                 }}
-                className="flex flex-col items-center justify-center gap-4 w-24 h-24 md:w-32 md:h-32 rounded-full border-2 border-dashed border-white/10 text-white/30 hover:border-white/30 hover:text-white/60 hover:bg-white/5 transition-all duration-300"
+                className="flex flex-col items-center justify-center gap-3 w-28 h-28 md:w-32 md:h-32 rounded-full border-2 border-dashed border-white/20 text-white/40 hover:border-cyan-400/50 hover:text-cyan-300 hover:bg-white/5 transition-all duration-300 group"
               >
-                <i className="fas fa-plus text-2xl" />
-                <span className="text-xs">Add Account</span>
+                <i className="fas fa-plus text-2xl group-hover:scale-110 transition-transform" />
+                <span className="text-xs font-medium tracking-wide">ADD PROFILE</span>
               </button>
             </div>
 
             <button
               onClick={() => {
-                // 清除所有
-                if (confirm('确定要清除所有本机记录吗？')) {
-                  savedUsers.forEach(u => removeSavedUser(u.id));
-                }
+                if (confirm('确定要清除所有本机记录吗？')) savedUsers.forEach(u => removeSavedUser(u.id));
               }}
-              className="text-white/20 hover:text-white/40 text-xs mt-8 transition-colors"
+              className="text-white/30 hover:text-white/60 text-xs tracking-wider transition-colors hover:underline"
             >
-              Clear All History
+              CLEAR LOCAL HISTORY
             </button>
           </div>
         )}
 
         {/* 场景 B: 登录表单 */}
-        {viewMode === 'auth-form' && (
-          <div className="w-full max-w-sm bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-500">
+        {
+          viewMode === 'auth-form' && (
+            <div className="w-full max-w-sm bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-500">
 
-            {/* 头像预览 */}
-            <div className="flex justify-center -mt-16 mb-6">
-              <div className="bg-[#0f172a] p-2 rounded-full">
-                <PlanetAvatar userId={userId || 'guest'} size="lg" />
-              </div>
-            </div>
-
-            <form onSubmit={handleAuthSubmit} className="space-y-4">
-              <div className="space-y-1">
-                <input
-                  type="text"
-                  value={userId}
-                  onChange={e => setUserId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} // 仅允许英文数字
-                  placeholder="User ID (e.g. alex)"
-                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
-                  maxLength={20}
-                  autoFocus
-                />
+              {/* 头像预览 */}
+              <div className="flex justify-center -mt-16 mb-6">
+                <div className="bg-[#0f172a] p-2 rounded-full">
+                  <PlanetAvatar userId={userId || 'guest'} size="lg" />
+                </div>
               </div>
 
-              {isRegistering && (
-                <div className="space-y-1 animate-in fade-in height-auto">
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                <div className="space-y-1">
                   <input
                     type="text"
-                    value={nickname}
-                    onChange={e => setNickname(e.target.value)}
-                    placeholder="Nickname"
+                    value={userId}
+                    onChange={e => setUserId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} // 仅允许英文数字
+                    placeholder="User ID (e.g. alex)"
                     className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
                     maxLength={20}
+                    autoFocus
                   />
                 </div>
-              )}
 
-              <div className="space-y-1">
-                <div className="relative">
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder={isRegistering ? "Password (6+ chars)" : "Password (optional)"}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center tracking-widest"
-                    maxLength={10}
-                  />
+                {isRegistering && (
+                  <div className="space-y-1 animate-in fade-in height-auto">
+                    <input
+                      type="text"
+                      value={nickname}
+                      onChange={e => setNickname(e.target.value)}
+                      placeholder="Nickname"
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
+                      maxLength={20}
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder={isRegistering ? "Password (6+ chars)" : "Password (optional)"}
+                      className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center tracking-widest"
+                      maxLength={10}
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <button
-                type="submit"
-                disabled={isSubmitting || (!userId && !isRegistering)}
-                className="w-full py-3.5 mt-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-cyan-900/20 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98] transition-all"
-              >
-                {isSubmitting ? 'Processing...' : (isRegistering ? 'Sign Up' : 'Log In')}
-              </button>
-            </form>
-
-            <div className="mt-6 flex justify-between items-center text-sm">
-              {savedUsers.length > 0 && (
                 <button
-                  onClick={() => setViewMode('saved-list')}
-                  className="text-white/40 hover:text-white transition-colors flex items-center gap-1"
+                  type="submit"
+                  disabled={isSubmitting || (!userId && !isRegistering)}
+                  className="w-full py-3.5 mt-2 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold rounded-xl shadow-lg shadow-cyan-900/20 disabled:opacity-50 disabled:cursor-not-allowed transform active:scale-[0.98] transition-all"
                 >
-                  <i className="fas fa-arrow-left" /> Back
+                  {isSubmitting ? 'Processing...' : (isRegistering ? 'Sign Up' : 'Log In')}
                 </button>
-              )}
+              </form>
 
-              <button
-                onClick={() => {
-                  setIsRegistering(!isRegistering);
-                  setError('');
-                }}
-                className={`ml-auto ${savedUsers.length === 0 ? 'w-full text-center' : ''} text-cyan-400/80 hover:text-cyan-300 transition-colors`}
-              >
-                {isRegistering ? 'Have an account? Log In' : 'New User? Sign Up'}
-              </button>
+              <div className="mt-6 flex justify-between items-center text-sm">
+                {savedUsers.length > 0 && (
+                  <button
+                    onClick={() => setViewMode('saved-list')}
+                    className="text-white/40 hover:text-white transition-colors flex items-center gap-1"
+                  >
+                    <i className="fas fa-arrow-left" /> Back
+                  </button>
+                )}
+
+                <button
+                  onClick={() => {
+                    setIsRegistering(!isRegistering);
+                    setError('');
+                  }}
+                  className={`ml-auto ${savedUsers.length === 0 ? 'w-full text-center' : ''} text-cyan-400/80 hover:text-cyan-300 transition-colors`}
+                >
+                  {isRegistering ? 'Have an account? Log In' : 'New User? Sign Up'}
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )
+        }
 
-      </div>
-    </div>
+      </div >
+    </div >
   );
 }

@@ -333,24 +333,45 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (!currentUser) return { success: false, error: '未登录' };
 
         try {
+            console.log('Starting upload for:', file.name, 'Size:', file.size);
             const res = await fetch(`/api/upload?userId=${currentUser.id}&fileName=${encodeURIComponent(file.name)}`, {
                 method: 'POST',
-                body: file
+                body: file,
+                headers: {
+                    // 通常 fetch body 为 File 时不需要手动设置 Content-Type，浏览器会自动处理 multipart/boundary
+                    // 但这里 api/upload 似乎是 raw streaming body 读取，所以不要设置 boundary?
+                    // api/upload.ts 用 'for await chunks' 读取，说明是 raw body。
+                    // 浏览器发送 File body 时，默认 content-type 是文件的 MIME type。
+                }
             });
 
-            if (!res.ok) throw new Error('Upload failed');
+            if (!res.ok) {
+                const text = await res.text();
+                console.error('Upload failed endpoint:', res.status, res.statusText, text);
+                if (res.status === 404) {
+                    return { success: false, error: '上传服务未找到 (Local Dev需配置Proxy或使用Vercel)' };
+                }
+                try {
+                    const json = JSON.parse(text);
+                    return { success: false, error: json.error || `Upload failed: ${res.status}` };
+                } catch {
+                    return { success: false, error: `Upload error: ${res.status} ${res.statusText}` };
+                }
+            }
 
             const data = await res.json();
-            const newAvatarUrl = data.url;
+            console.log('Upload success:', data);
 
-            const updateRes = await updateProfile(currentUser.name, newAvatarUrl);
-            if (updateRes) {
-                return { success: true, url: newAvatarUrl };
+            if (data.url) {
+                // 更新头像
+                await updateProfile(currentUser.name, data.url);
+                return { success: true, url: data.url };
             } else {
-                return { success: false, error: 'Profile update failed' };
+                return { success: false, error: 'No URL returned' };
             }
-        } catch (e) {
-            return { success: false, error: 'Upload failed' };
+        } catch (err: any) {
+            console.error('Upload network error:', err);
+            return { success: false, error: err.message || 'Network Error' };
         }
     };
 
