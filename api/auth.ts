@@ -20,11 +20,34 @@ interface User {
     createdAt: string;
 }
 
-// Redis客户端（通过环境变量自动配置）
-const redis = new Redis({
-    url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '',
-    token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+// 检测可用的环境变量
+const getRedisCredentials = () => {
+    // 按优先级尝试不同的环境变量前缀
+    const prefixes = [
+        { url: 'KV_REST_API_URL', token: 'KV_REST_API_TOKEN' },
+        { url: 'UPSTASH_REDIS_REST_URL', token: 'UPSTASH_REDIS_REST_TOKEN' },
+        { url: 'STORAGE_URL', token: 'STORAGE_TOKEN' },
+        { url: 'REDIS_URL', token: 'REDIS_TOKEN' },
+    ];
+
+    for (const prefix of prefixes) {
+        const url = process.env[prefix.url];
+        const token = process.env[prefix.token];
+        if (url && token) {
+            console.log(`Using Redis credentials from ${prefix.url}`);
+            return { url, token };
+        }
+    }
+
+    return { url: '', token: '' };
+};
+
+const credentials = getRedisCredentials();
+
+// Redis客户端
+const redis = credentials.url && credentials.token
+    ? new Redis(credentials)
+    : null;
 
 // 默认头像列表
 const DEFAULT_AVATARS = ['👨', '👩', '👧', '👦', '👴', '👵', '🧑', '👤'];
@@ -37,6 +60,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
+    }
+
+    // 检查Redis是否可用
+    if (!redis) {
+        console.error('Redis not configured. Available env vars:', Object.keys(process.env).filter(k =>
+            k.includes('REDIS') || k.includes('KV') || k.includes('UPSTASH') || k.includes('STORAGE')
+        ));
+        return res.status(500).json({
+            error: 'Database not configured',
+            hint: 'Please check Upstash Redis environment variables in Vercel settings',
+            availableVars: Object.keys(process.env).filter(k =>
+                k.includes('REDIS') || k.includes('KV') || k.includes('UPSTASH') || k.includes('STORAGE')
+            )
+        });
     }
 
     try {
@@ -54,7 +91,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
     } catch (error) {
         console.error('Auth API Error:', error);
-        return res.status(500).json({ error: 'Internal server error' });
+        return res.status(500).json({
+            error: 'Internal server error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
     }
 }
 
