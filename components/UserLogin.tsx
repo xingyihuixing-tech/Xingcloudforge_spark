@@ -80,27 +80,18 @@ export function UserLogin() {
 
   // 处理快捷登录
   const handleQuickLogin = async (user: SavedUser) => {
-    // 免密登录逻辑：检查 savedUser.lastLogin 是否使得 Session 仍然视作有效（简化逻辑：只要本地有，就允许进入）
-    // 这里的逻辑已变更：click -> login (auto)
-    // 除非用户显示点击了 Logout (我们需要一个标记，暂未实现，先默认所有SavedUser都可尝试免密)
-    // 如果 login 需要密码，后端会失败？Context里的 login 只是调 API。
-    // 如果我们想实现纯前端的"记住状态"，可以在 login 时仅更新 currentUser 而不发请求（离线/模拟模式），
-    // 或者发送 ID 换取 Token（如果有）。
-    // 根据用户需求： "switch account时，点击用户卡片又要重新输入密码... 优化成除非log out 否则保持登录状态"
-    // 这意味着本地存了 token 或者 password (不推荐)。
-    // 或者仅仅是 Context 状态切换？
-    // 为了实现"除非Log out"，我们需要在 SavedUser 里存一个 `isLoggedOut` 标记。
-    // 如果 `!isLoggedOut`，直接 `setCurrentUser` 并切入。
-
-    // 临时逻辑：直接切入（模拟免密）
-    const res = await login(user.id); // login now supports optional password
+    // 尝试无密码登录/自动恢复
+    const res = await login(user.id);
     if (res.success) {
-      // success
+      // success - Context updates, redirect/UI update happens automatically via currentUser change
     } else {
-      // 失败（如需要密码），只有这时才跳表单
+      // 失败（通常是因为Token过期或Logout后需要密码）
+      // 不要显示错误，直接跳转输入框让用户输入密码
       setUserId(user.id);
+      setPassword(''); // Ensure password is empty
       setViewMode('auth-form');
-      setError(res.error || '需要验证密码');
+      // setError(res.error || '需要验证密码'); // 用户反馈不希望看到错误，直接输入密码
+      setError(''); // Clear error
     }
   };
 
@@ -121,11 +112,11 @@ export function UserLogin() {
 
         {/* 标题区 - 品牌升级 */}
         <div className="mb-12 text-center animate-in fade-in slide-in-from-top-10 duration-700 pt-12 pb-6">
-          <h1 className="text-7xl md:text-8xl mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-200 via-cyan-200 to-purple-200 animate-pulse leading-relaxed py-4 drop-shadow-[0_0_30px_rgba(100,200,255,0.6)]"
+          <h1 className="text-7xl md:text-8xl mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-cyan-400 to-purple-400 animate-pulse leading-relaxed py-4 drop-shadow-[0_0_50px_rgba(50,200,255,0.8)]"
             style={{ fontFamily: '"Great Vibes", cursive' }}>
             Xingstar Space
           </h1>
-          <p className="text-cyan-100/60 text-sm md:text-base tracking-[0.5em] uppercase font-light" style={{ fontFamily: '"Orbitron", sans-serif' }}>
+          <p className="text-cyan-200/80 text-sm md:text-base tracking-[0.5em] uppercase font-light drop-shadow-md" style={{ fontFamily: '"Orbitron", sans-serif' }}>
             Particle Visualization Engine
           </p>
         </div>
@@ -180,7 +171,7 @@ export function UserLogin() {
                 <span className="text-xs font-medium tracking-wide">ADD PROFILE</span>
               </button>
             </div>
-
+            {/* Clear All Button */}
             <button
               onClick={() => {
                 if (confirm('确定要清除所有本机记录吗？')) savedUsers.forEach(u => removeSavedUser(u.id));
@@ -195,7 +186,7 @@ export function UserLogin() {
         {/* 场景 B: 登录表单 */}
         {
           viewMode === 'auth-form' && (
-            <div className="relative w-full max-w-sm md:max-w-md bg-black/16 backdrop-blur-sm border border-white/5 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-all duration-500 hover:bg-black/30 hover:shadow-[0_0_70px_rgba(0,0,0,0.6)] hover:border-white/10">
+            <div className="relative w-full max-w-sm md:max-w-md bg-black/8 backdrop-blur-sm border border-white/5 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-all duration-500 hover:bg-black/20 hover:shadow-[0_0_70px_rgba(0,0,0,0.6)] hover:border-white/10">
 
               {/* 头像预览 */}
               <div className="flex justify-center -mt-16 mb-6">
@@ -206,12 +197,13 @@ export function UserLogin() {
 
               <form onSubmit={handleAuthSubmit} className="space-y-4">
                 <div className="space-y-1">
+                  {/* Fixed styling for vertical alignment of cursor/text */}
                   <input
                     type="text"
                     value={userId}
                     onChange={e => setUserId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} // 仅允许英文数字
                     placeholder="User ID (e.g. alex)"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 h-12 flex items-center text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
                     maxLength={20}
                     autoFocus
                   />
