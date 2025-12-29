@@ -26,6 +26,10 @@ const getRedisCredentials = () => {
     const prefixes = [
         { url: 'KV_REST_API_URL', token: 'KV_REST_API_TOKEN' },
         { url: 'UPSTASH_REDIS_REST_URL', token: 'UPSTASH_REDIS_REST_TOKEN' },
+        // 支持Vercel自动生成的各种格式
+        { url: 'UPSTASH_REDIS_REST_KV_REST_API_URL', token: 'UPSTASH_REDIS_REST_KV_REST_API_TOKEN' },
+        { url: 'UPSTASH_REDIS_REST_KV_URL', token: 'UPSTASH_REDIS_REST_KV_TOKEN' },
+        { url: 'UPSTASH_REDIS_REST_REDIS_URL', token: 'UPSTASH_REDIS_REST_REDIS_TOKEN' },
         { url: 'STORAGE_URL', token: 'STORAGE_TOKEN' },
         { url: 'REDIS_URL', token: 'REDIS_TOKEN' },
     ];
