@@ -26,6 +26,7 @@ export interface SavedUser {
     name: string;
     avatar: string;
     lastLogin: number;
+    isLoggedOut?: boolean; // 新增：是否显式登出
 }
 
 // 用户配置结构
@@ -48,12 +49,14 @@ interface UserContextType {
     // 动作
     login: (userId: string, password?: string) => Promise<{ success: boolean; error?: string }>;
     logout: () => void;
+    switchAccount: () => void;
     register: (userId: string, name: string, password?: string, avatar?: string) => Promise<{ success: boolean; error?: string }>;
     removeSavedUser: (userId: string) => void; // "忘记账号"
 
     // 用户管理
     updateProfile: (name: string, avatar: string) => Promise<boolean>;
     changePassword: (oldPass: string, newPass: string) => Promise<{ success: boolean; error?: string }>;
+    uploadAvatar: (file: File) => Promise<{ success: boolean; url?: string; error?: string }>; // 新增
 
     // 配置
     loadCloudConfig: () => Promise<UserConfig | null>;
@@ -96,7 +99,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
             if (saved) {
                 const users = JSON.parse(saved) as SavedUser[];
                 const user = users.find(u => u.id === lastUserId);
-                if (user) {
+                // 只有当用户没有显式登出时才自动恢复
+                if (user && !user.isLoggedOut) {
                     setCurrentUser({
                         id: user.id,
                         name: user.name,
@@ -122,7 +126,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }, []);
 
     // 更新本地存储
-    const updateSavedUsers = (user: User) => {
+    const updateSavedUsers = (user: User, isLoggedOut: boolean = false) => {
         setSavedUsers(prev => {
             // 移除旧的（如果存在）
             const filtered = prev.filter(u => u.id !== user.id);
@@ -131,7 +135,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 id: user.id,
                 name: user.name,
                 avatar: user.avatar,
-                lastLogin: Date.now()
+                lastLogin: Date.now(),
+                isLoggedOut
             };
             const newList = [newUser, ...filtered];
             localStorage.setItem(SAVED_USERS_KEY, JSON.stringify(newList));
@@ -143,20 +148,37 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setIsLoading(true);
         setSyncStatus('syncing');
 
+        const localUser = savedUsers.find(u => u.id === userId);
+
+        // 如果没有提供密码，且本地有记录且没登出 -> 信任本地进行免密登录
+        if (!password && localUser && !localUser.isLoggedOut) {
+            const user = {
+                id: localUser.id,
+                name: localUser.name,
+                avatar: localUser.avatar,
+                createdAt: new Date().toISOString()
+            };
+            setCurrentUser(user);
+            localStorage.setItem(CURRENT_USER_KEY, userId);
+            updateSavedUsers(user, false); // 更新时间，并确保标记为未登出
+            setIsLoading(false);
+            setSyncStatus('idle');
+            return { success: true };
+        }
+
         try {
             // 离线/模拟登录
             if (!isOnline) {
-                const savedUser = savedUsers.find(u => u.id === userId);
-                if (savedUser) {
+                if (localUser) {
                     const user = {
-                        id: savedUser.id,
-                        name: savedUser.name,
-                        avatar: savedUser.avatar,
+                        id: localUser.id,
+                        name: localUser.name,
+                        avatar: localUser.avatar,
                         createdAt: new Date().toISOString()
                     };
                     setCurrentUser(user);
                     localStorage.setItem(CURRENT_USER_KEY, userId);
-                    updateSavedUsers(user);
+                    updateSavedUsers(user, false);
                     setSyncStatus('idle');
                     setIsLoading(false);
                     return { success: true };
@@ -185,8 +207,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
             setCurrentUser(user);
             localStorage.setItem(CURRENT_USER_KEY, user.id);
 
-            // 成功登录后，加入本地记忆列表
-            updateSavedUsers(user);
+            // 成功登录后，加入本地记忆列表，并标记为未登出
+            updateSavedUsers(user, false);
 
             setSyncStatus('idle');
             setIsLoading(false);
@@ -289,15 +311,52 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
 
     const logout = () => {
+        if (currentUser) {
+            setSavedUsers(prev => {
+                const newList = prev.map(u =>
+                    u.id === currentUser.id ? { ...u, isLoggedOut: true } : u
+                );
+                localStorage.setItem(SAVED_USERS_KEY, JSON.stringify(newList));
+                return newList;
+            });
+        }
         setCurrentUser(null);
         localStorage.removeItem(CURRENT_USER_KEY);
     };
 
-    // --- 配置同步逻辑 ---
+    const switchAccount = () => {
+        setCurrentUser(null);
+        localStorage.removeItem(CURRENT_USER_KEY);
+    };
+
+    const uploadAvatar = async (file: File): Promise<{ success: boolean; url?: string; error?: string }> => {
+        if (!currentUser) return { success: false, error: '未登录' };
+
+        try {
+            const res = await fetch(`/api/upload?userId=${currentUser.id}&fileName=${encodeURIComponent(file.name)}`, {
+                method: 'POST',
+                body: file
+            });
+
+            if (!res.ok) throw new Error('Upload failed');
+
+            const data = await res.json();
+            const newAvatarUrl = data.url;
+
+            const updateRes = await updateProfile(currentUser.name, newAvatarUrl);
+            if (updateRes) {
+                return { success: true, url: newAvatarUrl };
+            } else {
+                return { success: false, error: 'Profile update failed' };
+            }
+        } catch (e) {
+            return { success: false, error: 'Upload failed' };
+        }
+    };
+
     const loadCloudConfig = async () => {
         if (!currentUser) return null;
 
-        // 先尝试加载离线缓存
         const cacheKey = OFFLINE_CONFIG_PREFIX + currentUser.id;
         const cached = localStorage.getItem(cacheKey);
         let config: UserConfig | null = cached ? JSON.parse(cached) : null;
@@ -309,7 +368,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
                     const data = await res.json();
                     if (data.config) {
                         config = data.config;
-                        // 更新缓存
                         localStorage.setItem(cacheKey, JSON.stringify(config));
                     }
                 }
@@ -323,7 +381,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const saveCloudConfig = async (config: Partial<UserConfig>) => {
         if (!currentUser) return false;
 
-        // 1. 保存到本地缓存
         const cacheKey = OFFLINE_CONFIG_PREFIX + currentUser.id;
         const currentConfigStr = localStorage.getItem(cacheKey);
         const newConfig = {
@@ -333,7 +390,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
         };
         localStorage.setItem(cacheKey, JSON.stringify(newConfig));
 
-        // 2. 如果在线，推送到云端
         if (isOnline) {
             try {
                 setSyncStatus('syncing');
@@ -349,7 +405,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
                 return false;
             }
         }
-
         return true;
     };
 
@@ -361,10 +416,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
         syncStatus,
         login,
         logout,
+        switchAccount,
         register,
         removeSavedUser,
         updateProfile,
         changePassword,
+        uploadAvatar,
         loadCloudConfig,
         saveCloudConfig
     };

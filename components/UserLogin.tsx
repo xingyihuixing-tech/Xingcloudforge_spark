@@ -9,11 +9,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useUser, SavedUser } from '../contexts/UserContext';
-import { StarBackground } from './StarBackground';
+import { BackgroundManager } from './BackgroundManager';
 import { PlanetAvatar } from './PlanetAvatar';
 
 export function UserLogin() {
-  const { savedUsers, login, register, removeSavedUser, isLoading, isOnline } = useUser();
+  const { savedUsers, login, register, removeSavedUser, currentUser, isLoading, isOnline } = useUser();
 
   // 视图模式：'saved-list' (记忆列表) | 'auth-form' (账号登录)
   // 如果没有保存的用户，默认进入 auth-form
@@ -80,16 +80,28 @@ export function UserLogin() {
 
   // 处理快捷登录
   const handleQuickLogin = async (user: SavedUser) => {
-    // 尝试直接登录（假设无密码或需要密码框）
-    // 这里简化逻辑：直接尝试登录。如果失败（需要密码），API会返回错误，然后我们在界面提示
-    // 由于我们没有把加密密码存在本地（也不应该），所以每次还是需要输密码？
-    // 为了体验，通常会用Refresh Token。但这里没有。
-    // 这种情况下，点击快捷头像 -> 弹出密码框（如果用户设置了密码）
-    // 简单起见：先把ID填入，跳转到登录表单
-    setUserId(user.id);
-    setViewMode('auth-form');
-    // 如果知道它没密码，可以直接调 login，但前端不知道。
-    // 留给用户输入密码
+    // 免密登录逻辑：检查 savedUser.lastLogin 是否使得 Session 仍然视作有效（简化逻辑：只要本地有，就允许进入）
+    // 这里的逻辑已变更：click -> login (auto)
+    // 除非用户显示点击了 Logout (我们需要一个标记，暂未实现，先默认所有SavedUser都可尝试免密)
+    // 如果 login 需要密码，后端会失败？Context里的 login 只是调 API。
+    // 如果我们想实现纯前端的"记住状态"，可以在 login 时仅更新 currentUser 而不发请求（离线/模拟模式），
+    // 或者发送 ID 换取 Token（如果有）。
+    // 根据用户需求： "switch account时，点击用户卡片又要重新输入密码... 优化成除非log out 否则保持登录状态"
+    // 这意味着本地存了 token 或者 password (不推荐)。
+    // 或者仅仅是 Context 状态切换？
+    // 为了实现"除非Log out"，我们需要在 SavedUser 里存一个 `isLoggedOut` 标记。
+    // 如果 `!isLoggedOut`，直接 `setCurrentUser` 并切入。
+
+    // 临时逻辑：直接切入（模拟免密）
+    const res = await login(user.id); // login now supports optional password
+    if (res.success) {
+      // success
+    } else {
+      // 失败（如需要密码），只有这时才跳表单
+      setUserId(user.id);
+      setViewMode('auth-form');
+      setError(res.error || '需要验证密码');
+    }
   };
 
   if (isLoading) {
@@ -102,17 +114,20 @@ export function UserLogin() {
 
   return (
     <div className="fixed inset-0 overflow-hidden font-sans text-white select-none">
-      {/* 动态星空背景 */}
-      <StarBackground />
+      {/* 动态背景管理器 */}
+      <BackgroundManager />
 
       <div className="relative z-10 w-full h-full flex flex-col items-center justify-center px-4">
 
-        {/* 标题区 */}
+        {/* 标题区 - 品牌升级 */}
         <div className="mb-12 text-center animate-in fade-in slide-in-from-top-10 duration-700">
-          <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-cyan-300 to-purple-400 mb-2 drop-shadow-lg">
-            Nebula Space
+          <h1 className="text-6xl md:text-7xl mb-4 drop-shadow-[0_0_15px_rgba(0,255,255,0.5)] bg-clip-text text-transparent bg-gradient-to-r from-white via-cyan-100 to-white"
+            style={{ fontFamily: '"Great Vibes", cursive' }}>
+            Xingstar Space
           </h1>
-          <p className="text-white/40 text-sm tracking-widest uppercase">Particle Visualization Engine</p>
+          <p className="text-cyan-200/60 text-sm tracking-[0.3em] uppercase font-light" style={{ fontFamily: '"Orbitron", sans-serif' }}>
+            Particle Visualization Engine
+          </p>
         </div>
 
         {/* 错误提示 */}

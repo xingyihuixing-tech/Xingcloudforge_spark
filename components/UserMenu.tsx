@@ -3,7 +3,7 @@ import { useUser, User } from '../contexts/UserContext';
 import { PlanetAvatar } from './PlanetAvatar';
 
 export const UserMenu: React.FC = () => {
-    const { currentUser, logout, updateProfile, changePassword } = useUser();
+    const { currentUser, logout, switchAccount, updateProfile, changePassword, uploadAvatar } = useUser();
     const [isOpen, setIsOpen] = useState(false);
     const [modalMode, setModalMode] = useState<'profile' | 'password' | null>(null);
 
@@ -11,6 +11,11 @@ export const UserMenu: React.FC = () => {
 
     const handleLogout = () => {
         logout();
+        setIsOpen(false);
+    };
+
+    const handleSwitch = () => {
+        switchAccount(); // 保留免密
         setIsOpen(false);
     };
 
@@ -59,7 +64,7 @@ export const UserMenu: React.FC = () => {
 
                         <div className="h-px bg-white/10 my-1 mx-2" />
 
-                        <MenuItem icon="exchange-alt" label="Switch Account" onClick={() => { logout(); setIsOpen(false); }} />
+                        <MenuItem icon="exchange-alt" label="Switch Account" onClick={handleSwitch} />
                         <MenuItem icon="sign-out-alt" label="Log Out" variant="danger" onClick={handleLogout} />
                     </div>
                 </>
@@ -73,6 +78,7 @@ export const UserMenu: React.FC = () => {
                     onClose={() => setModalMode(null)}
                     updateProfile={updateProfile}
                     changePassword={changePassword}
+                    uploadAvatar={uploadAvatar}
                 />
             )}
         </div>
@@ -83,8 +89,8 @@ const MenuItem = ({ icon, label, onClick, variant = 'default' }: { icon: string,
     <button
         onClick={onClick}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${variant === 'danger'
-                ? 'text-red-400 hover:bg-red-500/10 hover:pl-4'
-                : 'text-white/70 hover:bg-white/10 hover:text-white hover:pl-4'
+            ? 'text-red-400 hover:bg-red-500/10 hover:pl-4'
+            : 'text-white/70 hover:bg-white/10 hover:text-white hover:pl-4'
             }`}
     >
         <i className={`fas fa-${icon} w-5 text-center opacity-70`} />
@@ -98,13 +104,15 @@ const SettingsModal = ({
     user,
     onClose,
     updateProfile,
-    changePassword
+    changePassword,
+    uploadAvatar
 }: {
     mode: 'profile' | 'password',
     user: User,
     onClose: () => void,
     updateProfile: (name: string, avatar: string) => Promise<boolean>,
-    changePassword: (oldP: string, newP: string) => Promise<{ success: boolean, error?: string }>
+    changePassword: (oldP: string, newP: string) => Promise<{ success: boolean, error?: string }>,
+    uploadAvatar: (file: File) => Promise<{ success: boolean, url?: string, error?: string }>
 }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -114,9 +122,34 @@ const SettingsModal = ({
     const [name, setName] = useState(user.name);
     const [avatarUrl, setAvatarUrl] = useState(user.avatar || '');
 
+    // File Upload State
+    const [isUploading, setIsUploading] = useState(false);
+
     // Password State
     const [oldPass, setOldPass] = useState('');
     const [newPass, setNewPass] = useState('');
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files[0]) {
+            const file = e.target.files[0];
+            if (file.size > 2 * 1024 * 1024) { // 2MB limit
+                setError('Image too large (max 2MB)');
+                return;
+            }
+
+            setIsUploading(true);
+            setError('');
+
+            const res = await uploadAvatar(file);
+            if (res.success && res.url) {
+                setAvatarUrl(res.url); // Preview immediately
+                setSuccessMsg('Avatar uploaded!');
+            } else {
+                setError(res.error || 'Upload failed');
+            }
+            setIsUploading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -180,11 +213,17 @@ const SettingsModal = ({
                 <form onSubmit={handleSubmit} className="space-y-5">
                     {mode === 'profile' ? (
                         <>
-                            <div className="flex justify-center mb-6">
-                                <div className="relative group">
+                            <div className="flex flex-col items-center mb-6 gap-4">
+                                <div className="relative group cursor-pointer">
                                     <PlanetAvatar userId={user.id} imageUrl={avatarUrl} size="lg" />
-                                    {/* 暂时没有图片上传接口，以后可加 */}
+                                    {/* Upload Overlay */}
+                                    <label className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white text-xs font-semibold backdrop-blur-sm">
+                                        {isUploading ? <i className="fas fa-spinner fa-spin" /> : 'UPLOAD'}
+                                        <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} disabled={isUploading} />
+                                    </label>
                                 </div>
+                                {/* 增加一个文字提示 */}
+                                <p className="text-xs text-white/40">Click avatar to upload new image</p>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-xs text-white/40 ml-1 uppercase tracking-wider font-semibold">Nickname</label>
@@ -232,7 +271,7 @@ const SettingsModal = ({
                         </button>
                         <button
                             type="submit"
-                            disabled={isLoading}
+                            disabled={isLoading || isUploading}
                             className="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium hover:shadow-lg hover:shadow-cyan-500/20 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm"
                         >
                             {isLoading ? 'Saving...' : 'Save Changes'}
