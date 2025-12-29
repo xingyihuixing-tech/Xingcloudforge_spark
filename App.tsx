@@ -842,9 +842,8 @@ const App: React.FC = () => {
     <div className="w-full h-screen relative overflow-hidden font-sans" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-1)' }}>
       {/* 3D Scene Area - 全屏 */}
       <div className="absolute inset-0">
-        {/* 用户信息显示 */}
-        {/* 用户信息显示 */}
-        <div className="absolute top-2 right-2 md:top-4 md:right-4 z-50">
+        {/* 用户信息显示 - 左上角 */}
+        <div className="absolute top-2 left-2 md:top-4 md:left-4 z-50">
           <UserMenu />
         </div>
 

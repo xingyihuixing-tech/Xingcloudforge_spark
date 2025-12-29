@@ -158,18 +158,23 @@ export function UserLogin() {
                 </div>
               ))}
 
-              {/* Add Account Button */}
-              <button
-                onClick={() => {
-                  setUserId('');
-                  setPassword('');
-                  setViewMode('auth-form');
-                }}
-                className="flex flex-col items-center justify-center gap-3 w-28 h-28 md:w-32 md:h-32 rounded-full border-2 border-dashed border-white/20 text-white/40 hover:border-cyan-400/50 hover:text-cyan-300 hover:bg-white/5 transition-all duration-300 group"
-              >
-                <i className="fas fa-plus text-2xl group-hover:scale-110 transition-transform" />
-                <span className="text-xs font-medium tracking-wide">ADD PROFILE</span>
-              </button>
+              {/* Add Account Button - Wrapped like saved user cards for alignment */}
+              <div className="group relative flex flex-col items-center">
+                <button
+                  onClick={() => {
+                    setUserId('');
+                    setPassword('');
+                    setViewMode('auth-form');
+                  }}
+                  className="flex flex-col items-center justify-center gap-3 w-28 h-28 md:w-32 md:h-32 rounded-full border-2 border-dashed border-white/20 text-white/40 hover:border-cyan-400/50 hover:text-cyan-300 hover:bg-white/5 transition-all duration-300"
+                >
+                  <i className="fas fa-plus text-2xl group-hover:scale-110 transition-transform" />
+                  <span className="text-xs font-medium tracking-wide">ADD</span>
+                </button>
+                <span className="mt-4 text-lg font-medium text-white/40 group-hover:text-cyan-300 transition-colors drop-shadow-md">
+                  New
+                </span>
+              </div>
             </div>
             {/* Clear All Button */}
             <button
@@ -197,13 +202,12 @@ export function UserLogin() {
 
               <form onSubmit={handleAuthSubmit} className="space-y-4">
                 <div className="space-y-1">
-                  {/* Fixed styling for vertical alignment of cursor/text */}
                   <input
                     type="text"
                     value={userId}
-                    onChange={e => setUserId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))} // 仅允许英文数字
+                    onChange={e => setUserId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
                     placeholder="User ID (e.g. alex)"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 h-12 flex items-center text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center leading-normal"
                     maxLength={20}
                     autoFocus
                   />
