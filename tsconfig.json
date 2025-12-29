@@ -26,5 +26,11 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "api",
+    "OldNebulaScene.tsx",
+    "oldimageProcessing.ts"
+  ]
 }

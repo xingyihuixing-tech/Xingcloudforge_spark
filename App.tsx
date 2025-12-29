@@ -10,6 +10,8 @@ import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
 import GestureHandler from './components/GestureHandler';
+import { UserLogin } from './components/UserLogin';
+import { useUser } from './contexts/UserContext';
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode } from './types';
 import {
   DEFAULT_SETTINGS,
@@ -126,6 +128,9 @@ const saveSettings = (settings: AppSettings) => {
 };
 
 const App: React.FC = () => {
+  // 用户登录状态
+  const { currentUser, isLoading: isUserLoading } = useUser();
+
   const [settings, setSettings] = useState<AppSettings>(loadSavedSettings);
   const [planetSettings, setPlanetSettings] = useState<PlanetSceneSettings>(loadPlanetSceneSettings);
   const [appMode, setAppMode] = useState<AppMode>('nebula');
@@ -827,10 +832,27 @@ const App: React.FC = () => {
   // 检测移动设备
   const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+  // 如果用户未登录，显示登录界面
+  if (!currentUser) {
+    return <UserLogin />;
+  }
+
   return (
     <div className="w-full h-screen relative overflow-hidden font-sans" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-1)' }}>
       {/* 3D Scene Area - 全屏 */}
       <div className="absolute inset-0">
+        {/* 用户信息显示 */}
+        <div className="absolute top-2 right-2 md:top-4 md:right-4 z-50 flex items-center gap-2 px-3 py-1.5 rounded-xl"
+          style={{
+            background: 'rgba(20,20,30,0.6)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+          }}
+        >
+          <span className="text-lg">{currentUser.avatar}</span>
+          <span className="text-sm text-white/80">{currentUser.name}</span>
+        </div>
+
         {/* 顶部模式切换栏 - 水晶宝石风格 */}
         <div className="absolute top-2 md:top-4 left-1/2 transform -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 rounded-2xl"
           style={{
