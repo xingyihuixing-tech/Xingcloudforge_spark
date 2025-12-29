@@ -2,22 +2,21 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { User } from '../contexts/UserContext';
 import { PlanetAvatar } from './PlanetAvatar';
-import { base64ToBlob } from '../services/imageProcessing';
 
 interface SettingsModalProps {
+    isOpen: boolean;
     mode: 'profile' | 'password';
     user: User;
     onClose: () => void;
-    updateProfile: (updates: Partial<User>) => Promise<boolean>;
-    changePassword: (oldPw: string, newPw: string) => Promise<boolean>;
-    uploadAvatar: (file: File) => Promise<{ success: boolean; url: string }>;
+    onUpdateProfile: (updates: Partial<User>) => Promise<boolean>;
+    onChangePassword: (oldPw: string, newPw: string) => Promise<boolean>;
+    onUploadAvatar: (file: File) => Promise<{ success: boolean; url: string }>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
-    mode, user, onClose, updateProfile, changePassword, uploadAvatar
+    isOpen, mode, user, onClose, onUpdateProfile, onChangePassword, onUploadAvatar
 }) => {
-    const [name, setName] = useState(user.name);
-    const [bio, setBio] = useState(user.bio || '');
+    const [name, setName] = useState(user?.name || '');
     const [oldPassword, setOldPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -25,20 +24,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
 
+    if (!isOpen) return null;
+
     const handleProfileUpdate = async () => {
         setIsLoading(true);
         setError('');
         setSuccess('');
         try {
-            const result = await updateProfile({ name, bio });
+            const result = await onUpdateProfile({ name });
             if (result) {
-                setSuccess('Profile updated successfully');
+                setSuccess('资料更新成功');
                 setTimeout(onClose, 1000);
             } else {
-                setError('Failed to update profile');
+                setError('更新失败');
             }
         } catch (e) {
-            setError('An error occurred');
+            setError('发生错误');
         } finally {
             setIsLoading(false);
         }
@@ -46,22 +47,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
     const handlePasswordChange = async () => {
         if (newPassword !== confirmPassword) {
-            setError('New passwords do not match');
+            setError('两次输入的新密码不一致');
             return;
         }
         setIsLoading(true);
         setError('');
         setSuccess('');
         try {
-            const result = await changePassword(oldPassword, newPassword);
+            const result = await onChangePassword(oldPassword, newPassword);
             if (result) {
-                setSuccess('Password changed successfully');
+                setSuccess('密码修改成功');
                 setTimeout(onClose, 1000);
             } else {
-                setError('Incorrect old password');
+                setError('原密码错误');
             }
         } catch (e) {
-            setError('An error occurred');
+            setError('发生错误');
         } finally {
             setIsLoading(false);
         }
@@ -73,15 +74,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         setIsLoading(true);
         try {
-            const res = await uploadAvatar(file);
+            const res = await onUploadAvatar(file);
             if (res.success) {
-                await updateProfile({ avatar: res.url });
-                setSuccess('Avatar updated');
+                await onUpdateProfile({ avatar: res.url });
+                setSuccess('头像更新成功');
             } else {
-                setError('Upload failed');
+                setError('上传失败');
             }
         } catch (err) {
-            setError('Upload error');
+            setError('上传出错');
         } finally {
             setIsLoading(false);
         }
@@ -95,7 +96,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </button>
 
                 <h2 className="text-xl font-medium text-white mb-6">
-                    {mode === 'profile' ? 'Edit Profile' : 'Change Password'}
+                    {mode === 'profile' ? '编辑资料' : '修改密码'}
                 </h2>
 
                 {error && <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm rounded-lg">{error}</div>}
@@ -104,29 +105,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {mode === 'profile' ? (
                     <div className="space-y-4">
                         <div className="flex items-center gap-4 mb-4">
-                            <PlanetAvatar userId={user.id} imageUrl={user.avatar} size="lg" />
+                            <PlanetAvatar userId={user?.id || 'default'} imageUrl={user?.avatar} size="lg" />
                             <div>
                                 <label className="block text-sm text-cyan-400 hover:text-cyan-300 cursor-pointer">
-                                    Change Avatar
+                                    更换头像
                                     <input type="file" hidden accept="image/*" onChange={handleAvatarUpload} />
                                 </label>
-                                <p className="text-xs text-white/30 mt-1">Max 2MB, JPG/PNG</p>
+                                <p className="text-xs text-white/30 mt-1">最大 2MB, JPG/PNG</p>
                             </div>
                         </div>
                         <div>
-                            <label className="text-xs text-white/40 mb-1 block">Display Name</label>
+                            <label className="text-xs text-white/40 mb-1 block">显示名称</label>
                             <input
                                 value={name}
                                 onChange={e => setName(e.target.value)}
                                 className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-500 outline-none transition-colors"
-                            />
-                        </div>
-                        <div>
-                            <label className="text-xs text-white/40 mb-1 block">Bio</label>
-                            <textarea
-                                value={bio}
-                                onChange={e => setBio(e.target.value)}
-                                className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-white focus:border-cyan-500 outline-none transition-colors h-24 resize-none"
                             />
                         </div>
                         <button
@@ -134,13 +127,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             disabled={isLoading}
                             className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition-colors mt-2 disabled:opacity-50"
                         >
-                            {isLoading ? 'Saving...' : 'Save Changes'}
+                            {isLoading ? '保存中...' : '保存修改'}
                         </button>
                     </div>
                 ) : (
                     <div className="space-y-4">
                         <div>
-                            <label className="text-xs text-white/40 mb-1 block">Current Password</label>
+                            <label className="text-xs text-white/40 mb-1 block">当前密码</label>
                             <input
                                 type="password"
                                 value={oldPassword}
@@ -149,7 +142,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-xs text-white/40 mb-1 block">New Password</label>
+                            <label className="text-xs text-white/40 mb-1 block">新密码</label>
                             <input
                                 type="password"
                                 value={newPassword}
@@ -158,7 +151,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             />
                         </div>
                         <div>
-                            <label className="text-xs text-white/40 mb-1 block">Confirm New Password</label>
+                            <label className="text-xs text-white/40 mb-1 block">确认新密码</label>
                             <input
                                 type="password"
                                 value={confirmPassword}
@@ -171,7 +164,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                             disabled={isLoading}
                             className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium transition-colors mt-2 disabled:opacity-50"
                         >
-                            {isLoading ? 'Changing Password...' : 'Change Password'}
+                            {isLoading ? '修改中...' : '修改密码'}
                         </button>
                     </div>
                 )}

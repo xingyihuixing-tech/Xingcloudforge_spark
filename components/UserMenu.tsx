@@ -89,19 +89,15 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                 </>
             )}
 
-            {/* 个人资料设置弹窗 */}
+            {/* 个人资料/密码设置弹窗 */}
             <SettingsModal
                 isOpen={modalMode === 'profile' || modalMode === 'password'}
                 mode={modalMode === 'password' ? 'password' : 'profile'}
                 onClose={() => setModalMode(null)}
-                user={{
-                    name: currentUser.name || '',
-                    avatar: currentUser.avatar || '',
-                    email: currentUser.email || '',
-                    bio: currentUser.bio || '',
-                }}
+                user={currentUser}
                 onUpdateProfile={async (data) => {
-                    return await updateProfile(data);
+                    // UserContext.updateProfile expects (name, avatar) but we have Partial<User>
+                    return await updateProfile(data.name || currentUser.name, data.avatar || currentUser.avatar);
                 }}
                 onChangePassword={async (oldPass, newPass) => {
                     const result = await changePassword(oldPass, newPass);
@@ -125,17 +121,6 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                 modeSwitchMaterial={modeSwitchMaterial}
                 setModeSwitchMaterial={setModeSwitchMaterial}
             />
-
-            {(modalMode === 'profile' || modalMode === 'password') && (
-                <SettingsModal
-                    mode={modalMode}
-                    user={currentUser}
-                    onClose={() => setModalMode(null)}
-                    updateProfile={updateProfile}
-                    changePassword={changePassword}
-                    uploadAvatar={uploadAvatar}
-                />
-            )}
         </div>
     );
 };
