@@ -4439,334 +4439,23 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         )}
 
         {/* 设置面板 - 使用 createPortal 渲染到 body */}
-        {showSettings && createPortal(
-          <div
-            className="fixed z-[9999] rounded-xl shadow-2xl w-72 max-h-[80vh] overflow-hidden flex flex-col"
-            style={{
-              left: settingsPanelPos ? settingsPanelPos.x : '50%',
-              top: settingsPanelPos ? settingsPanelPos.y : '50%',
-              transform: settingsPanelPos ? 'none' : 'translate(-50%, -50%)',
-              backgroundColor: 'rgba(20, 20, 30, 0.95)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              backdropFilter: 'blur(16px)',
-              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
-            }}
-          >
-            {/* 可拖拽标题栏 - 支持鼠标和触摸 */}
-            <div
-              className="flex items-center justify-between px-4 py-2 cursor-move select-none"
-              style={{
-                backgroundColor: 'rgba(255,255,255,0.05)',
-                borderBottom: '1px solid rgba(255,255,255,0.1)',
-                touchAction: 'none'
-              }}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-                const offsetX = e.clientX - rect.left;
-                const offsetY = e.clientY - rect.top;
 
-                const handleMouseMove = (moveEvent: MouseEvent) => {
-                  setSettingsPanelPos({
-                    x: moveEvent.clientX - offsetX,
-                    y: moveEvent.clientY - offsetY
-                  });
-                };
-
-                const handleMouseUp = () => {
-                  document.removeEventListener('mousemove', handleMouseMove);
-                  document.removeEventListener('mouseup', handleMouseUp);
-                };
-
-                document.addEventListener('mousemove', handleMouseMove);
-                document.addEventListener('mouseup', handleMouseUp);
-              }}
-              onTouchStart={(e) => {
-                const touch = e.touches[0];
-                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
-                const offsetX = touch.clientX - rect.left;
-                const offsetY = touch.clientY - rect.top;
-
-                const handleTouchMove = (moveEvent: TouchEvent) => {
-                  moveEvent.preventDefault();
-                  const moveTouch = moveEvent.touches[0];
-                  setSettingsPanelPos({
-                    x: moveTouch.clientX - offsetX,
-                    y: moveTouch.clientY - offsetY
-                  });
-                };
-
-                const handleTouchEnd = () => {
-                  document.removeEventListener('touchmove', handleTouchMove);
-                  document.removeEventListener('touchend', handleTouchEnd);
-                };
-
-                document.addEventListener('touchmove', handleTouchMove, { passive: false });
-                document.addEventListener('touchend', handleTouchEnd);
-              }}
-            >
-              <h4 className="text-xs font-bold" style={{ color: 'var(--ui-secondary)' }}>主题设置</h4>
-              <button
-                onClick={() => setShowSettings(false)}
-                className="text-xs px-2 py-0.5 rounded hover:bg-white/10 transition-colors"
-                style={{ color: 'var(--text-2)' }}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="p-3 overflow-y-auto flex-1">
-
-
-
-              {/* 🌌 全局背景设置 (仅在星球模式或互通模式下显示) */}
-              {(appMode === 'planet' || overlayMode) && (
-                <div className="mb-4 pb-4 border-b border-gray-700">
-                  <h5 className="text-xs font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--ui-secondary)' }}>
-                    <span>🌌</span> 全局背景设置
-                  </h5>
-
-                  {/* 背景开关 */}
-                  <div className="flex items-center justify-between mb-3 p-2 rounded" style={{ backgroundColor: 'var(--surface)' }}>
-                    <span className="text-xs" style={{ color: 'var(--text-1)' }}>全景图背景</span>
-                    <button
-                      onClick={() => {
-                        // 互通模式下背景由 PlanetScene 渲染，所以修改 planetSettings
-                        if (appMode === 'planet' || overlayMode) {
-                          setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, enabled: !prev.background?.enabled } }));
-                        } else {
-                          setSettings(prev => ({ ...prev, background: { ...prev.background!, enabled: !prev.background?.enabled } }));
-                        }
-                      }}
-                      className={`px-3 py-1 text-xs rounded-full font-bold transition-colors ${((appMode === 'planet' || overlayMode) ? planetSettings.background?.enabled : settings.background?.enabled)
-                        ? 'bg-green-600 text-white'
-                        : 'bg-gray-600 text-gray-400'
-                        }`}
-                    >
-                      {((appMode === 'planet' || overlayMode) ? planetSettings.background?.enabled : settings.background?.enabled) ? '已开启' : '已关闭'}
-                    </button>
-                  </div>
-
-                  {/* 全景图选择 */}
-                  <div className="mb-3">
-                    <label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>全景图 ({BACKGROUND_IMAGES.length}张)</label>
-                    <select
-                      value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.panoramaUrl : settings.background?.panoramaUrl) || '/background/starfield.jpg'}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (appMode === 'planet' || overlayMode) {
-                          setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, panoramaUrl: val } }));
-                        } else {
-                          setSettings(prev => ({ ...prev, background: { ...prev.background!, panoramaUrl: val } }));
-                        }
-                      }}
-                      className="w-full text-xs rounded px-2 py-1.5"
-                      style={{ backgroundColor: 'var(--surface)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
-                    >
-                      {BACKGROUND_IMAGES.length > 0 ? (
-                        BACKGROUND_IMAGES.map(img => (
-                          <option key={img.value} value={img.value}>{img.label}</option>
-                        ))
-                      ) : (
-                        <option value="/background/starfield.jpg">默认星空</option>
-                      )}
-                    </select>
-                  </div>
-
-                  {/* 参数滑块 */}
-                  <RangeControl
-                    label="背景亮度"
-                    value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.brightness : settings.background?.brightness) ?? 1.0}
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    onChange={(v) => {
-                      if (appMode === 'planet' || overlayMode) {
-                        setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, brightness: v } }));
-                      } else {
-                        setSettings(prev => ({ ...prev, background: { ...prev.background!, brightness: v } }));
-                      }
-                    }}
-                  />
-                  <RangeControl
-                    label="背景饱和度"
-                    value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.saturation : settings.background?.saturation) ?? 1.0}
-                    min={0}
-                    max={5}
-                    step={0.1}
-                    onChange={(v) => {
-                      if (appMode === 'planet' || overlayMode) {
-                        setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, saturation: v } }));
-                      } else {
-                        setSettings(prev => ({ ...prev, background: { ...prev.background!, saturation: v } }));
-                      }
-                    }}
-                  />
-                  <RangeControl
-                    label="背景旋转"
-                    value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.rotation : settings.background?.rotation) ?? 0}
-                    min={0}
-                    max={360}
-                    step={10}
-                    onChange={(v) => {
-                      if (appMode === 'planet' || overlayMode) {
-                        setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, rotation: v } }));
-                      } else {
-                        setSettings(prev => ({ ...prev, background: { ...prev.background!, rotation: v } }));
-                      }
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* 🎨 配色方案设置 */}
-              <div className="mb-4 pt-4 border-t border-gray-700">
-                <h5 className="text-xs font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--ui-secondary)' }}>
-                  <span>🎨</span> 配色方案
-                </h5>
-
-                {/* 方案选择 */}
-                <div className="flex items-center justify-between mb-3 p-2 rounded" style={{ backgroundColor: 'var(--surface)' }}>
-                  <span className="text-xs" style={{ color: 'var(--text-1)' }}>当前方案</span>
-                  <div className="flex gap-1">
-                    <select
-                      value={activeSchemeId}
-                      onChange={(e) => applyScheme(e.target.value)}
-                      className="text-xs rounded px-2 py-1 cursor-pointer"
-                      style={{ backgroundColor: 'var(--surface)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
-                    >
-                      {Object.entries(colorSchemes).map(([key, scheme]) => (
-                        <option key={key} value={key}>{scheme.name}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => deleteScheme(activeSchemeId)}
-                      className="px-2 rounded text-xs transition-colors hover:bg-red-500/20 text-red-400"
-                      title="删除当前方案"
-                      style={{ border: '1px solid var(--border)' }}
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* 控制台背景色 */}
-              <div className="mb-3">
-                <label className="text-xs block mb-2" style={{ color: 'var(--text-2)' }}>控制台背景色</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>深色主题</label>
-                    <div className="flex gap-1">
-                      <input
-                        type="color"
-                        value={customColors.darkBg}
-                        onChange={(e) => setCustomColors(prev => ({ ...prev, darkBg: e.target.value }))}
-                        className="w-6 h-6 rounded cursor-pointer flex-shrink-0"
-                      />
-                      <input
-                        type="text"
-                        value={customColors.darkBg}
-                        onChange={(e) => setCustomColors(prev => ({ ...prev, darkBg: e.target.value }))}
-                        className="flex-1 px-1 rounded text-[10px] w-0"
-                        style={{ backgroundColor: 'var(--surface)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* UI颜色自定义 */}
-              <div className="space-y-2">
-                <label className="text-xs block" style={{ color: 'var(--text-2)' }}>自定义颜色</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>主交互色</label>
-                    <input
-                      type="color"
-                      value={customColors.primary}
-                      onChange={(e) => setCustomColors(prev => ({ ...prev, primary: e.target.value }))}
-                      className="w-full h-6 rounded cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>次交互色</label>
-                    <input
-                      type="color"
-                      value={customColors.secondary}
-                      onChange={(e) => setCustomColors(prev => ({ ...prev, secondary: e.target.value }))}
-                      className="w-full h-6 rounded cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>标题强调</label>
-                    <input
-                      type="color"
-                      value={customColors.textAccent}
-                      onChange={(e) => setCustomColors(prev => ({ ...prev, textAccent: e.target.value }))}
-                      className="w-full h-6 rounded cursor-pointer"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>装饰线条</label>
-                    <input
-                      type="color"
-                      value={customColors.decoration}
-                      onChange={(e) => setCustomColors(prev => ({ ...prev, decoration: e.target.value }))}
-                      className="w-full h-6 rounded cursor-pointer"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>编辑栏颜色</label>
-                    <input
-                      type="color"
-                      value={customColors.editBar}
-                      onChange={(e) => setCustomColors(prev => ({ ...prev, editBar: e.target.value }))}
-                      className="w-full h-6 rounded cursor-pointer"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2 mt-2 border-t flex gap-2" style={{ borderColor: 'var(--border)' }}>
-                  {/* 所有方案都可以保存修改和另存为 */}
-                  <button
-                    onClick={() => saveScheme(false)}
-                    className="flex-1 py-1.5 text-xs rounded transition-all hover:opacity-80"
-                    style={{
-                      background: 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)',
-                      backdropFilter: 'blur(8px)',
-                      border: '1px solid var(--ui-secondary)',
-                      color: 'var(--ui-secondary)',
-                    }}
-                  >
-                    保存修改
-                  </button>
-                  <button
-                    onClick={() => saveScheme(true)}
-                    className="flex-1 py-1.5 text-xs rounded transition-all hover:opacity-80"
-                    style={{
-                      background: 'rgba(var(--ui-primary-rgb, 99, 102, 241), 0.3)',
-                      backdropFilter: 'blur(8px)',
-                      border: '1px solid var(--ui-primary)',
-                      color: 'var(--ui-primary)',
-                    }}
-                  >
-                    另存为...
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
       </div>
 
       {/* 标题栏 - 星云模式 */}
       {appMode === 'nebula' && (
-        <div className="mb-4">
-          <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--accent)' }}>
+        <div className="mb-4 text-center relative">
+          <h1 className="text-4xl font-bold mb-1 tracking-wider" style={{
+            fontFamily: "'Great Vibes', cursive",
+            background: 'linear-gradient(to right, #22d3ee, #818cf8)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 10px rgba(34, 211, 238, 0.3))',
+            padding: '5px 0'
+          }}>
             XingCloud
           </h1>
-          <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>
+          <div className="flex justify-between text-xs font-mono px-2" style={{ color: 'var(--text-2)' }}>
             <span>FPS: {fps}</span>
             <span>粒子数: {(particleCount / 1000).toFixed(1)}k</span>
           </div>
@@ -4775,11 +4464,18 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
       {/* 标题栏 - 星球模式 */}
       {appMode === 'planet' && (
-        <div className="mb-4">
-          <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--ui-primary)' }}>
+        <div className="mb-4 text-center relative">
+          <h1 className="text-4xl font-bold mb-1 tracking-wider" style={{
+            fontFamily: "'Great Vibes', cursive",
+            background: 'linear-gradient(to right, #f472b6, #fb7185)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            filter: 'drop-shadow(0 0 10px rgba(244, 114, 182, 0.3))',
+            padding: '5px 0'
+          }}>
             XingForge
           </h1>
-          <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>
+          <div className="flex justify-between text-xs font-mono px-2" style={{ color: 'var(--text-2)' }}>
             <span>FPS: {fps}</span>
             <span>粒子数: {(particleCount / 1000).toFixed(1)}k</span>
           </div>

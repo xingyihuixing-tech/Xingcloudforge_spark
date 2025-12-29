@@ -891,7 +891,15 @@ const App: React.FC = () => {
       <div className="absolute inset-0">
         {/* 用户信息显示 - 左上角 */}
         <div className="absolute top-0 left-0 p-2 md:p-3 z-50">
-          <UserMenu />
+          <UserMenu
+            settings={settings}
+            setSettings={setSettings}
+            planetSettings={planetSettings}
+            setPlanetSettings={setPlanetSettings}
+            appMode={appMode}
+            modeSwitchMaterial={modeSwitchMaterial}
+            setModeSwitchMaterial={setModeSwitchMaterial}
+          />
         </div>
 
         {/* 顶部模式切换栏 - 水晶宝石风格 */}
@@ -907,18 +915,17 @@ const App: React.FC = () => {
         >
           <button
             onClick={() => setAppMode('nebula')}
-            className="px-5 md:px-7 py-2 md:py-2.5 rounded-xl text-lg md:text-xl transition-all duration-300 relative group overflow-hidden"
+            className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
             style={{
-              fontFamily: "'Great Vibes', cursive",
-              ...getModeSwitchStyle(appMode === 'nebula', '#6366f1', 0),
-              background: appMode === 'nebula' ? 'linear-gradient(to right, #22d3ee, #818cf8)' : 'transparent',
-              borderColor: 'transparent',
-              color: appMode === 'nebula' ? '#fff' : 'rgba(255,255,255,0.7)',
-              textShadow: appMode === 'nebula' ? '0 2px 4px rgba(0,0,0,0.3)' : 'none'
+              ...getModeSwitchStyle(appMode === 'nebula', '#06b6d4', 0),
+              // Use simple style or inherit from helper? The loop in App.tsx used helper.
+              // Reverting to the simpler "星云" style
+              fontFamily: 'inherit'
             }}
           >
-            <span className="relative z-10">Xingcloud</span>
-            {appMode === 'nebula' && <div className="absolute inset-0 bg-white/20 animate-pulse rounded-xl" />}
+            <i className="fas fa-cloud-meatball mr-1 md:mr-2"></i>
+            <span className="hidden sm:inline">星云模式</span>
+            <span className="sm:hidden">星云</span>
           </button>
 
           {/* 叠加模式按钮 - 圆形互通按钮 */}
@@ -959,18 +966,15 @@ const App: React.FC = () => {
                 }));
               }
             }}
-            className="px-5 md:px-7 py-2 md:py-2.5 rounded-xl text-lg md:text-xl transition-all duration-300 relative group overflow-hidden"
+            className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
             style={{
-              fontFamily: "'Great Vibes', cursive",
               ...getModeSwitchStyle(appMode === 'planet', '#ec4899', 1),
-              background: appMode === 'planet' ? 'linear-gradient(to right, #f472b6, #fb7185)' : 'transparent',
-              borderColor: 'transparent',
-              color: appMode === 'planet' ? '#fff' : 'rgba(255,255,255,0.7)',
-              textShadow: appMode === 'planet' ? '0 2px 4px rgba(0,0,0,0.3)' : 'none'
+              fontFamily: 'inherit'
             }}
           >
-            <span className="relative z-10">Xingforge</span>
-            {appMode === 'planet' && <div className="absolute inset-0 bg-white/20 animate-pulse rounded-xl" />}
+            <i className="fas fa-globe mr-1 md:mr-2"></i>
+            <span className="hidden sm:inline">星球模式</span>
+            <span className="sm:hidden">星球</span>
           </button>
         </div>
 
