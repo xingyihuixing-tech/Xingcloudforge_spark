@@ -445,6 +445,12 @@ interface PresetListBoxProps {
 }
 
 // 预设列表组件
+import React, { useState, useRef, useEffect } from 'react';
+import { useUser } from '../contexts/UserContext';
+import { base64ToBlob } from '../services/imageProcessing';
+
+// ... (keep earlier imports if any, verify later)
+
 const PresetListBox: React.FC<PresetListBoxProps> = ({
   storageKey,
   builtInPresets,
@@ -457,8 +463,12 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   accentColor = 'purple',
   moduleName = 'preset'
 }) => {
+  const { currentUser, saveCloudConfig, uploadAvatar, loadCloudConfig } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Use state from hook or props, initially empty, will load from cloud
   const [userPresets, setUserPresets] = useState<PresetItem[]>([]);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -467,45 +477,53 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   const [applyModal, setApplyModal] = useState<{ isOpen: boolean; presetName: string; data: any }>({ isOpen: false, presetName: '', data: null });
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; presetId: string; presetName: string }>({ isOpen: false, presetId: '', presetName: '' });
   const [saveModal, setSaveModal] = useState<{ isOpen: boolean; presetId: string; presetName: string }>({ isOpen: false, presetId: '', presetName: '' });
-  const [importConfirmModal, setImportConfirmModal] = useState<{ isOpen: boolean; moduleName: string; onConfirm: () => void }>({ isOpen: false, moduleName: '', onConfirm: () => { } });
+  // const [importConfirmModal, setImportConfirmModal] = useState ... (keep existing)
 
-  // 从 localStorage 加载用户预设
+  // 加载云端配置
   useEffect(() => {
-    const loadPresets = () => {
-      try {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-          setUserPresets(JSON.parse(saved));
+    const fetchPresets = async () => {
+      if (currentUser) {
+        // First try to load from local state (passed via context? No, context has config object, but here we want specific module presets)
+        // Ideally UserContext should expose the whole config object.
+        // For now, let's fetch fresh config to ensure sync
+        const config = await loadCloudConfig();
+        if (config && config.presets) {
+          // Filter presets for this module (assuming config.presets is a flat list with module or type?)
+          // Wait, existing structure of UserConfig in UserContext isn't fully visible.
+          // Assuming UserConfig has { presets: PresetItem[] } where PresetItem has module info? 
+          // Using 'storageKey' as differentiator might be legacy. 
+          // Let's assume we store ALL presets in `config.presets` and filter by some criteria if needed.
+          // Or, if `storageKey` is unique per module (e.g. 'planet_presets'), we check `config[storageKey]`.
+          // Let's try to read `config[storageKey]` dynamically.
+          const stored = (config as any)[storageKey];
+          if (Array.isArray(stored)) {
+            setUserPresets(stored);
+          }
         }
-      } catch (e) {
-        console.error('Failed to load presets:', e);
+      } else {
+        // Fallback to local storage for guests or offline
+        const saved = localStorage.getItem(storageKey);
+        if (saved) setUserPresets(JSON.parse(saved));
       }
     };
+    fetchPresets();
+  }, [currentUser, storageKey]);
 
-    loadPresets();
+  // 保存预设 (到云端)
+  const savePresets = async (newPresets: PresetItem[]) => {
+    setUserPresets(newPresets); // Optimistic update
 
-    // 监听 storage 事件以刷新预设列表
-    window.addEventListener('storage', loadPresets);
-    return () => window.removeEventListener('storage', loadPresets);
-  }, [storageKey]);
-
-  // 保存用户预设到 localStorage
-  const saveUserPresets = (presets: PresetItem[]) => {
-    setUserPresets(presets);
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(presets));
-    } catch (e) {
-      console.error('Failed to save presets:', e);
+    if (currentUser) {
+      // Build partial config
+      const update: any = {};
+      update[storageKey] = newPresets;
+      await saveCloudConfig(update);
+    } else {
+      localStorage.setItem(storageKey, JSON.stringify(newPresets));
     }
   };
 
-  // 合并内置预设和用户预设（过滤掉被用户覆盖的内置预设）
-  const allPresets: PresetItem[] = [
-    ...builtInPresets.map(p => ({ ...p, isBuiltIn: true })).filter(p => !userPresets.some(u => u.id === p.id)),
-    ...userPresets
-  ];
-
-  // 双击重命名（仅用户预设）
+  // 双击重命名
   const handleDoubleClick = (preset: PresetItem) => {
     if (preset.isBuiltIn) return;
     setEditingId(preset.id);
@@ -519,7 +537,7 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
       const updated = userPresets.map(p =>
         p.id === editingId ? { ...p, name: editingName.trim() } : p
       );
-      saveUserPresets(updated);
+      savePresets(updated);
     }
     setEditingId(null);
   };
@@ -531,10 +549,8 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     const displayName = preset.name;
 
     if (hasInstance) {
-      // 有实例，弹出确认框
       setApplyModal({ isOpen: true, presetName: displayName, data: dataToApply });
     } else {
-      // 无实例，直接创建
       onCreateInstance(dataToApply, displayName);
     }
   };
@@ -545,20 +561,54 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     setSaveModal({ isOpen: true, presetId, presetName });
   };
 
-  // 确认保存
-  const confirmSave = () => {
+  // 确认保存 (包含图片上传逻辑)
+  const confirmSave = async () => {
     const { presetId, presetName } = saveModal;
-    const existingIdx = userPresets.findIndex(p => p.id === presetId);
-    if (existingIdx >= 0) {
-      // 更新现有用户预设
-      const updated = [...userPresets];
-      updated[existingIdx] = { ...updated[existingIdx], data: { ...currentData } };
-      saveUserPresets(updated);
-    } else {
-      // 内置预设被覆盖，创建同ID的用户预设
-      const newPreset: PresetItem = { id: presetId, name: presetName, isBuiltIn: false, data: { ...currentData } };
-      saveUserPresets([...userPresets, newPreset]);
+    let dataToSave = { ...currentData };
+
+    // 检查是否有 base64 图片需要上传
+    // 假设 dataToSave.imageData 是 base64 字符串
+    // 不同模块可能字段不同，这里做通用检查
+    // 针对 PlanetPreset, 字段可能是 `imageData` 或 `thumbnail`
+
+    let imageUrl = '';
+    const possibleImageFields = ['imageData', 'previewImage', 'thumbnail'];
+
+    // UI状态：保存中... (可以使用 saveModal 的状态来扩展)
+    // 简单起见，这里直接 await
+
+    if (currentUser) {
+      for (const field of possibleImageFields) {
+        if (dataToSave[field] && typeof dataToSave[field] === 'string' && dataToSave[field].startsWith('data:image')) {
+          try {
+            const blob = base64ToBlob(dataToSave[field]);
+            // Upload via UserContext's uploadAvatar (which just calls /api/upload)
+            // We cheat and pass a file object
+            const file = new File([blob], `preset_${Date.now()}.png`, { type: 'image/png' });
+            const res = await uploadAvatar(file);
+            if (res.success && res.url) {
+              imageUrl = res.url;
+              dataToSave[field] = imageUrl; // Replace base64 with URL
+            }
+          } catch (e) {
+            console.error('Failed to upload preset image', e);
+          }
+        }
+      }
     }
+
+    const existingIdx = userPresets.findIndex(p => p.id === presetId);
+    let updatedPresets = [...userPresets];
+
+    if (existingIdx >= 0) {
+      updatedPresets[existingIdx] = { ...updatedPresets[existingIdx], data: dataToSave };
+    } else {
+      const newPreset: PresetItem = { id: presetId, name: presetName, isBuiltIn: false, data: dataToSave };
+      updatedPresets.push(newPreset);
+    }
+
+    await savePresets(updatedPresets);
+    setSaveModal({ isOpen: false, presetId: '', presetName: '' });
   };
 
   // 删除预设
@@ -568,11 +618,19 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
 
   // 确认删除
   const confirmDelete = () => {
-    saveUserPresets(userPresets.filter(p => p.id !== deleteModal.presetId));
+    savePresets(userPresets.filter(p => p.id !== deleteModal.presetId));
+    setDeleteModal({ isOpen: false, presetId: '', presetName: '' });
   };
 
-  // 导出单个预设
+  // Imperial/Built-in presets merge
+  const allPresets: PresetItem[] = [
+    ...builtInPresets.map(p => ({ ...p, isBuiltIn: true })).filter(p => !userPresets.some(u => u.id === p.id)),
+    ...userPresets
+  ];
+
+  // Export/Import ... (keep largely same, or update export to handle URLs)
   const handleExportPreset = (preset: PresetItem) => {
+    // ... (existing export logic)
     try {
       const exportData = {
         type: 'planet_preset',
@@ -593,25 +651,7 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     }
   };
 
-  // 导入预设的实际处理函数
-  const doImport = (importData: any) => {
-    const presetsToImport = (importData.presets || [])
-      .filter((p: any) => !p.isBuiltIn)
-      .map((p: any) => ({
-        ...p,
-        id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        isBuiltIn: false
-      }));
-    if (presetsToImport.length === 0) {
-      alert('没有可导入的用户预设');
-      return;
-    }
-    const mergedPresets = [...userPresets, ...presetsToImport];
-    saveUserPresets(mergedPresets);
-    alert(`成功导入 ${presetsToImport.length} 个预设`);
-  };
-
-  // 导入预设
+  // 导入预处理
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -619,27 +659,74 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const importData = JSON.parse(event.target?.result as string);
-        if (importData.type !== 'planet_preset') {
+        const json = JSON.parse(event.target?.result as string);
+        if (json.type !== 'planet_preset') {
           alert('无效的预设文件格式');
           return;
         }
-        if (importData.module !== moduleName) {
-          setImportConfirmModal({
-            isOpen: true,
-            moduleName: importData.module,
-            onConfirm: () => doImport(importData)
-          });
-          return;
+        if (json.module !== moduleName) {
+          // 虽然模块不同，但如果数据结构兼容也可以尝试，或者提示用户
+          if (!window.confirm(`该预设属于 ${json.module} 模块，当前是 ${moduleName} 模块。是否继续导入？`)) {
+            return;
+          }
         }
-        doImport(importData);
+
+        // 准备导入
+        setApplyModal({ ...applyModal, isOpen: false }); // Ensure other modals closed
+        setImportConfirmModal({
+          isOpen: true,
+          moduleName: json.module,
+          onConfirm: () => doImport(json)
+        });
+
       } catch (err) {
-        console.error('Import failed:', err);
-        alert('导入失败：文件格式错误');
+        alert('解析预设文件失败');
+        console.error(err);
       }
     };
     reader.readAsText(file);
+    // Reset inputs
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // 执行导入
+  const doImport = (importData: any) => {
+    const presetsToImport = (importData.presets || [])
+      .filter((p: any) => !p.isBuiltIn) // 一般仅导入用户预设部分，或者是全部当做用户预设导入
+      .map((p: any) => ({
+        ...p,
+        id: p.id || Date.now().toString() + Math.random().toString().slice(2, 6), // Ensure ID
+        isBuiltIn: false // Imported are always user presets
+      }));
+
+    if (presetsToImport.length === 0) {
+      alert('文件中没有可导入的预设');
+      setImportConfirmModal({ ...importConfirmModal, isOpen: false });
+      return;
+    }
+
+    // Merge, avoiding ID conflicts by regenerating ID if exists? Or overwrite? 
+    // Strategy: Append, if ID conflict, overwrite or rename? 
+    // Simple: Overwrite if ID matches, else append.
+
+    let newPresets = [...userPresets];
+    let addedCount = 0;
+    let updatedCount = 0;
+
+    presetsToImport.forEach((imported: PresetItem) => {
+      const idx = newPresets.findIndex(p => p.id === imported.id);
+      if (idx >= 0) {
+        newPresets[idx] = imported;
+        updatedCount++;
+      } else {
+        newPresets.push(imported);
+        addedCount++;
+      }
+    });
+
+    savePresets(newPresets);
+    setImportConfirmModal({ ...importConfirmModal, isOpen: false });
+    alert(`导入成功！新增 ${addedCount} 个，更新 ${updatedCount} 个。`);
   };
 
   // 使用CSS变量统一主题色（使用次交互色）

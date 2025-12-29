@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useUser, User } from '../contexts/UserContext';
 import { PlanetAvatar } from './PlanetAvatar';
+import { ThemeSettingsModal } from './ThemeSettingsModal';
 
 export const UserMenu: React.FC = () => {
     const { currentUser, logout, switchAccount, updateProfile, changePassword, uploadAvatar } = useUser();
     const [isOpen, setIsOpen] = useState(false);
-    const [modalMode, setModalMode] = useState<'profile' | 'password' | null>(null);
+    const [modalMode, setModalMode] = useState<'profile' | 'password' | 'theme' | null>(null);
 
     if (!currentUser) return null;
 
@@ -59,6 +60,9 @@ export const UserMenu: React.FC = () => {
                             <p className="text-xs text-white/30 font-mono truncate mt-0.5 opacity-60">@{currentUser.id}</p>
                         </div>
 
+                        <MenuItem icon="palette" label="Theme Settings" onClick={() => { setModalMode('theme'); setIsOpen(false); }} />
+                        <div className="h-px bg-white/10 my-1 mx-2" />
+
                         <MenuItem icon="user-edit" label="Edit Profile" onClick={() => { setModalMode('profile'); setIsOpen(false); }} />
                         <MenuItem icon="key" label="Change Password" onClick={() => { setModalMode('password'); setIsOpen(false); }} />
 
@@ -71,7 +75,12 @@ export const UserMenu: React.FC = () => {
             )}
 
             {/* 模态框 */}
-            {modalMode && (
+            <ThemeSettingsModal
+                isOpen={modalMode === 'theme'}
+                onClose={() => setModalMode(null)}
+            />
+
+            {(modalMode === 'profile' || modalMode === 'password') && (
                 <SettingsModal
                     mode={modalMode}
                     user={currentUser}

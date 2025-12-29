@@ -130,7 +130,7 @@ const saveSettings = (settings: AppSettings) => {
 
 const App: React.FC = () => {
   // 用户登录状态
-  const { currentUser, isLoading: isUserLoading } = useUser();
+  const { currentUser, isLoading: isUserLoading, saveCloudConfig, loadCloudConfig } = useUser();
 
   const [settings, setSettings] = useState<AppSettings>(loadSavedSettings);
   const [planetSettings, setPlanetSettings] = useState<PlanetSceneSettings>(loadPlanetSceneSettings);
@@ -139,13 +139,60 @@ const App: React.FC = () => {
   const [modeSwitchMaterial, setModeSwitchMaterial] = useState<any>(null);
   const [data, setData] = useState<ProcessedData | null>(null);
 
-  // 星云预览模式：点击预设时暂时隐藏星云列表，只显示主场景星云
+  // 星云预览模式
   const [nebulaPreviewMode, setNebulaPreviewMode] = useState(false);
 
   // 多星云实例的粒子数据缓存
   const [nebulaInstancesData, setNebulaInstancesData] = useState<Map<string, ProcessedData>>(new Map());
 
-  // 读取模式切换按钮的材质设置
+  // Cloud Sync: Load data on user login
+  useEffect(() => {
+    if (currentUser) {
+      loadCloudConfig().then(config => {
+        if (config) {
+          if (config.settings) {
+            // Merge cloud settings with defaults to ensure valid structure
+            setSettings(prev => ({ ...prev, ...config.settings }));
+            // Also cache locally
+            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...DEFAULT_SETTINGS, ...config.settings }));
+          }
+          if (config.planetScene) {
+            setPlanetSettings(prev => ({ ...prev, ...config.planetScene }));
+            localStorage.setItem(PLANET_SCENE_STORAGE_KEY, JSON.stringify(config.planetScene));
+          }
+          if (config.theme?.modeSwitch) {
+            setModeSwitchMaterial(config.theme.modeSwitch);
+            localStorage.setItem('button_material_settings', JSON.stringify({ modeSwitch: config.theme.modeSwitch }));
+          }
+        }
+      });
+    }
+  }, [currentUser, loadCloudConfig]);
+
+  // Cloud Sync: Auto-save when settings change (Debounced)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      // Always save to local storage
+      saveSettings(settings); // Helper function defined above
+      savePlanetSceneSettings(planetSettings);
+      if (modeSwitchMaterial) {
+        localStorage.setItem('button_material_settings', JSON.stringify({ modeSwitch: modeSwitchMaterial }));
+      }
+
+      // If logged in, save to cloud
+      if (currentUser) {
+        saveCloudConfig({
+          settings: settings as any,
+          planetScene: planetSettings as any,
+          theme: { modeSwitch: modeSwitchMaterial }
+        });
+      }
+    }, 2000); // 2 second debounce
+
+    return () => clearTimeout(handler);
+  }, [settings, planetSettings, modeSwitchMaterial, currentUser, saveCloudConfig]);
+
+  // 读取模式切换按钮的材质设置 (Initial local load only)
   useEffect(() => {
     const loadMaterial = () => {
       try {
@@ -843,28 +890,35 @@ const App: React.FC = () => {
       {/* 3D Scene Area - 全屏 */}
       <div className="absolute inset-0">
         {/* 用户信息显示 - 左上角 */}
-        <div className="absolute top-2 left-2 md:top-4 md:left-4 z-50">
+        <div className="absolute top-0 left-0 p-2 md:p-3 z-50">
           <UserMenu />
         </div>
 
         {/* 顶部模式切换栏 - 水晶宝石风格 */}
-        <div className="absolute top-2 md:top-4 left-1/2 transform -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 rounded-2xl"
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 z-50 flex items-center gap-2 p-1.5 rounded-b-2xl border-t-0"
           style={{
             background: 'linear-gradient(135deg, rgba(20,20,30,0.08) 0%, rgba(40,40,60,0.08) 100%)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.1)',
-            border: '1px solid rgba(255,255,255,0.15)'
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderTop: 'none'
           }}
         >
           <button
             onClick={() => setAppMode('nebula')}
-            className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
-            style={getModeSwitchStyle(appMode === 'nebula', '#6366f1', 0)}
+            className="px-5 md:px-7 py-2 md:py-2.5 rounded-xl text-lg md:text-xl transition-all duration-300 relative group overflow-hidden"
+            style={{
+              fontFamily: "'Great Vibes', cursive",
+              ...getModeSwitchStyle(appMode === 'nebula', '#6366f1', 0),
+              background: appMode === 'nebula' ? 'linear-gradient(to right, #22d3ee, #818cf8)' : 'transparent',
+              borderColor: 'transparent',
+              color: appMode === 'nebula' ? '#fff' : 'rgba(255,255,255,0.7)',
+              textShadow: appMode === 'nebula' ? '0 2px 4px rgba(0,0,0,0.3)' : 'none'
+            }}
           >
-            <i className="fas fa-cloud mr-1 md:mr-2"></i>
-            <span className="hidden sm:inline">星云模式</span>
-            <span className="sm:hidden">星云</span>
+            <span className="relative z-10">Xingcloud</span>
+            {appMode === 'nebula' && <div className="absolute inset-0 bg-white/20 animate-pulse rounded-xl" />}
           </button>
 
           {/* 叠加模式按钮 - 圆形互通按钮 */}
@@ -881,27 +935,21 @@ const App: React.FC = () => {
                 }));
               }
             }}
-            className="w-10 h-10 md:w-11 md:h-11 rounded-full flex items-center justify-center transition-all duration-300"
-            style={overlayMode ? {
-              background: 'linear-gradient(135deg, #6366f1 0%, #06b6d4 100%)',
-              boxShadow: '0 0 20px rgba(99, 102, 241, 0.5), 0 0 20px rgba(6, 182, 212, 0.5), inset 0 2px 4px rgba(255,255,255,0.3)',
-              border: '2px solid rgba(255,255,255,0.4)',
-            } : {
-              background: 'linear-gradient(135deg, rgba(50,50,70,0.6) 0%, rgba(30,30,45,0.8) 100%)',
-              boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.05)',
-              border: '1px solid rgba(255,255,255,0.1)',
+            className={`w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center transition-all duration-500 overflow-hidden ${overlayMode ? 'rotate-180 scale-110' : 'hover:scale-105'
+              }`}
+            style={{
+              background: overlayMode ? 'linear-gradient(135deg, #60a5fa, #c084fc)' : 'rgba(255,255,255,0.05)',
+              boxShadow: overlayMode ? '0 0 20px rgba(167,139,250,0.4)' : 'inset 0 1px 2px rgba(255,255,255,0.1)',
+              border: overlayMode ? 'none' : '1px solid rgba(255,255,255,0.1)'
             }}
-            title={overlayMode ? '关闭叠加模式' : '开启叠加模式（同时显示星云和星球）'}
+            title={overlayMode ? "关闭互通模式" : "开启互通模式 (双场景叠加)"}
           >
-            <span className="text-lg" style={{ filter: overlayMode ? 'drop-shadow(0 0 4px white)' : 'none' }}>
-              {overlayMode ? '🔗' : '⊕'}
-            </span>
+            <i className={`fas fa-infinity text-sm md:text-lg ${overlayMode ? 'text-white' : 'text-white/40'}`} />
           </button>
 
           <button
             onClick={() => {
               setAppMode('planet');
-              // 如果没有星球，自动创建一个默认星球
               if (planetSettings.planets.length === 0) {
                 const id = Date.now().toString();
                 const newPlanet = createDefaultPlanet(id, '星球 1');
@@ -911,12 +959,18 @@ const App: React.FC = () => {
                 }));
               }
             }}
-            className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
-            style={getModeSwitchStyle(appMode === 'planet', '#06b6d4', 1)}
+            className="px-5 md:px-7 py-2 md:py-2.5 rounded-xl text-lg md:text-xl transition-all duration-300 relative group overflow-hidden"
+            style={{
+              fontFamily: "'Great Vibes', cursive",
+              ...getModeSwitchStyle(appMode === 'planet', '#ec4899', 1),
+              background: appMode === 'planet' ? 'linear-gradient(to right, #f472b6, #fb7185)' : 'transparent',
+              borderColor: 'transparent',
+              color: appMode === 'planet' ? '#fff' : 'rgba(255,255,255,0.7)',
+              textShadow: appMode === 'planet' ? '0 2px 4px rgba(0,0,0,0.3)' : 'none'
+            }}
           >
-            <i className="fas fa-globe mr-1 md:mr-2"></i>
-            <span className="hidden sm:inline">星球模式</span>
-            <span className="sm:hidden">星球</span>
+            <span className="relative z-10">Xingforge</span>
+            {appMode === 'planet' && <div className="absolute inset-0 bg-white/20 animate-pulse rounded-xl" />}
           </button>
         </div>
 
@@ -1131,7 +1185,7 @@ const App: React.FC = () => {
           />
         </div>
       </div>
-    </div>
+    </div >
   );
 };
 

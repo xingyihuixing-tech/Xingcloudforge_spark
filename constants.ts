@@ -365,9 +365,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     globalStrength: 1.0,
   } as ColorTintSettings,
 
-  // Depth Mapping
   depthMode: DepthMode.Brightness,
-  depthRange: 400,
+  depthRange: 10,
   depthInvert: false,
   noiseStrength: 40,
 

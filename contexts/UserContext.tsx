@@ -414,41 +414,51 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (isOnline) {
             try {
                 setSyncStatus('syncing');
-                await fetch('/api/config', {
+                const res = await fetch('/api/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: currentUser.id, config: newConfig })
                 });
-                setSyncStatus('synced');
-                return true;
+
+                if (res.ok) {
+                    setSyncStatus('synced');
+                    return true;
+                } else {
+                    setSyncStatus('error');
+                    return false;
+                }
             } catch (e) {
+                console.error('Save cloud config failed', e);
                 setSyncStatus('error');
                 return false;
             }
+        } else {
+            // 离线模式暂未实现本地队列，直接返回失败或仅更新本地
+            // 实际项目中应存入 IndexDB 待联网后同步
+            return false;
         }
-        return true;
-    };
-
-    const value = {
-        currentUser,
-        savedUsers,
-        isLoading,
-        isOnline,
-        syncStatus,
-        login,
-        logout,
-        switchAccount,
-        register,
-        removeSavedUser,
-        updateProfile,
-        changePassword,
-        uploadAvatar,
-        loadCloudConfig,
-        saveCloudConfig
     };
 
     return (
-        <UserContext.Provider value={value}>{children}</UserContext.Provider>
+        <UserContext.Provider value={{
+            currentUser,
+            savedUsers,
+            isLoading,
+            isOnline,
+            syncStatus,
+            login,
+            logout,
+            switchAccount,
+            register,
+            removeSavedUser,
+            updateProfile,
+            changePassword,
+            uploadAvatar,
+            loadCloudConfig,
+            saveCloudConfig
+        }}>
+            {children}
+        </UserContext.Provider>
     );
 }
 
