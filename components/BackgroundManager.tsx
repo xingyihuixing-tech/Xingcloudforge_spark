@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import * as THREE from 'three';
 import { StarBackground } from './StarBackground';
 import { ThreePlanetScene, PlanetPreset } from './ThreePlanetScene';
