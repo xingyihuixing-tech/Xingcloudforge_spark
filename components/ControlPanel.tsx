@@ -7293,7 +7293,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                       </div>
 
                       {/* ===== 粒子核心面板 ===== */}
-                      {coreSubTab === 'particle' && (() => {
+                      {coreSubTab === 'particle' && planet.coreSystem?.cores && (() => {
                         return (
                           <div className="border-l-2 pl-2" style={{ borderColor: 'var(--ui-decoration)' }}>
                             <FloatingListSelector
@@ -9092,10 +9092,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
                   // 构建核心选项列表
                   const coreOptions: { id: string; name: string; type: 'particle' | 'solid' }[] = [];
-                  planet.coreSystem.cores.forEach(c => {
+                  (planet.coreSystem?.cores || []).forEach(c => {
                     if (c.enabled) coreOptions.push({ id: c.id, name: c.name, type: 'particle' });
                   });
-                  (planet.coreSystem.solidCores || []).forEach(c => {
+                  (planet.coreSystem?.solidCores || []).forEach(c => {
                     if (c.enabled) coreOptions.push({ id: c.id, name: c.name, type: 'solid' });
                   });
 

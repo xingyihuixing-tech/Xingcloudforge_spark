@@ -756,7 +756,7 @@ const App: React.FC = () => {
       planetSettings.planets.forEach(planet => {
         // 2.2 粒子核心
         if (planet.coreSystem?.coresEnabled && planet.coreSystem.coreType === 'particle') {
-          planet.coreSystem.cores.forEach(core => {
+          (planet.coreSystem?.cores || []).forEach(core => {
             if (core.enabled) {
               // 估算: 4/3 * PI * R^3 * density * fillPercent/100
               const volume = (4 / 3) * Math.PI * Math.pow(core.baseRadius, 3);
