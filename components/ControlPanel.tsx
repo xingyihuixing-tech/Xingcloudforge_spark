@@ -445,12 +445,6 @@ interface PresetListBoxProps {
 }
 
 // 预设列表组件
-import React, { useState, useRef, useEffect } from 'react';
-import { useUser } from '../contexts/UserContext';
-import { base64ToBlob } from '../services/imageProcessing';
-
-// ... (keep earlier imports if any, verify later)
-
 const PresetListBox: React.FC<PresetListBoxProps> = ({
   storageKey,
   builtInPresets,
@@ -463,12 +457,8 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   accentColor = 'purple',
   moduleName = 'preset'
 }) => {
-  const { currentUser, saveCloudConfig, uploadAvatar, loadCloudConfig } = useUser();
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Use state from hook or props, initially empty, will load from cloud
   const [userPresets, setUserPresets] = useState<PresetItem[]>([]);
-
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -479,51 +469,43 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   const [saveModal, setSaveModal] = useState<{ isOpen: boolean; presetId: string; presetName: string }>({ isOpen: false, presetId: '', presetName: '' });
   const [importConfirmModal, setImportConfirmModal] = useState<{ isOpen: boolean; moduleName: string; onConfirm: () => void }>({ isOpen: false, moduleName: '', onConfirm: () => { } });
 
-  // 加载云端配置
+  // 从 localStorage 加载用户预设
   useEffect(() => {
-    const fetchPresets = async () => {
-      if (currentUser) {
-        // First try to load from local state (passed via context? No, context has config object, but here we want specific module presets)
-        // Ideally UserContext should expose the whole config object.
-        // For now, let's fetch fresh config to ensure sync
-        const config = await loadCloudConfig();
-        if (config && config.presets) {
-          // Filter presets for this module (assuming config.presets is a flat list with module or type?)
-          // Wait, existing structure of UserConfig in UserContext isn't fully visible.
-          // Assuming UserConfig has { presets: PresetItem[] } where PresetItem has module info? 
-          // Using 'storageKey' as differentiator might be legacy. 
-          // Let's assume we store ALL presets in `config.presets` and filter by some criteria if needed.
-          // Or, if `storageKey` is unique per module (e.g. 'planet_presets'), we check `config[storageKey]`.
-          // Let's try to read `config[storageKey]` dynamically.
-          const stored = (config as any)[storageKey];
-          if (Array.isArray(stored)) {
-            setUserPresets(stored);
-          }
-        }
-      } else {
-        // Fallback to local storage for guests or offline
+    const loadPresets = () => {
+      try {
         const saved = localStorage.getItem(storageKey);
-        if (saved) setUserPresets(JSON.parse(saved));
+        if (saved) {
+          setUserPresets(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error('Failed to load presets:', e);
       }
     };
-    fetchPresets();
-  }, [currentUser, storageKey]);
 
-  // 保存预设 (到云端)
-  const savePresets = async (newPresets: PresetItem[]) => {
-    setUserPresets(newPresets); // Optimistic update
+    loadPresets();
 
-    if (currentUser) {
-      // Build partial config
-      const update: any = {};
-      update[storageKey] = newPresets;
-      await saveCloudConfig(update);
-    } else {
-      localStorage.setItem(storageKey, JSON.stringify(newPresets));
+    // 监听 storage 事件以刷新预设列表
+    window.addEventListener('storage', loadPresets);
+    return () => window.removeEventListener('storage', loadPresets);
+  }, [storageKey]);
+
+  // 保存用户预设到 localStorage
+  const saveUserPresets = (presets: PresetItem[]) => {
+    setUserPresets(presets);
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(presets));
+    } catch (e) {
+      console.error('Failed to save presets:', e);
     }
   };
 
-  // 双击重命名
+  // 合并内置预设和用户预设（过滤掉被用户覆盖的内置预设）
+  const allPresets: PresetItem[] = [
+    ...builtInPresets.map(p => ({ ...p, isBuiltIn: true })).filter(p => !userPresets.some(u => u.id === p.id)),
+    ...userPresets
+  ];
+
+  // 双击重命名（仅用户预设）
   const handleDoubleClick = (preset: PresetItem) => {
     if (preset.isBuiltIn) return;
     setEditingId(preset.id);
@@ -537,7 +519,7 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
       const updated = userPresets.map(p =>
         p.id === editingId ? { ...p, name: editingName.trim() } : p
       );
-      savePresets(updated);
+      saveUserPresets(updated);
     }
     setEditingId(null);
   };
@@ -549,8 +531,10 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     const displayName = preset.name;
 
     if (hasInstance) {
+      // 有实例，弹出确认框
       setApplyModal({ isOpen: true, presetName: displayName, data: dataToApply });
     } else {
+      // 无实例，直接创建
       onCreateInstance(dataToApply, displayName);
     }
   };
@@ -561,54 +545,20 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     setSaveModal({ isOpen: true, presetId, presetName });
   };
 
-  // 确认保存 (包含图片上传逻辑)
-  const confirmSave = async () => {
+  // 确认保存
+  const confirmSave = () => {
     const { presetId, presetName } = saveModal;
-    let dataToSave = { ...currentData };
-
-    // 检查是否有 base64 图片需要上传
-    // 假设 dataToSave.imageData 是 base64 字符串
-    // 不同模块可能字段不同，这里做通用检查
-    // 针对 PlanetPreset, 字段可能是 `imageData` 或 `thumbnail`
-
-    let imageUrl = '';
-    const possibleImageFields = ['imageData', 'previewImage', 'thumbnail'];
-
-    // UI状态：保存中... (可以使用 saveModal 的状态来扩展)
-    // 简单起见，这里直接 await
-
-    if (currentUser) {
-      for (const field of possibleImageFields) {
-        if (dataToSave[field] && typeof dataToSave[field] === 'string' && dataToSave[field].startsWith('data:image')) {
-          try {
-            const blob = base64ToBlob(dataToSave[field]);
-            // Upload via UserContext's uploadAvatar (which just calls /api/upload)
-            // We cheat and pass a file object
-            const file = new File([blob], `preset_${Date.now()}.png`, { type: 'image/png' });
-            const res = await uploadAvatar(file);
-            if (res.success && res.url) {
-              imageUrl = res.url;
-              dataToSave[field] = imageUrl; // Replace base64 with URL
-            }
-          } catch (e) {
-            console.error('Failed to upload preset image', e);
-          }
-        }
-      }
-    }
-
     const existingIdx = userPresets.findIndex(p => p.id === presetId);
-    let updatedPresets = [...userPresets];
-
     if (existingIdx >= 0) {
-      updatedPresets[existingIdx] = { ...updatedPresets[existingIdx], data: dataToSave };
+      // 更新现有用户预设
+      const updated = [...userPresets];
+      updated[existingIdx] = { ...updated[existingIdx], data: { ...currentData } };
+      saveUserPresets(updated);
     } else {
-      const newPreset: PresetItem = { id: presetId, name: presetName, isBuiltIn: false, data: dataToSave };
-      updatedPresets.push(newPreset);
+      // 内置预设被覆盖，创建同ID的用户预设
+      const newPreset: PresetItem = { id: presetId, name: presetName, isBuiltIn: false, data: { ...currentData } };
+      saveUserPresets([...userPresets, newPreset]);
     }
-
-    await savePresets(updatedPresets);
-    setSaveModal({ isOpen: false, presetId: '', presetName: '' });
   };
 
   // 删除预设
@@ -618,19 +568,11 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
 
   // 确认删除
   const confirmDelete = () => {
-    savePresets(userPresets.filter(p => p.id !== deleteModal.presetId));
-    setDeleteModal({ isOpen: false, presetId: '', presetName: '' });
+    saveUserPresets(userPresets.filter(p => p.id !== deleteModal.presetId));
   };
 
-  // Imperial/Built-in presets merge
-  const allPresets: PresetItem[] = [
-    ...builtInPresets.map(p => ({ ...p, isBuiltIn: true })).filter(p => !userPresets.some(u => u.id === p.id)),
-    ...userPresets
-  ];
-
-  // Export/Import ... (keep largely same, or update export to handle URLs)
+  // 导出单个预设
   const handleExportPreset = (preset: PresetItem) => {
-    // ... (existing export logic)
     try {
       const exportData = {
         type: 'planet_preset',
@@ -651,7 +593,25 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     }
   };
 
-  // 导入预处理
+  // 导入预设的实际处理函数
+  const doImport = (importData: any) => {
+    const presetsToImport = (importData.presets || [])
+      .filter((p: any) => !p.isBuiltIn)
+      .map((p: any) => ({
+        ...p,
+        id: `imported_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        isBuiltIn: false
+      }));
+    if (presetsToImport.length === 0) {
+      alert('没有可导入的用户预设');
+      return;
+    }
+    const mergedPresets = [...userPresets, ...presetsToImport];
+    saveUserPresets(mergedPresets);
+    alert(`成功导入 ${presetsToImport.length} 个预设`);
+  };
+
+  // 导入预设
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -659,74 +619,27 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
-        const json = JSON.parse(event.target?.result as string);
-        if (json.type !== 'planet_preset') {
+        const importData = JSON.parse(event.target?.result as string);
+        if (importData.type !== 'planet_preset') {
           alert('无效的预设文件格式');
           return;
         }
-        if (json.module !== moduleName) {
-          // 虽然模块不同，但如果数据结构兼容也可以尝试，或者提示用户
-          if (!window.confirm(`该预设属于 ${json.module} 模块，当前是 ${moduleName} 模块。是否继续导入？`)) {
-            return;
-          }
+        if (importData.module !== moduleName) {
+          setImportConfirmModal({
+            isOpen: true,
+            moduleName: importData.module,
+            onConfirm: () => doImport(importData)
+          });
+          return;
         }
-
-        // 准备导入
-        setApplyModal({ ...applyModal, isOpen: false }); // Ensure other modals closed
-        setImportConfirmModal({
-          isOpen: true,
-          moduleName: json.module,
-          onConfirm: () => doImport(json)
-        });
-
+        doImport(importData);
       } catch (err) {
-        alert('解析预设文件失败');
-        console.error(err);
+        console.error('Import failed:', err);
+        alert('导入失败：文件格式错误');
       }
     };
     reader.readAsText(file);
-    // Reset inputs
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  // 执行导入
-  const doImport = (importData: any) => {
-    const presetsToImport = (importData.presets || [])
-      .filter((p: any) => !p.isBuiltIn) // 一般仅导入用户预设部分，或者是全部当做用户预设导入
-      .map((p: any) => ({
-        ...p,
-        id: p.id || Date.now().toString() + Math.random().toString().slice(2, 6), // Ensure ID
-        isBuiltIn: false // Imported are always user presets
-      }));
-
-    if (presetsToImport.length === 0) {
-      alert('文件中没有可导入的预设');
-      setImportConfirmModal({ ...importConfirmModal, isOpen: false });
-      return;
-    }
-
-    // Merge, avoiding ID conflicts by regenerating ID if exists? Or overwrite? 
-    // Strategy: Append, if ID conflict, overwrite or rename? 
-    // Simple: Overwrite if ID matches, else append.
-
-    let newPresets = [...userPresets];
-    let addedCount = 0;
-    let updatedCount = 0;
-
-    presetsToImport.forEach((imported: PresetItem) => {
-      const idx = newPresets.findIndex(p => p.id === imported.id);
-      if (idx >= 0) {
-        newPresets[idx] = imported;
-        updatedCount++;
-      } else {
-        newPresets.push(imported);
-        addedCount++;
-      }
-    });
-
-    savePresets(newPresets);
-    setImportConfirmModal({ ...importConfirmModal, isOpen: false });
-    alert(`导入成功！新增 ${addedCount} 个，更新 ${updatedCount} 个。`);
   };
 
   // 使用CSS变量统一主题色（使用次交互色）
@@ -2260,7 +2173,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   const [isDraggingMaterialPanel, setIsDraggingMaterialPanel] = useState(false);
   const [settingsPanelPos, setSettingsPanelPos] = useState<{ x: number; y: number } | null>(null);
   const [expandedMaterialPanels, setExpandedMaterialPanels] = useState<Record<string, boolean>>({});
-
 
   // 按键材质类型定义
   type MaterialType = 'glass' | 'neon' | 'crystal' | 'neumorphism' | 'holographic';
@@ -4439,10 +4351,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           document.body
         )}
 
-        {/* 设置面板 - 配色方案设置 */}
+        {/* 设置面板 - 使用 createPortal 渲染到 body */}
         {showSettings && createPortal(
           <div
-            className="fixed z-[9999] rounded-xl shadow-2xl w-80 max-h-[70vh] overflow-hidden flex flex-col"
+            className="fixed z-[9999] rounded-xl shadow-2xl w-72 max-h-[80vh] overflow-hidden flex flex-col"
             style={{
               left: settingsPanelPos ? settingsPanelPos.x : '50%',
               top: settingsPanelPos ? settingsPanelPos.y : '50%',
@@ -4453,128 +4365,321 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
               boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
             }}
           >
-            {/* 可拖拽标题栏 */}
+            {/* 可拖拽标题栏 - 支持鼠标和触摸 */}
             <div
-              className="flex items-center justify-between p-3 cursor-move select-none"
-              style={{ background: 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))' }}
+              className="flex items-center justify-between px-4 py-2 cursor-move select-none"
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.05)',
+                borderBottom: '1px solid rgba(255,255,255,0.1)',
+                touchAction: 'none'
+              }}
               onMouseDown={(e) => {
+                e.preventDefault();
                 const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
                 const offsetX = e.clientX - rect.left;
                 const offsetY = e.clientY - rect.top;
+
                 const handleMouseMove = (moveEvent: MouseEvent) => {
-                  setSettingsPanelPos({ x: moveEvent.clientX - offsetX, y: moveEvent.clientY - offsetY });
+                  setSettingsPanelPos({
+                    x: moveEvent.clientX - offsetX,
+                    y: moveEvent.clientY - offsetY
+                  });
                 };
+
                 const handleMouseUp = () => {
                   document.removeEventListener('mousemove', handleMouseMove);
                   document.removeEventListener('mouseup', handleMouseUp);
                 };
+
                 document.addEventListener('mousemove', handleMouseMove);
                 document.addEventListener('mouseup', handleMouseUp);
               }}
+              onTouchStart={(e) => {
+                const touch = e.touches[0];
+                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                const offsetX = touch.clientX - rect.left;
+                const offsetY = touch.clientY - rect.top;
+
+                const handleTouchMove = (moveEvent: TouchEvent) => {
+                  moveEvent.preventDefault();
+                  const moveTouch = moveEvent.touches[0];
+                  setSettingsPanelPos({
+                    x: moveTouch.clientX - offsetX,
+                    y: moveTouch.clientY - offsetY
+                  });
+                };
+
+                const handleTouchEnd = () => {
+                  document.removeEventListener('touchmove', handleTouchMove);
+                  document.removeEventListener('touchend', handleTouchEnd);
+                };
+
+                document.addEventListener('touchmove', handleTouchMove, { passive: false });
+                document.addEventListener('touchend', handleTouchEnd);
+              }}
             >
-              <h4 className="text-xs font-bold text-white">配色方案设置</h4>
+              <h4 className="text-xs font-bold" style={{ color: 'var(--ui-secondary)' }}>主题设置</h4>
               <button
                 onClick={() => setShowSettings(false)}
-                className="text-xs px-2 py-0.5 rounded hover:bg-white/20 transition-colors text-white"
+                className="text-xs px-2 py-0.5 rounded hover:bg-white/10 transition-colors"
+                style={{ color: 'var(--text-2)' }}
               >
                 ✕
               </button>
             </div>
+            <div className="p-3 overflow-y-auto flex-1">
 
-            <div className="p-4 overflow-y-auto flex-1 space-y-4">
-              {/* 预设配色方案 */}
-              <div>
-                <label className="text-[10px] uppercase tracking-wider mb-2 block" style={{ color: 'var(--text-2)' }}>预设方案</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {Object.entries(colorSchemes).map(([id, scheme]) => (
+
+
+              {/* 🌌 全局背景设置 (仅在星球模式或互通模式下显示) */}
+              {(appMode === 'planet' || overlayMode) && (
+                <div className="mb-4 pb-4 border-b border-gray-700">
+                  <h5 className="text-xs font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--ui-secondary)' }}>
+                    <span>🌌</span> 全局背景设置
+                  </h5>
+
+                  {/* 背景开关 */}
+                  <div className="flex items-center justify-between mb-3 p-2 rounded" style={{ backgroundColor: 'var(--surface)' }}>
+                    <span className="text-xs" style={{ color: 'var(--text-1)' }}>全景图背景</span>
                     <button
-                      key={id}
                       onClick={() => {
-                        setActiveSchemeId(id);
-                        localStorage.setItem('active_color_scheme', id);
-                        document.documentElement.style.setProperty('--ui-primary', scheme.primary);
-                        document.documentElement.style.setProperty('--ui-secondary', scheme.secondary);
-                        document.documentElement.style.setProperty('--accent', scheme.accent);
-                        document.documentElement.style.setProperty('--surface', scheme.surface);
-                        localStorage.setItem('theme_primary_color', scheme.primary);
+                        // 互通模式下背景由 PlanetScene 渲染，所以修改 planetSettings
+                        if (appMode === 'planet' || overlayMode) {
+                          setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, enabled: !prev.background?.enabled } }));
+                        } else {
+                          setSettings(prev => ({ ...prev, background: { ...prev.background!, enabled: !prev.background?.enabled } }));
+                        }
                       }}
-                      className={`p-2 rounded-lg border text-left transition-all ${activeSchemeId === id
-                        ? 'border-white/40 bg-white/10'
-                        : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                      className={`px-3 py-1 text-xs rounded-full font-bold transition-colors ${((appMode === 'planet' || overlayMode) ? planetSettings.background?.enabled : settings.background?.enabled)
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-600 text-gray-400'
                         }`}
                     >
-                      <div className="flex gap-1 mb-1">
-                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.primary }} />
-                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.secondary }} />
-                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.accent }} />
-                      </div>
-                      <span className="text-[10px]" style={{ color: 'var(--text-1)' }}>{scheme.name}</span>
+                      {((appMode === 'planet' || overlayMode) ? planetSettings.background?.enabled : settings.background?.enabled) ? '已开启' : '已关闭'}
                     </button>
-                  ))}
+                  </div>
+
+                  {/* 全景图选择 */}
+                  <div className="mb-3">
+                    <label className="text-xs block mb-1" style={{ color: 'var(--text-2)' }}>全景图 ({BACKGROUND_IMAGES.length}张)</label>
+                    <select
+                      value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.panoramaUrl : settings.background?.panoramaUrl) || '/background/starfield.jpg'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (appMode === 'planet' || overlayMode) {
+                          setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, panoramaUrl: val } }));
+                        } else {
+                          setSettings(prev => ({ ...prev, background: { ...prev.background!, panoramaUrl: val } }));
+                        }
+                      }}
+                      className="w-full text-xs rounded px-2 py-1.5"
+                      style={{ backgroundColor: 'var(--surface)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
+                    >
+                      {BACKGROUND_IMAGES.length > 0 ? (
+                        BACKGROUND_IMAGES.map(img => (
+                          <option key={img.value} value={img.value}>{img.label}</option>
+                        ))
+                      ) : (
+                        <option value="/background/starfield.jpg">默认星空</option>
+                      )}
+                    </select>
+                  </div>
+
+                  {/* 参数滑块 */}
+                  <RangeControl
+                    label="背景亮度"
+                    value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.brightness : settings.background?.brightness) ?? 1.0}
+                    min={0}
+                    max={2}
+                    step={0.1}
+                    onChange={(v) => {
+                      if (appMode === 'planet' || overlayMode) {
+                        setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, brightness: v } }));
+                      } else {
+                        setSettings(prev => ({ ...prev, background: { ...prev.background!, brightness: v } }));
+                      }
+                    }}
+                  />
+                  <RangeControl
+                    label="背景饱和度"
+                    value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.saturation : settings.background?.saturation) ?? 1.0}
+                    min={0}
+                    max={5}
+                    step={0.1}
+                    onChange={(v) => {
+                      if (appMode === 'planet' || overlayMode) {
+                        setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, saturation: v } }));
+                      } else {
+                        setSettings(prev => ({ ...prev, background: { ...prev.background!, saturation: v } }));
+                      }
+                    }}
+                  />
+                  <RangeControl
+                    label="背景旋转"
+                    value={((appMode === 'planet' || overlayMode) ? planetSettings.background?.rotation : settings.background?.rotation) ?? 0}
+                    min={0}
+                    max={360}
+                    step={10}
+                    onChange={(v) => {
+                      if (appMode === 'planet' || overlayMode) {
+                        setPlanetSettings(prev => ({ ...prev, background: { ...prev.background, rotation: v } }));
+                      } else {
+                        setSettings(prev => ({ ...prev, background: { ...prev.background!, rotation: v } }));
+                      }
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* 🎨 配色方案设置 */}
+              <div className="mb-4 pt-4 border-t border-gray-700">
+                <h5 className="text-xs font-bold mb-3 flex items-center gap-2" style={{ color: 'var(--ui-secondary)' }}>
+                  <span>🎨</span> 配色方案
+                </h5>
+
+                {/* 方案选择 */}
+                <div className="flex items-center justify-between mb-3 p-2 rounded" style={{ backgroundColor: 'var(--surface)' }}>
+                  <span className="text-xs" style={{ color: 'var(--text-1)' }}>当前方案</span>
+                  <div className="flex gap-1">
+                    <select
+                      value={activeSchemeId}
+                      onChange={(e) => applyScheme(e.target.value)}
+                      className="text-xs rounded px-2 py-1 cursor-pointer"
+                      style={{ backgroundColor: 'var(--surface)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
+                    >
+                      {Object.entries(colorSchemes).map(([key, scheme]) => (
+                        <option key={key} value={key}>{scheme.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => deleteScheme(activeSchemeId)}
+                      className="px-2 rounded text-xs transition-colors hover:bg-red-500/20 text-red-400"
+                      title="删除当前方案"
+                      style={{ border: '1px solid var(--border)' }}
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
               </div>
 
-              {/* 自定义颜色 */}
-              <div>
-                <label className="text-[10px] uppercase tracking-wider mb-2 block" style={{ color: 'var(--text-2)' }}>自定义颜色</label>
-                <div className="space-y-2">
-                  {[
-                    { key: 'primary' as const, label: '主色', cssVar: '--ui-primary' },
-                    { key: 'secondary' as const, label: '次色', cssVar: '--ui-secondary' },
-                    { key: 'accent' as const, label: '强调色', cssVar: '--accent' },
-                  ].map(item => (
-                    <div key={item.key} className="flex items-center justify-between">
-                      <span className="text-[10px]" style={{ color: 'var(--text-1)' }}>{item.label}</span>
+              {/* 控制台背景色 */}
+              <div className="mb-3">
+                <label className="text-xs block mb-2" style={{ color: 'var(--text-2)' }}>控制台背景色</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>深色主题</label>
+                    <div className="flex gap-1">
                       <input
                         type="color"
-                        value={customColors[item.key]}
-                        onChange={(e) => {
-                          const newColors = { ...customColors, [item.key]: e.target.value };
-                          setCustomColors(newColors);
-                          setActiveSchemeId('custom');
-                          document.documentElement.style.setProperty(item.cssVar, e.target.value);
-                          localStorage.setItem('custom_theme_colors', JSON.stringify(newColors));
-                          if (item.key === 'primary') {
-                            localStorage.setItem('theme_primary_color', e.target.value);
-                          }
-                        }}
-                        className="w-8 h-6 rounded cursor-pointer border-0"
+                        value={customColors.darkBg}
+                        onChange={(e) => setCustomColors(prev => ({ ...prev, darkBg: e.target.value }))}
+                        className="w-6 h-6 rounded cursor-pointer flex-shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={customColors.darkBg}
+                        onChange={(e) => setCustomColors(prev => ({ ...prev, darkBg: e.target.value }))}
+                        className="flex-1 px-1 rounded text-[10px] w-0"
+                        style={{ backgroundColor: 'var(--surface)', color: 'var(--text-1)', border: '1px solid var(--border)' }}
                       />
                     </div>
-                  ))}
+                  </div>
                 </div>
               </div>
 
-              {/* 效果预览 */}
-              <div className="p-3 rounded-lg" style={{ background: 'var(--surface)' }}>
-                <label className="text-[10px] uppercase tracking-wider mb-2 block" style={{ color: 'var(--text-2)' }}>效果预览</label>
-                <div className="flex gap-2 flex-wrap">
-                  <button className="px-2 py-1 rounded text-[10px] text-white" style={{ background: 'var(--ui-primary)' }}>主按钮</button>
-                  <button className="px-2 py-1 rounded text-[10px] border" style={{ borderColor: 'var(--ui-secondary)', color: 'var(--ui-secondary)' }}>次按钮</button>
-                  <span className="px-2 py-1 rounded text-[10px]" style={{ background: 'var(--accent)', color: '#000' }}>标签</span>
+              {/* UI颜色自定义 */}
+              <div className="space-y-2">
+                <label className="text-xs block" style={{ color: 'var(--text-2)' }}>自定义颜色</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>主交互色</label>
+                    <input
+                      type="color"
+                      value={customColors.primary}
+                      onChange={(e) => setCustomColors(prev => ({ ...prev, primary: e.target.value }))}
+                      className="w-full h-6 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>次交互色</label>
+                    <input
+                      type="color"
+                      value={customColors.secondary}
+                      onChange={(e) => setCustomColors(prev => ({ ...prev, secondary: e.target.value }))}
+                      className="w-full h-6 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>标题强调</label>
+                    <input
+                      type="color"
+                      value={customColors.textAccent}
+                      onChange={(e) => setCustomColors(prev => ({ ...prev, textAccent: e.target.value }))}
+                      className="w-full h-6 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>装饰线条</label>
+                    <input
+                      type="color"
+                      value={customColors.decoration}
+                      onChange={(e) => setCustomColors(prev => ({ ...prev, decoration: e.target.value }))}
+                      className="w-full h-6 rounded cursor-pointer"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <label className="text-[10px] block mb-1 opacity-70" style={{ color: 'var(--text-2)' }}>编辑栏颜色</label>
+                    <input
+                      type="color"
+                      value={customColors.editBar}
+                      onChange={(e) => setCustomColors(prev => ({ ...prev, editBar: e.target.value }))}
+                      className="w-full h-6 rounded cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 mt-2 border-t flex gap-2" style={{ borderColor: 'var(--border)' }}>
+                  {/* 所有方案都可以保存修改和另存为 */}
+                  <button
+                    onClick={() => saveScheme(false)}
+                    className="flex-1 py-1.5 text-xs rounded transition-all hover:opacity-80"
+                    style={{
+                      background: 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)',
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid var(--ui-secondary)',
+                      color: 'var(--ui-secondary)',
+                    }}
+                  >
+                    保存修改
+                  </button>
+                  <button
+                    onClick={() => saveScheme(true)}
+                    className="flex-1 py-1.5 text-xs rounded transition-all hover:opacity-80"
+                    style={{
+                      background: 'rgba(var(--ui-primary-rgb, 99, 102, 241), 0.3)',
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid var(--ui-primary)',
+                      color: 'var(--ui-primary)',
+                    }}
+                  >
+                    另存为...
+                  </button>
                 </div>
               </div>
             </div>
           </div>,
           document.body
         )}
-
       </div>
 
       {/* 标题栏 - 星云模式 */}
       {appMode === 'nebula' && (
-        <div className="mb-4 text-center relative">
-          <h1 className="text-4xl font-bold mb-1 tracking-wider" style={{
-            fontFamily: "'Great Vibes', cursive",
-            background: 'linear-gradient(to right, #22d3ee, #818cf8)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            filter: 'drop-shadow(0 0 10px rgba(34, 211, 238, 0.3))',
-            padding: '5px 0'
-          }}>
+        <div className="mb-4">
+          <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--accent)' }}>
             XingCloud
           </h1>
-          <div className="flex justify-between text-xs font-mono px-2" style={{ color: 'var(--text-2)' }}>
+          <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>
             <span>FPS: {fps}</span>
             <span>粒子数: {(particleCount / 1000).toFixed(1)}k</span>
           </div>
@@ -4583,18 +4688,11 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
       {/* 标题栏 - 星球模式 */}
       {appMode === 'planet' && (
-        <div className="mb-4 text-center relative">
-          <h1 className="text-4xl font-bold mb-1 tracking-wider" style={{
-            fontFamily: "'Great Vibes', cursive",
-            background: 'linear-gradient(to right, #f472b6, #fb7185)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            filter: 'drop-shadow(0 0 10px rgba(244, 114, 182, 0.3))',
-            padding: '5px 0'
-          }}>
+        <div className="mb-4">
+          <h1 className="text-xl font-bold mb-1" style={{ color: 'var(--ui-primary)' }}>
             XingForge
           </h1>
-          <div className="flex justify-between text-xs font-mono px-2" style={{ color: 'var(--text-2)' }}>
+          <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>
             <span>FPS: {fps}</span>
             <span>粒子数: {(particleCount / 1000).toFixed(1)}k</span>
           </div>
@@ -7149,8 +7247,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                   {[
                     {
                       key: 'core' as const, icon: '🌍', label: '核心', color: '#22d3ee', count:
-                        (planet.coreSystem?.coresEnabled ? (planet.coreSystem?.cores?.filter(c => c.enabled).length ?? 0) : 0) +
-                        ((planet.coreSystem?.solidCoresEnabled ?? true) ? (planet.coreSystem?.solidCores?.filter(c => c.enabled).length || 0) : 0)
+                        (planet.coreSystem.coresEnabled ? planet.coreSystem.cores.filter(c => c.enabled).length : 0) +
+                        ((planet.coreSystem.solidCoresEnabled ?? true) ? (planet.coreSystem.solidCores?.filter(c => c.enabled).length || 0) : 0)
                     },
                     {
                       key: 'energyBody' as const, icon: '⚡', label: '能量体', color: '#f59e0b', count:
@@ -7217,13 +7315,12 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 </div>
 
                 {/* ===== 核心 子Tab ===== */}
-                {planetSubTab === 'core' && planet.coreSystem && (() => {
+                {planetSubTab === 'core' && (() => {
                   // 粒子核心相关
-                  const cores = planet.coreSystem?.cores || [];
-                  const effectiveSelectedCoreId = selectedCoreId && cores.find(c => c.id === selectedCoreId)
+                  const effectiveSelectedCoreId = selectedCoreId && planet.coreSystem.cores.find(c => c.id === selectedCoreId)
                     ? selectedCoreId
-                    : cores[0]?.id || null;
-                  const currentCore = cores.find(c => c.id === effectiveSelectedCoreId);
+                    : planet.coreSystem.cores[0]?.id || null;
+                  const currentCore = planet.coreSystem.cores.find(c => c.id === effectiveSelectedCoreId);
 
                   const updateCore = (coreId: string, updates: Partial<PlanetCoreSettings>) => {
                     setPlanetSettings(prev => ({
@@ -7293,7 +7390,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                       </div>
 
                       {/* ===== 粒子核心面板 ===== */}
-                      {coreSubTab === 'particle' && planet.coreSystem?.cores && (() => {
+                      {coreSubTab === 'particle' && (() => {
                         return (
                           <div className="border-l-2 pl-2" style={{ borderColor: 'var(--ui-decoration)' }}>
                             <FloatingListSelector
@@ -9092,10 +9189,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
                   // 构建核心选项列表
                   const coreOptions: { id: string; name: string; type: 'particle' | 'solid' }[] = [];
-                  (planet.coreSystem?.cores || []).forEach(c => {
+                  planet.coreSystem.cores.forEach(c => {
                     if (c.enabled) coreOptions.push({ id: c.id, name: c.name, type: 'particle' });
                   });
-                  (planet.coreSystem?.solidCores || []).forEach(c => {
+                  (planet.coreSystem.solidCores || []).forEach(c => {
                     if (c.enabled) coreOptions.push({ id: c.id, name: c.name, type: 'solid' });
                   });
 

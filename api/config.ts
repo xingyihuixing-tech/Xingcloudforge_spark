@@ -11,11 +11,14 @@
 import { Redis } from '@upstash/redis';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Redis客户端
-const redis = new Redis({
-    url: process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '',
-    token: process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+// Redis客户端 - 需要有效的环境变量
+const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+// 只在环境变量有效时初始化 Redis
+const redis = REDIS_URL && REDIS_TOKEN
+    ? new Redis({ url: REDIS_URL, token: REDIS_TOKEN })
+    : null;
 
 // 配置数据结构
 interface UserConfig {
@@ -36,6 +39,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
+    }
+
+    // 检查 Redis 是否可用
+    if (!redis) {
+        console.error('Config API Error: Redis environment variables not configured');
+        return res.status(503).json({
+            error: 'Database service unavailable',
+            message: 'Redis 环境变量未配置。请检查 KV_REST_API_URL 和 KV_REST_API_TOKEN'
+        });
     }
 
     try {
@@ -62,12 +74,12 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
     }
 
     // 验证用户是否存在
-    const exists = await redis.sismember('users', userId);
+    const exists = await redis!.sismember('users', userId);
     if (!exists) {
         return res.status(404).json({ error: '用户不存在' });
     }
 
-    const config = await redis.get(`config:${userId}`) as UserConfig | null;
+    const config = await redis!.get(`config:${userId}`) as UserConfig | null;
 
     if (!config) {
         // 返回空配置
@@ -96,13 +108,13 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
     }
 
     // 验证用户是否存在
-    const exists = await redis.sismember('users', userId);
+    const exists = await redis!.sismember('users', userId);
     if (!exists) {
         return res.status(404).json({ error: '用户不存在' });
     }
 
     // 获取现有配置并合并
-    const existingConfig = await redis.get(`config:${userId}`) as UserConfig | null;
+    const existingConfig = await redis!.get(`config:${userId}`) as UserConfig | null;
 
     const newConfig: UserConfig = {
         version: (existingConfig?.version || 0) + 1,
@@ -114,7 +126,7 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         planetTemplates: config.planetTemplates ?? existingConfig?.planetTemplates ?? [],
     };
 
-    await redis.set(`config:${userId}`, newConfig);
+    await redis!.set(`config:${userId}`, newConfig);
 
     return res.status(200).json({
         success: true,
