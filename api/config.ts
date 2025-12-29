@@ -12,7 +12,7 @@ import { Redis } from '@upstash/redis';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 // Redis客户端 - 支持多种环境变量名称格式
-const REDIS_URL = process.env.KV_REST_API_URL
+const RAW_REDIS_URL = process.env.KV_REST_API_URL
     || process.env.UPSTASH_REDIS_REST_URL
     || process.env.UPSTASH_REDIS_REST_KV_URL
     || process.env.UPSTASH_REDIS_REST_KV_REST_API_URL
@@ -20,6 +20,28 @@ const REDIS_URL = process.env.KV_REST_API_URL
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN
     || process.env.UPSTASH_REDIS_REST_TOKEN
     || process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN;
+
+// 将 rediss:// URL 转换为 https:// REST API URL
+function convertToRestUrl(url: string | undefined): string | undefined {
+    if (!url) return undefined;
+    // 如果已经是 https:// 格式，直接返回
+    if (url.startsWith('https://')) return url;
+    // 如果是 rediss:// 或 redis:// 格式，提取主机名并转换
+    if (url.startsWith('rediss://') || url.startsWith('redis://')) {
+        try {
+            // rediss://default:token@host.upstash.io:6379 -> https://host.upstash.io
+            const match = url.match(/@([^:]+)/);
+            if (match && match[1]) {
+                return `https://${match[1]}`;
+            }
+        } catch (e) {
+            console.error('Failed to parse Redis URL:', e);
+        }
+    }
+    return url;
+}
+
+const REDIS_URL = convertToRestUrl(RAW_REDIS_URL);
 
 // 只在环境变量有效时初始化 Redis
 const redis = REDIS_URL && REDIS_TOKEN

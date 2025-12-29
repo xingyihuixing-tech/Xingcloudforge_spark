@@ -46,7 +46,28 @@ const getRedisCredentials = () => {
     return { url: '', token: '' };
 };
 
+// 将 rediss:// URL 转换为 https:// REST API URL
+function convertToRestUrl(url: string | undefined): string | undefined {
+    if (!url) return undefined;
+    if (url.startsWith('https://')) return url;
+    if (url.startsWith('rediss://') || url.startsWith('redis://')) {
+        try {
+            const match = url.match(/@([^:]+)/);
+            if (match && match[1]) {
+                return `https://${match[1]}`;
+            }
+        } catch (e) {
+            console.error('Failed to parse Redis URL:', e);
+        }
+    }
+    return url;
+}
+
 const credentials = getRedisCredentials();
+// 转换 URL 格式
+if (credentials.url) {
+    credentials.url = convertToRestUrl(credentials.url) || credentials.url;
+}
 
 // Redis客户端
 const redis = credentials.url && credentials.token
@@ -104,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
 // 获取所有用户（不含密码）
 async function getUsers(req: VercelRequest, res: VercelResponse) {
-    const userIds = await redis.smembers('users') as string[];
+    const userIds = await redis!.smembers('users') as string[];
 
     if (!userIds || userIds.length === 0) {
         return res.status(200).json({ users: [] });
@@ -112,7 +133,7 @@ async function getUsers(req: VercelRequest, res: VercelResponse) {
 
     const users: Omit<User, 'password'>[] = [];
     for (const userId of userIds) {
-        const userData = await redis.hgetall(`user:${userId}`) as User | null;
+        const userData = await redis!.hgetall(`user:${userId}`) as User | null;
         if (userData) {
             const { password, ...userWithoutPassword } = userData;
             users.push(userWithoutPassword);
@@ -132,7 +153,7 @@ async function handleAuth(req: VercelRequest, res: VercelResponse) {
             return res.status(400).json({ error: '用户ID不能为空' });
         }
 
-        const userData = await redis.hgetall(`user:${userId}`) as User | null;
+        const userData = await redis!.hgetall(`user:${userId}`) as User | null;
         if (!userData) {
             return res.status(404).json({ error: '用户不存在' });
         }
@@ -153,7 +174,7 @@ async function handleAuth(req: VercelRequest, res: VercelResponse) {
         }
 
         // 检查用户是否已存在
-        const exists = await redis.sismember('users', userId);
+        const exists = await redis!.sismember('users', userId);
         if (exists) {
             return res.status(409).json({ error: '用户ID已存在' });
         }
@@ -167,8 +188,8 @@ async function handleAuth(req: VercelRequest, res: VercelResponse) {
         };
 
         // 保存用户
-        await redis.sadd('users', userId);
-        await redis.hset(`user:${userId}`, newUser);
+        await redis!.sadd('users', userId);
+        await redis!.hset(`user:${userId}`, newUser as unknown as Record<string, unknown>);
 
         const { password: _, ...userWithoutPassword } = newUser;
         return res.status(201).json({ success: true, user: userWithoutPassword });
@@ -185,7 +206,7 @@ async function updateUser(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: '用户ID不能为空' });
     }
 
-    const userData = await redis.hgetall(`user:${userId}`) as User | null;
+    const userData = await redis!.hgetall(`user:${userId}`) as User | null;
     if (!userData) {
         return res.status(404).json({ error: '用户不存在' });
     }
@@ -203,7 +224,7 @@ async function updateUser(req: VercelRequest, res: VercelResponse) {
     if (avatar) updates.avatar = avatar;
     if (newPassword !== undefined) updates.password = newPassword || undefined;
 
-    await redis.hset(`user:${userId}`, updates);
+    await redis!.hset(`user:${userId}`, updates as unknown as Record<string, unknown>);
 
     return res.status(200).json({ success: true });
 }
@@ -216,7 +237,7 @@ async function deleteUser(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: '用户ID不能为空' });
     }
 
-    const userData = await redis.hgetall(`user:${userId}`) as User | null;
+    const userData = await redis!.hgetall(`user:${userId}`) as User | null;
     if (!userData) {
         return res.status(404).json({ error: '用户不存在' });
     }
@@ -227,9 +248,9 @@ async function deleteUser(req: VercelRequest, res: VercelResponse) {
     }
 
     // 删除用户数据
-    await redis.srem('users', userId);
-    await redis.del(`user:${userId}`);
-    await redis.del(`config:${userId}`);
+    await redis!.srem('users', userId);
+    await redis!.del(`user:${userId}`);
+    await redis!.del(`config:${userId}`);
 
     return res.status(200).json({ success: true });
 }
