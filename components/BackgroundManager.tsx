@@ -1,4 +1,3 @@
-```
 import React, { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { StarBackground } from './StarBackground'; // Keep the original Nebula
@@ -77,14 +76,13 @@ export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?:
 const BgBtn = ({ type, icon, label, active, onClick }: any) => (
     <button
         onClick={onClick}
-        className={`group relative w - 10 h - 10 md: w - 12 md: h - 12 rounded - xl flex items - center justify - center transition - all duration - 300 ${
-    active
-        ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
-        : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
-} `}
+        className={`group relative w - 10 h - 10 md: w - 12 md: h - 12 rounded - xl flex items - center justify - center transition - all duration - 300 ${active
+                ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
+                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
+            } `}
         title={label}
     >
-        <i className={`fas fa - ${ icon } text - sm md: text - lg`} />
+        <i className={`fas fa - ${icon} text - sm md: text - lg`} />
         {/* Tooltip */}
         <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-black/80 text-white text-[10px] rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
             {label}

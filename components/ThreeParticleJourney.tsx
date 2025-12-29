@@ -1,8 +1,12 @@
 import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
+// @ts-ignore
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+// @ts-ignore
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer';
+// @ts-ignore
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass';
+// @ts-ignore
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass';
 
 export const ThreeParticleJourney: React.FC = () => {
@@ -28,7 +32,7 @@ export const ThreeParticleJourney: React.FC = () => {
 
         // State variables inside closure
         let scene: THREE.Scene, camera: THREE.PerspectiveCamera, renderer: THREE.WebGLRenderer;
-        let controls: OrbitControls, composer: EffectComposer;
+        let controls: any, composer: any;
         let particles: THREE.Points, particleGeometry: THREE.BufferGeometry, particleMaterial: THREE.PointsMaterial;
 
         let positions: Float32Array;
@@ -298,8 +302,9 @@ export const ThreeParticleJourney: React.FC = () => {
             cancelAnimationFrame(frameId);
             if (mountRef.current) mountRef.current.innerHTML = '';
             renderer.dispose();
-            geometry.dispose();
-            material.dispose();
+            // Fix: Use the variables from closure
+            if (particleGeometry) particleGeometry.dispose();
+            if (particleMaterial) particleMaterial.dispose();
         };
     }, []);
 
