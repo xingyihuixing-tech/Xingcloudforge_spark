@@ -1,0 +1,7 @@
+{
+  "name": "version 1",
+  "description": "散的不开 恢复快 明亮黑洞球状 但是显示不完整",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

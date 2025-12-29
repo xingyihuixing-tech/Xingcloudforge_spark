@@ -1,0 +1,482 @@
+{
+  "generatedAt": "2025-12-29T06:47:09.418Z",
+  "categories": {
+    "cute": {
+      "label": "萌物",
+      "icon": "🐱"
+    },
+    "magic_circle": {
+      "label": "法阵",
+      "icon": "🔮"
+    },
+    "star": {
+      "label": "星空",
+      "icon": "⭐"
+    },
+    "rings": {
+      "label": "光环",
+      "icon": "💫"
+    },
+    "myth": {
+      "label": "神兽",
+      "icon": "🐉"
+    }
+  },
+  "textures": {
+    "cute": [
+      {
+        "value": "/magic/cute/circle01.png",
+        "label": "萌物 1",
+        "filename": "circle01.png"
+      },
+      {
+        "value": "/magic/cute/circle02.png",
+        "label": "萌物 2",
+        "filename": "circle02.png"
+      },
+      {
+        "value": "/magic/cute/circle03.png",
+        "label": "萌物 3",
+        "filename": "circle03.png"
+      },
+      {
+        "value": "/magic/cute/circle04.png",
+        "label": "萌物 4",
+        "filename": "circle04.png"
+      },
+      {
+        "value": "/magic/cute/circle05.png",
+        "label": "萌物 5",
+        "filename": "circle05.png"
+      },
+      {
+        "value": "/magic/cute/circle06.png",
+        "label": "萌物 6",
+        "filename": "circle06.png"
+      },
+      {
+        "value": "/magic/cute/circle07.png",
+        "label": "萌物 7",
+        "filename": "circle07.png"
+      },
+      {
+        "value": "/magic/cute/circle08.png",
+        "label": "萌物 8",
+        "filename": "circle08.png"
+      },
+      {
+        "value": "/magic/cute/circle09.png",
+        "label": "萌物 9",
+        "filename": "circle09.png"
+      },
+      {
+        "value": "/magic/cute/circle10.png",
+        "label": "萌物 10",
+        "filename": "circle10.png"
+      },
+      {
+        "value": "/magic/cute/circle11.png",
+        "label": "萌物 11",
+        "filename": "circle11.png"
+      },
+      {
+        "value": "/magic/cute/circle12.png",
+        "label": "萌物 12",
+        "filename": "circle12.png"
+      },
+      {
+        "value": "/magic/cute/circle13.png",
+        "label": "萌物 13",
+        "filename": "circle13.png"
+      },
+      {
+        "value": "/magic/cute/circle14.png",
+        "label": "萌物 14",
+        "filename": "circle14.png"
+      },
+      {
+        "value": "/magic/cute/circle57.png",
+        "label": "萌物 15",
+        "filename": "circle57.png"
+      },
+      {
+        "value": "/magic/cute/circle58.png",
+        "label": "萌物 16",
+        "filename": "circle58.png"
+      }
+    ],
+    "magic_circle": [
+      {
+        "value": "/magic/magic_circle/circle15.png",
+        "label": "法阵 1",
+        "filename": "circle15.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle16.png",
+        "label": "法阵 2",
+        "filename": "circle16.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle17.png",
+        "label": "法阵 3",
+        "filename": "circle17.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle18.png",
+        "label": "法阵 4",
+        "filename": "circle18.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle19.png",
+        "label": "法阵 5",
+        "filename": "circle19.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle20.png",
+        "label": "法阵 6",
+        "filename": "circle20.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle21.png",
+        "label": "法阵 7",
+        "filename": "circle21.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle22.png",
+        "label": "法阵 8",
+        "filename": "circle22.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle23.png",
+        "label": "法阵 9",
+        "filename": "circle23.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle24.png",
+        "label": "法阵 10",
+        "filename": "circle24.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle28.png",
+        "label": "法阵 11",
+        "filename": "circle28.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle29.png",
+        "label": "法阵 12",
+        "filename": "circle29.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle30.png",
+        "label": "法阵 13",
+        "filename": "circle30.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle33.png",
+        "label": "法阵 14",
+        "filename": "circle33.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle36.png",
+        "label": "法阵 15",
+        "filename": "circle36.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle59.png",
+        "label": "法阵 16",
+        "filename": "circle59.png"
+      },
+      {
+        "value": "/magic/magic_circle/circle62.jpg",
+        "label": "法阵 17",
+        "filename": "circle62.jpg"
+      },
+      {
+        "value": "/magic/magic_circle/circle63.jpg",
+        "label": "法阵 18",
+        "filename": "circle63.jpg"
+      },
+      {
+        "value": "/magic/magic_circle/circle64.jpg",
+        "label": "法阵 19",
+        "filename": "circle64.jpg"
+      },
+      {
+        "value": "/magic/magic_circle/circle66.jpg",
+        "label": "法阵 20",
+        "filename": "circle66.jpg"
+      },
+      {
+        "value": "/magic/magic_circle/circle68.jpg",
+        "label": "法阵 21",
+        "filename": "circle68.jpg"
+      },
+      {
+        "value": "/magic/magic_circle/circle73.jpg",
+        "label": "法阵 22",
+        "filename": "circle73.jpg"
+      },
+      {
+        "value": "/magic/magic_circle/circle75.jpg",
+        "label": "法阵 23",
+        "filename": "circle75.jpg"
+      }
+    ],
+    "star": [
+      {
+        "value": "/magic/star/circle40.png",
+        "label": "星空 1",
+        "filename": "circle40.png"
+      },
+      {
+        "value": "/magic/star/circle42.png",
+        "label": "星空 2",
+        "filename": "circle42.png"
+      },
+      {
+        "value": "/magic/star/circle43.png",
+        "label": "星空 3",
+        "filename": "circle43.png"
+      },
+      {
+        "value": "/magic/star/circle44.png",
+        "label": "星空 4",
+        "filename": "circle44.png"
+      },
+      {
+        "value": "/magic/star/circle45.png",
+        "label": "星空 5",
+        "filename": "circle45.png"
+      },
+      {
+        "value": "/magic/star/circle46.png",
+        "label": "星空 6",
+        "filename": "circle46.png"
+      },
+      {
+        "value": "/magic/star/circle47.png",
+        "label": "星空 7",
+        "filename": "circle47.png"
+      },
+      {
+        "value": "/magic/star/circle48.png",
+        "label": "星空 8",
+        "filename": "circle48.png"
+      },
+      {
+        "value": "/magic/star/circle49.png",
+        "label": "星空 9",
+        "filename": "circle49.png"
+      },
+      {
+        "value": "/magic/star/circle50.png",
+        "label": "星空 10",
+        "filename": "circle50.png"
+      },
+      {
+        "value": "/magic/star/circle51.png",
+        "label": "星空 11",
+        "filename": "circle51.png"
+      },
+      {
+        "value": "/magic/star/circle52.png",
+        "label": "星空 12",
+        "filename": "circle52.png"
+      },
+      {
+        "value": "/magic/star/circle53.png",
+        "label": "星空 13",
+        "filename": "circle53.png"
+      },
+      {
+        "value": "/magic/star/circle54.png",
+        "label": "星空 14",
+        "filename": "circle54.png"
+      },
+      {
+        "value": "/magic/star/circle55.png",
+        "label": "星空 15",
+        "filename": "circle55.png"
+      },
+      {
+        "value": "/magic/star/IMG_20251208_161927.jpg",
+        "label": "星空 16",
+        "filename": "IMG_20251208_161927.jpg"
+      }
+    ],
+    "rings": [
+      {
+        "value": "/magic/rings/circle25.png",
+        "label": "光环 1",
+        "filename": "circle25.png"
+      },
+      {
+        "value": "/magic/rings/circle26.png",
+        "label": "光环 2",
+        "filename": "circle26.png"
+      },
+      {
+        "value": "/magic/rings/circle27.png",
+        "label": "光环 3",
+        "filename": "circle27.png"
+      },
+      {
+        "value": "/magic/rings/circle31.png",
+        "label": "光环 4",
+        "filename": "circle31.png"
+      },
+      {
+        "value": "/magic/rings/circle32.png",
+        "label": "光环 5",
+        "filename": "circle32.png"
+      },
+      {
+        "value": "/magic/rings/circle34.png",
+        "label": "光环 6",
+        "filename": "circle34.png"
+      },
+      {
+        "value": "/magic/rings/circle35.png",
+        "label": "光环 7",
+        "filename": "circle35.png"
+      },
+      {
+        "value": "/magic/rings/circle41.png",
+        "label": "光环 8",
+        "filename": "circle41.png"
+      },
+      {
+        "value": "/magic/rings/circle56.png",
+        "label": "光环 9",
+        "filename": "circle56.png"
+      },
+      {
+        "value": "/magic/rings/IMG_20251208_161905.jpg",
+        "label": "光环 10",
+        "filename": "IMG_20251208_161905.jpg"
+      },
+      {
+        "value": "/magic/rings/IMG_20251208_161917.jpg",
+        "label": "光环 11",
+        "filename": "IMG_20251208_161917.jpg"
+      }
+    ],
+    "myth": [
+      {
+        "value": "/magic/myth/circle37.png",
+        "label": "神兽 1",
+        "filename": "circle37.png"
+      },
+      {
+        "value": "/magic/myth/circle38.png",
+        "label": "神兽 2",
+        "filename": "circle38.png"
+      },
+      {
+        "value": "/magic/myth/circle39.png",
+        "label": "神兽 3",
+        "filename": "circle39.png"
+      },
+      {
+        "value": "/magic/myth/circle74.jpg",
+        "label": "神兽 4",
+        "filename": "circle74.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_113822.jpg",
+        "label": "神兽 5",
+        "filename": "IMG_20251208_113822.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_113835.jpg",
+        "label": "神兽 6",
+        "filename": "IMG_20251208_113835.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_113853.jpg",
+        "label": "神兽 7",
+        "filename": "IMG_20251208_113853.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_113905.jpg",
+        "label": "神兽 8",
+        "filename": "IMG_20251208_113905.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_113918.jpg",
+        "label": "神兽 9",
+        "filename": "IMG_20251208_113918.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_113941.jpg",
+        "label": "神兽 10",
+        "filename": "IMG_20251208_113941.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114008.jpg",
+        "label": "神兽 11",
+        "filename": "IMG_20251208_114008.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114032.jpg",
+        "label": "神兽 12",
+        "filename": "IMG_20251208_114032.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114044.jpg",
+        "label": "神兽 13",
+        "filename": "IMG_20251208_114044.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114111.jpg",
+        "label": "神兽 14",
+        "filename": "IMG_20251208_114111.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114126.jpg",
+        "label": "神兽 15",
+        "filename": "IMG_20251208_114126.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114137.jpg",
+        "label": "神兽 16",
+        "filename": "IMG_20251208_114137.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114150.jpg",
+        "label": "神兽 17",
+        "filename": "IMG_20251208_114150.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114205.jpg",
+        "label": "神兽 18",
+        "filename": "IMG_20251208_114205.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114232.jpg",
+        "label": "神兽 19",
+        "filename": "IMG_20251208_114232.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114401.jpg",
+        "label": "神兽 20",
+        "filename": "IMG_20251208_114401.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114447.jpg",
+        "label": "神兽 21",
+        "filename": "IMG_20251208_114447.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114512.jpg",
+        "label": "神兽 22",
+        "filename": "IMG_20251208_114512.jpg"
+      },
+      {
+        "value": "/magic/myth/IMG_20251208_114535.jpg",
+        "label": "神兽 23",
+        "filename": "IMG_20251208_114535.jpg"
+      }
+    ]
+  }
+}
