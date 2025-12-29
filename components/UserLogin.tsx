@@ -201,13 +201,14 @@ export function UserLogin() {
               </div>
 
               <form onSubmit={handleAuthSubmit} className="space-y-4">
-                <div className="space-y-1">
+                <div>
                   <input
                     type="text"
                     value={userId}
                     onChange={e => setUserId(e.target.value.replace(/[^a-zA-Z0-9]/g, ''))}
                     placeholder="User ID (e.g. alex)"
-                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center leading-normal"
+                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 text-white placeholder-white/30 focus:border-cyan-500/50 focus:bg-black/40 focus:outline-none transition-all text-center"
+                    style={{ height: '48px', lineHeight: '48px' }}
                     maxLength={20}
                     autoFocus
                   />

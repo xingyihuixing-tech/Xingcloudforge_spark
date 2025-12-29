@@ -46,7 +46,7 @@ export const UserMenu: React.FC = () => {
                         onClick={() => setIsOpen(false)}
                     />
                     <div
-                        className="absolute top-full right-0 mt-2 w-60 p-2 rounded-xl border border-white/10 z-50 transform origin-top-right animate-in fade-in slide-in-from-top-2 zoom-in-95 duration-200"
+                        className="absolute top-full left-0 mt-2 w-60 p-2 rounded-xl border border-white/10 z-50 transform origin-top-left animate-in fade-in slide-in-from-top-2 zoom-in-95 duration-200"
                         style={{
                             background: 'rgba(15, 15, 25, 0.95)',
                             backdropFilter: 'blur(20px)',
