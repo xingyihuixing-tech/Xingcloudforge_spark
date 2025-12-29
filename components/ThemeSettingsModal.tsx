@@ -168,8 +168,45 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
 
                         {activeTab === 'theme' && (
                             <div className="space-y-6">
+                                {/* 预设配色方案 */}
                                 <div>
-                                    <label className="text-xs text-white/40 uppercase tracking-wider font-semibold mb-3 block">主题色 (Primary)</label>
+                                    <label className="text-xs text-white/40 uppercase tracking-wider font-semibold mb-3 block">预设配色方案</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        {[
+                                            { id: 'ocean', name: '深海蓝', primary: '#0ea5e9', secondary: '#0369a1', accent: '#22d3ee' },
+                                            { id: 'sunset', name: '落日橙', primary: '#f97316', secondary: '#ea580c', accent: '#fdba74' },
+                                            { id: 'forest', name: '森林绿', primary: '#22c55e', secondary: '#16a34a', accent: '#4ade80' },
+                                            { id: 'nebula', name: '星云紫', primary: '#a855f7', secondary: '#9333ea', accent: '#c084fc' },
+                                            { id: 'rose', name: '玫瑰红', primary: '#f43f5e', secondary: '#e11d48', accent: '#fda4af' },
+                                            { id: 'midnight', name: '午夜靛', primary: '#6366f1', secondary: '#4f46e5', accent: '#818cf8' },
+                                        ].map(scheme => (
+                                            <button
+                                                key={scheme.id}
+                                                onClick={() => {
+                                                    handleThemeColorChange(scheme.primary);
+                                                    document.documentElement.style.setProperty('--ui-secondary', scheme.secondary);
+                                                    document.documentElement.style.setProperty('--accent', scheme.accent);
+                                                    localStorage.setItem('theme_scheme', JSON.stringify(scheme));
+                                                }}
+                                                className="p-3 rounded-xl border border-white/10 hover:border-white/30 transition-all text-left group"
+                                                style={{ background: `linear-gradient(135deg, ${scheme.primary}20, ${scheme.secondary}10)` }}
+                                            >
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <div className="flex gap-1">
+                                                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.primary }} />
+                                                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.secondary }} />
+                                                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.accent }} />
+                                                    </div>
+                                                </div>
+                                                <span className="text-xs font-medium text-white/80 group-hover:text-white">{scheme.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 自定义主题色 */}
+                                <div>
+                                    <label className="text-xs text-white/40 uppercase tracking-wider font-semibold mb-3 block">自定义主题色</label>
                                     <div className="grid grid-cols-5 gap-3">
                                         {[
                                             { color: '#6366f1', name: 'Indigo' },
@@ -195,11 +232,14 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* 预览区域 */}
                                 <div className="p-4 rounded-xl bg-gradient-to-br from-white/5 to-transparent border border-white/10">
-                                    <h4 className="text-sm font-medium text-white mb-2">预览</h4>
-                                    <div className="flex gap-2">
-                                        <button className="px-3 py-1.5 rounded-lg text-white text-xs font-medium" style={{ background: 'var(--ui-primary)' }}>Primary Button</button>
-                                        <button className="px-3 py-1.5 rounded-lg text-white/80 text-xs border border-white/20">Secondary</button>
+                                    <h4 className="text-sm font-medium text-white mb-2">效果预览</h4>
+                                    <div className="flex gap-2 flex-wrap">
+                                        <button className="px-3 py-1.5 rounded-lg text-white text-xs font-medium" style={{ background: 'var(--ui-primary)' }}>主按钮</button>
+                                        <button className="px-3 py-1.5 rounded-lg text-white/80 text-xs border" style={{ borderColor: 'var(--ui-secondary)' }}>次按钮</button>
+                                        <span className="px-2 py-1 rounded text-xs" style={{ background: 'var(--accent)', color: '#000' }}>标签</span>
                                     </div>
                                 </div>
                             </div>
