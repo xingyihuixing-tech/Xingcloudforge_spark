@@ -27,7 +27,7 @@ export const ThreeParticleJourney: React.FC = () => {
             bloomStrength: 1.5,
             bloomRadius: 0.5,
             bloomThreshold: 0.1,
-            cycleDuration: 12000 // 12秒切换一次形态
+            cycleDuration: 8000 // 8秒切换一次形态 (Faster)
         };
 
         // State variables inside closure
@@ -282,12 +282,50 @@ export const ThreeParticleJourney: React.FC = () => {
                 switchShape(shapes[currentShapeIdx]);
             }
 
+            const activeShape = shapes[currentShapeIdx];
+            const time = now * 0.001;
+
             // Lerp Positions
             const positionsArr = particleGeometry.attributes.position.array as Float32Array;
-            for (let i = 0; i < CONFIG.particleCount * 3; i++) {
-                positionsArr[i] += (targetPositions[i] - positionsArr[i]) * CONFIG.transitionSpeed;
+            for (let i = 0; i < CONFIG.particleCount; i++) {
+                const i3 = i * 3;
+
+                // Base target lerp
+                positionsArr[i3] += (targetPositions[i3] - positionsArr[i3]) * CONFIG.transitionSpeed;
+                positionsArr[i3 + 1] += (targetPositions[i3 + 1] - positionsArr[i3 + 1]) * CONFIG.transitionSpeed;
+                positionsArr[i3 + 2] += (targetPositions[i3 + 2] - positionsArr[i3 + 2]) * CONFIG.transitionSpeed;
+
+                // Dynamic Effects based on Shape
+                // River: Flow along X (assuming river is along X)
+                if (activeShape === 'river') {
+                    // Slight shift along X to simulate flow
+                    // We can't shift infinite without reset, so we use Sine wave offset for "alive" feel
+                    // Or simpler: just let the autoRotate do the work for "viewing", 
+                    // but add a "wobble" to simulating water surface
+                    positionsArr[i3 + 1] += Math.sin(positionsArr[i3] * 0.1 + time * 2) * 0.05;
+                }
+
+                // Nebula: Breathe/Disperse
+                if (activeShape === 'nebula') {
+                    // Slow expansion/contraction
+                    const breathe = 1 + Math.sin(time * 0.5 + i) * 0.0005; // very subtle per-particle
+                    positionsArr[i3] *= breathe;
+                    positionsArr[i3 + 1] *= breathe;
+                    positionsArr[i3 + 2] *= breathe;
+
+                    // Slow rotation around Y axis manually? No, controls.autoRotate handles scene rotation.
+                    // Add slight random drift?
+                    positionsArr[i3] += Math.cos(time + i) * 0.02;
+                    positionsArr[i3 + 1] += Math.sin(time + i * 0.5) * 0.02;
+                }
             }
             particleGeometry.attributes.position.needsUpdate = true;
+
+            // Enhance Camera Movements (More angles)
+            // Oscillate Camera Y slightly to look from above/below
+            controls.autoRotateSpeed = activeShape === 'river' ? 2.0 : 1.0; // Faster rotation
+            // Manually adjust polar angle? OrbitControls handles interactions, modifying spherical might fight it.
+            // But we can drift target?
 
             controls.update();
             composer.render();

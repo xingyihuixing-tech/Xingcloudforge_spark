@@ -1,75 +1,57 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
-import { StarBackground } from './StarBackground'; // Keep the original Nebula
+import { StarBackground } from './StarBackground';
 import { ThreePlanetScene, PlanetPreset } from './ThreePlanetScene';
 import { ThreeParticleJourney } from './ThreeParticleJourney';
+// @ts-ignore
+import { useUser } from '../contexts/UserContext';
 
-export type BackgroundType = 'nebula' | 'warp' | 'galaxy' | 'blackhole' | 'cyber' | 'journey' | PlanetPreset;
+export type BackgroundType = 'nebula' | 'galaxy' | 'journey' | PlanetPreset;
 
-export const BackgroundManager: React.FC<{ activeBg?: BackgroundType; onChange?: (type: BackgroundType) => void }> = ({ activeBg, onChange }) => {
-    // 默认使用 journey (极致体验)
-    const [current, setCurrent] = useState<BackgroundType>(activeBg || 'journey');
+export const BackgroundManager: React.FC = () => {
+    // Logic: 
+    // 1. If savedUsers.length === 0 (New/Cleared) -> 'journey'
+    // 2. Else -> Random from [gaia, inferno, glacial, nebula, galaxy, journey]
+
+    const { savedUsers } = useUser();
+    const [current, setCurrent] = useState<BackgroundType>('journey');
+    const [initialized, setInitialized] = useState(false);
 
     useEffect(() => {
-        if (activeBg) setCurrent(activeBg);
-    }, [activeBg]);
+        if (initialized) return;
 
-    const handleChange = (type: BackgroundType) => {
-        setCurrent(type);
-        onChange?.(type);
-    };
+        if (savedUsers.length === 0) {
+            setCurrent('journey');
+        } else {
+            // Random Selection
+            // Options: gasi(gaia), lava(inferno), ice(glacial), nebula, galaxy, journey(star map)
+            const options: BackgroundType[] = ['gaia', 'inferno', 'glacial', 'nebula', 'galaxy', 'journey'];
+            const randomBg = options[Math.floor(Math.random() * options.length)];
+            setCurrent(randomBg);
+        }
+        setInitialized(true);
+    }, [savedUsers, initialized]);
 
     const renderBackground = () => {
         switch (current) {
             case 'nebula': return <StarBackground />;
-            case 'warp': return <ThreeWarpBackground />;
-            case 'galaxy': return <ThreeGalaxyBackground />;
-            case 'blackhole': return <ThreeBlackHoleBackground />;
-            case 'cyber': return <ThreeCyberGridBackground />;
+            case 'galaxy': return <ThreeGalaxyBackground />; // Using existing component
             case 'journey': return <ThreeParticleJourney />;
+
             // Planets
             case 'gaia':
             case 'inferno':
             case 'glacial':
-            case 'storm':
-            case 'synth':
                 return <ThreePlanetScene preset={current as PlanetPreset} />;
+
             default: return <ThreeParticleJourney />;
         }
     };
 
     return (
-        <>
-            <div className="fixed inset-0 z-0 bg-black transition-opacity duration-1000">
-                {renderBackground()}
-            </div>
-
-            {/* 切换器 UI - 底部两行 */}
-            <div className="fixed bottom-6 right-6 z-[60] flex flex-col gap-3 items-end">
-
-                {/* Planet Series */}
-                <div className="flex gap-2 p-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg">
-                    <BgBtn type="gaia" icon="globe-americas" label="Gaia" active={current === 'gaia'} onClick={() => handleChange('gaia')} />
-                    <BgBtn type="glacial" icon="snowflake" label="Ice" active={current === 'glacial'} onClick={() => handleChange('glacial')} />
-                    <BgBtn type="inferno" icon="fire" label="Lava" active={current === 'inferno'} onClick={() => handleChange('inferno')} />
-                    <BgBtn type="storm" icon="bolt" label="Storm" active={current === 'storm'} onClick={() => handleChange('storm')} />
-                    <BgBtn type="synth" icon="microchip" label="Synth" active={current === 'synth'} onClick={() => handleChange('synth')} />
-                </div>
-
-                {/* Space Series */}
-                <div className="flex gap-2 p-2 rounded-xl bg-black/40 backdrop-blur-xl border border-white/10 shadow-lg">
-                    {/* Journey button included here or separate? Let's add it as a primary option or keep separate.
-              Let's put Journey as the first item in Space Series? Or keep separate for emphasis.
-              Actually, let's put it in the Space Series to keep UI clean. */}
-                    <BgBtn type="journey" icon="star" label="Journey" active={current === 'journey'} onClick={() => handleChange('journey')} />
-                    <div className="w-px h-8 bg-white/10 mx-1"></div>
-                    <BgBtn type="nebula" icon="cloud" label="Nebula" active={current === 'nebula'} onClick={() => handleChange('nebula')} />
-                    <BgBtn type="galaxy" icon="globe-asia" label="Galaxy" active={current === 'galaxy'} onClick={() => handleChange('galaxy')} />
-                    <BgBtn type="blackhole" icon="circle" label="Void" active={current === 'blackhole'} onClick={() => handleChange('blackhole')} />
-                    <BgBtn type="cyber" icon="cube" label="Grid" active={current === 'cyber'} onClick={() => handleChange('cyber')} />
-                </div>
-            </div>
-        </>
+        <div className="fixed inset-0 z-0 bg-black transition-opacity duration-1000">
+            {renderBackground()}
+        </div>
     );
 };
 
@@ -77,8 +59,8 @@ const BgBtn = ({ type, icon, label, active, onClick }: any) => (
     <button
         onClick={onClick}
         className={`group relative w - 10 h - 10 md: w - 12 md: h - 12 rounded - xl flex items - center justify - center transition - all duration - 300 ${active
-                ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
-                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
+            ? 'bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-[0_0_15px_rgba(6,182,212,0.6)] scale-110'
+            : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white hover:scale-105'
             } `}
         title={label}
     >

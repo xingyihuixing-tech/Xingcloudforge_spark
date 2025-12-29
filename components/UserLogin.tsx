@@ -195,7 +195,7 @@ export function UserLogin() {
         {/* 场景 B: 登录表单 */}
         {
           viewMode === 'auth-form' && (
-            <div className="w-full max-w-sm bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <div className="relative w-full max-w-sm md:max-w-md bg-black/16 backdrop-blur-sm border border-white/5 rounded-3xl p-6 md:p-8 shadow-[0_0_50px_rgba(0,0,0,0.5)] transition-all duration-500 hover:bg-black/30 hover:shadow-[0_0_70px_rgba(0,0,0,0.6)] hover:border-white/10">
 
               {/* 头像预览 */}
               <div className="flex justify-center -mt-16 mb-6">
