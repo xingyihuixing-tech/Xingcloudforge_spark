@@ -11,9 +11,15 @@
 import { Redis } from '@upstash/redis';
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// Redis客户端 - 需要有效的环境变量
-const REDIS_URL = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+// Redis客户端 - 支持多种环境变量名称格式
+const REDIS_URL = process.env.KV_REST_API_URL
+    || process.env.UPSTASH_REDIS_REST_URL
+    || process.env.UPSTASH_REDIS_REST_KV_URL
+    || process.env.UPSTASH_REDIS_REST_KV_REST_API_URL
+    || process.env.UPSTASH_REDIS_REST_REDIS_URL;
+const REDIS_TOKEN = process.env.KV_REST_API_TOKEN
+    || process.env.UPSTASH_REDIS_REST_TOKEN
+    || process.env.UPSTASH_REDIS_REST_KV_REST_API_TOKEN;
 
 // 只在环境变量有效时初始化 Redis
 const redis = REDIS_URL && REDIS_TOKEN
