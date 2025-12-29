@@ -2261,6 +2261,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   const [settingsPanelPos, setSettingsPanelPos] = useState<{ x: number; y: number } | null>(null);
   const [expandedMaterialPanels, setExpandedMaterialPanels] = useState<Record<string, boolean>>({});
 
+
   // 按键材质类型定义
   type MaterialType = 'glass' | 'neon' | 'crystal' | 'neumorphism' | 'holographic';
 
@@ -4438,7 +4439,125 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           document.body
         )}
 
-        {/* 设置面板 - 使用 createPortal 渲染到 body */}
+        {/* 设置面板 - 配色方案设置 */}
+        {showSettings && createPortal(
+          <div
+            className="fixed z-[9999] rounded-xl shadow-2xl w-80 max-h-[70vh] overflow-hidden flex flex-col"
+            style={{
+              left: settingsPanelPos ? settingsPanelPos.x : '50%',
+              top: settingsPanelPos ? settingsPanelPos.y : '50%',
+              transform: settingsPanelPos ? 'none' : 'translate(-50%, -50%)',
+              backgroundColor: 'rgba(20, 20, 30, 0.95)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              backdropFilter: 'blur(16px)',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+            }}
+          >
+            {/* 可拖拽标题栏 */}
+            <div
+              className="flex items-center justify-between p-3 cursor-move select-none"
+              style={{ background: 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))' }}
+              onMouseDown={(e) => {
+                const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect();
+                const offsetX = e.clientX - rect.left;
+                const offsetY = e.clientY - rect.top;
+                const handleMouseMove = (moveEvent: MouseEvent) => {
+                  setSettingsPanelPos({ x: moveEvent.clientX - offsetX, y: moveEvent.clientY - offsetY });
+                };
+                const handleMouseUp = () => {
+                  document.removeEventListener('mousemove', handleMouseMove);
+                  document.removeEventListener('mouseup', handleMouseUp);
+                };
+                document.addEventListener('mousemove', handleMouseMove);
+                document.addEventListener('mouseup', handleMouseUp);
+              }}
+            >
+              <h4 className="text-xs font-bold text-white">配色方案设置</h4>
+              <button
+                onClick={() => setShowSettings(false)}
+                className="text-xs px-2 py-0.5 rounded hover:bg-white/20 transition-colors text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              {/* 预设配色方案 */}
+              <div>
+                <label className="text-[10px] uppercase tracking-wider mb-2 block" style={{ color: 'var(--text-2)' }}>预设方案</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(colorSchemes).map(([id, scheme]) => (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        setActiveSchemeId(id);
+                        localStorage.setItem('active_color_scheme', id);
+                        document.documentElement.style.setProperty('--ui-primary', scheme.primary);
+                        document.documentElement.style.setProperty('--ui-secondary', scheme.secondary);
+                        document.documentElement.style.setProperty('--accent', scheme.accent);
+                        document.documentElement.style.setProperty('--surface', scheme.surface);
+                        localStorage.setItem('theme_primary_color', scheme.primary);
+                      }}
+                      className={`p-2 rounded-lg border text-left transition-all ${activeSchemeId === id
+                        ? 'border-white/40 bg-white/10'
+                        : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                        }`}
+                    >
+                      <div className="flex gap-1 mb-1">
+                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.primary }} />
+                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.secondary }} />
+                        <div className="w-3 h-3 rounded-full" style={{ background: scheme.accent }} />
+                      </div>
+                      <span className="text-[10px]" style={{ color: 'var(--text-1)' }}>{scheme.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 自定义颜色 */}
+              <div>
+                <label className="text-[10px] uppercase tracking-wider mb-2 block" style={{ color: 'var(--text-2)' }}>自定义颜色</label>
+                <div className="space-y-2">
+                  {[
+                    { key: 'primary' as const, label: '主色', cssVar: '--ui-primary' },
+                    { key: 'secondary' as const, label: '次色', cssVar: '--ui-secondary' },
+                    { key: 'accent' as const, label: '强调色', cssVar: '--accent' },
+                  ].map(item => (
+                    <div key={item.key} className="flex items-center justify-between">
+                      <span className="text-[10px]" style={{ color: 'var(--text-1)' }}>{item.label}</span>
+                      <input
+                        type="color"
+                        value={customColors[item.key]}
+                        onChange={(e) => {
+                          const newColors = { ...customColors, [item.key]: e.target.value };
+                          setCustomColors(newColors);
+                          setActiveSchemeId('custom');
+                          document.documentElement.style.setProperty(item.cssVar, e.target.value);
+                          localStorage.setItem('custom_theme_colors', JSON.stringify(newColors));
+                          if (item.key === 'primary') {
+                            localStorage.setItem('theme_primary_color', e.target.value);
+                          }
+                        }}
+                        className="w-8 h-6 rounded cursor-pointer border-0"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 效果预览 */}
+              <div className="p-3 rounded-lg" style={{ background: 'var(--surface)' }}>
+                <label className="text-[10px] uppercase tracking-wider mb-2 block" style={{ color: 'var(--text-2)' }}>效果预览</label>
+                <div className="flex gap-2 flex-wrap">
+                  <button className="px-2 py-1 rounded text-[10px] text-white" style={{ background: 'var(--ui-primary)' }}>主按钮</button>
+                  <button className="px-2 py-1 rounded text-[10px] border" style={{ borderColor: 'var(--ui-secondary)', color: 'var(--ui-secondary)' }}>次按钮</button>
+                  <span className="px-2 py-1 rounded text-[10px]" style={{ background: 'var(--accent)', color: '#000' }}>标签</span>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
 
       </div>
 
@@ -7030,8 +7149,8 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                   {[
                     {
                       key: 'core' as const, icon: '🌍', label: '核心', color: '#22d3ee', count:
-                        (planet.coreSystem.coresEnabled ? planet.coreSystem.cores.filter(c => c.enabled).length : 0) +
-                        ((planet.coreSystem.solidCoresEnabled ?? true) ? (planet.coreSystem.solidCores?.filter(c => c.enabled).length || 0) : 0)
+                        (planet.coreSystem?.coresEnabled ? (planet.coreSystem?.cores?.filter(c => c.enabled).length ?? 0) : 0) +
+                        ((planet.coreSystem?.solidCoresEnabled ?? true) ? (planet.coreSystem?.solidCores?.filter(c => c.enabled).length || 0) : 0)
                     },
                     {
                       key: 'energyBody' as const, icon: '⚡', label: '能量体', color: '#f59e0b', count:
@@ -7098,12 +7217,13 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
                 </div>
 
                 {/* ===== 核心 子Tab ===== */}
-                {planetSubTab === 'core' && (() => {
+                {planetSubTab === 'core' && planet.coreSystem && (() => {
                   // 粒子核心相关
-                  const effectiveSelectedCoreId = selectedCoreId && planet.coreSystem.cores.find(c => c.id === selectedCoreId)
+                  const cores = planet.coreSystem?.cores || [];
+                  const effectiveSelectedCoreId = selectedCoreId && cores.find(c => c.id === selectedCoreId)
                     ? selectedCoreId
-                    : planet.coreSystem.cores[0]?.id || null;
-                  const currentCore = planet.coreSystem.cores.find(c => c.id === effectiveSelectedCoreId);
+                    : cores[0]?.id || null;
+                  const currentCore = cores.find(c => c.id === effectiveSelectedCoreId);
 
                   const updateCore = (coreId: string, updates: Partial<PlanetCoreSettings>) => {
                     setPlanetSettings(prev => ({
