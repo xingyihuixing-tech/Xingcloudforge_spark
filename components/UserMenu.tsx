@@ -3,7 +3,7 @@ import { useUser, User } from '../contexts/UserContext';
 import { PlanetAvatar } from './PlanetAvatar';
 import { ThemeSettingsModal } from './ThemeSettingsModal';
 import { SettingsModal } from './SettingsModal';
-import { AppSettings, PlanetSceneSettings } from '../types';
+import { AppSettings, PlanetSceneSettings, ThemeConfig, MaterialSettings, MaterialPreset } from '../types';
 
 interface UserMenuProps {
     settings?: AppSettings;
@@ -13,11 +13,23 @@ interface UserMenuProps {
     appMode?: 'nebula' | 'planet';
     modeSwitchMaterial?: any;
     setModeSwitchMaterial?: React.Dispatch<React.SetStateAction<any>>;
+    // 主题配置
+    themeConfig?: ThemeConfig;
+    setThemeConfig?: React.Dispatch<React.SetStateAction<ThemeConfig>>;
+    // 材质配置
+    materialSettings?: MaterialSettings;
+    setMaterialSettings?: React.Dispatch<React.SetStateAction<MaterialSettings>>;
+    // 材质预设
+    userMaterialPresets?: MaterialPreset[];
+    setUserMaterialPresets?: React.Dispatch<React.SetStateAction<MaterialPreset[]>>;
 }
 
 export const UserMenu: React.FC<UserMenuProps> = ({
     settings, setSettings, planetSettings, setPlanetSettings, appMode,
-    modeSwitchMaterial, setModeSwitchMaterial
+    modeSwitchMaterial, setModeSwitchMaterial,
+    themeConfig, setThemeConfig,
+    materialSettings, setMaterialSettings,
+    userMaterialPresets, setUserMaterialPresets
 }) => {
     const { currentUser, logout, switchAccount, updateProfile, changePassword, uploadAvatar } = useUser();
     const [isOpen, setIsOpen] = useState(false);
@@ -120,6 +132,12 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                 appMode={appMode}
                 modeSwitchMaterial={modeSwitchMaterial}
                 setModeSwitchMaterial={setModeSwitchMaterial}
+                themeConfig={themeConfig}
+                setThemeConfig={setThemeConfig}
+                materialSettings={materialSettings}
+                setMaterialSettings={setMaterialSettings}
+                userMaterialPresets={userMaterialPresets}
+                setUserMaterialPresets={setUserMaterialPresets}
             />
         </div>
     );

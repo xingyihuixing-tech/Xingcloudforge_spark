@@ -13,7 +13,7 @@ import GestureHandler from './components/GestureHandler';
 import { UserLogin } from './components/UserLogin';
 import { UserMenu } from './components/UserMenu';
 import { useUser } from './contexts/UserContext';
-import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode } from './types';
+import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset } from './types';
 import {
   DEFAULT_SETTINGS,
   SAMPLE_IMAGES,
@@ -21,7 +21,12 @@ import {
   DEFAULT_PLANET_SCENE_SETTINGS,
   PLANET_SCENE_STORAGE_KEY,
   createDefaultPlanet,
-  DEFAULT_NEBULA_INSTANCE
+  DEFAULT_NEBULA_INSTANCE,
+  DEFAULT_THEME_CONFIG,
+  DEFAULT_COLOR_SCHEMES,
+  DEFAULT_MATERIAL_SETTINGS,
+  BUILT_IN_MATERIAL_PRESETS,
+  createDefaultMaterialConfig
 } from './constants';
 import { processImage, ProcessedData, extractDominantColors } from './services/imageProcessing';
 
@@ -128,6 +133,115 @@ const saveSettings = (settings: AppSettings) => {
   }
 };
 
+// ==================== 主题与材质配置加载/保存 ====================
+
+const THEME_CONFIG_STORAGE_KEY = 'nebula_theme_config_v1';
+const MATERIAL_SETTINGS_STORAGE_KEY = 'nebula_material_settings_v1';
+const MATERIAL_PRESETS_STORAGE_KEY = 'nebula_material_presets_v1';
+
+// 加载主题配置
+const loadThemeConfig = (): ThemeConfig => {
+  try {
+    const saved = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // 合并默认系统预设（处理新增预设）
+      const schemes = { ...DEFAULT_COLOR_SCHEMES };
+      // 过滤已删除的系统预设
+      const deletedIds = parsed.deletedSystemSchemeIds || [];
+      deletedIds.forEach((id: string) => { delete schemes[id]; });
+      // 合并用户方案
+      Object.entries(parsed.schemes || {}).forEach(([id, scheme]) => {
+        if (!(scheme as any).isSystem) {
+          schemes[id] = scheme as any;
+        }
+      });
+      return {
+        schemes,
+        activeSchemeId: parsed.activeSchemeId || 'midnight',
+        activeColors: parsed.activeColors || DEFAULT_THEME_CONFIG.activeColors,
+        consoleBg: parsed.consoleBg || '#000000',
+        deletedSystemSchemeIds: deletedIds
+      };
+    }
+  } catch (e) {
+    console.warn('Failed to load theme config:', e);
+  }
+  return { ...DEFAULT_THEME_CONFIG };
+};
+
+// 保存主题配置
+const saveThemeConfig = (config: ThemeConfig) => {
+  try {
+    // 只保存用户方案和状态，不保存系统预设
+    const userSchemes: Record<string, any> = {};
+    Object.entries(config.schemes).forEach(([id, scheme]) => {
+      if (!scheme.isSystem) {
+        userSchemes[id] = scheme;
+      }
+    });
+    localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify({
+      schemes: userSchemes,
+      activeSchemeId: config.activeSchemeId,
+      activeColors: config.activeColors,
+      consoleBg: config.consoleBg,
+      deletedSystemSchemeIds: config.deletedSystemSchemeIds
+    }));
+  } catch (e) {
+    console.warn('Failed to save theme config:', e);
+  }
+};
+
+// 加载材质设置
+const loadMaterialSettings = (): MaterialSettings => {
+  try {
+    const saved = localStorage.getItem(MATERIAL_SETTINGS_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // 兼容旧版 subModuleTabs 为 Record 的结构
+      if (parsed.subModuleTabs && typeof parsed.subModuleTabs === 'object' && parsed.subModuleTabs.core) {
+        // 旧版是 Record<string, ButtonMaterialConfig>，取第一个值
+        parsed.subModuleTabs = parsed.subModuleTabs.core || createDefaultMaterialConfig('neon');
+      }
+      return { ...DEFAULT_MATERIAL_SETTINGS, ...parsed };
+    }
+  } catch (e) {
+    console.warn('Failed to load material settings:', e);
+  }
+  return { ...DEFAULT_MATERIAL_SETTINGS };
+};
+
+// 保存材质设置
+const saveMaterialSettings = (settings: MaterialSettings) => {
+  try {
+    localStorage.setItem(MATERIAL_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+  } catch (e) {
+    console.warn('Failed to save material settings:', e);
+  }
+};
+
+// 加载用户材质预设
+const loadUserMaterialPresets = (): MaterialPreset[] => {
+  try {
+    const saved = localStorage.getItem(MATERIAL_PRESETS_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('Failed to load material presets:', e);
+  }
+  return [];
+};
+
+// 保存用户材质预设
+const saveUserMaterialPresets = (presets: MaterialPreset[]) => {
+  try {
+    localStorage.setItem(MATERIAL_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  } catch (e) {
+    console.warn('Failed to save material presets:', e);
+  }
+};
+
 const App: React.FC = () => {
   // 用户登录状态
   const { currentUser, isLoading: isUserLoading, saveCloudConfig, loadCloudConfig } = useUser();
@@ -138,6 +252,12 @@ const App: React.FC = () => {
   const [overlayMode, setOverlayMode] = useState(false); // 叠加模式：同时显示星云和星球
   const [modeSwitchMaterial, setModeSwitchMaterial] = useState<any>(null);
   const [data, setData] = useState<ProcessedData | null>(null);
+
+  // 主题与材质配置状态（App 作为 SSOT）
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig>(loadThemeConfig);
+  const [materialSettings, setMaterialSettings] = useState<MaterialSettings>(loadMaterialSettings);
+  const [userMaterialPresets, setUserMaterialPresets] = useState<MaterialPreset[]>(loadUserMaterialPresets);
+  const [hasHydratedFromCloud, setHasHydratedFromCloud] = useState(false);
 
   // 星云预览模式
   const [nebulaPreviewMode, setNebulaPreviewMode] = useState(false);
@@ -160,12 +280,35 @@ const App: React.FC = () => {
             setPlanetSettings(prev => ({ ...prev, ...config.planetScene }));
             localStorage.setItem(PLANET_SCENE_STORAGE_KEY, JSON.stringify(config.planetScene));
           }
+          // 加载主题配置
+          if (config.theme?.themeConfig) {
+            const cloudTheme = config.theme.themeConfig;
+            setThemeConfig(prev => ({
+              ...prev,
+              activeSchemeId: cloudTheme.activeSchemeId || prev.activeSchemeId,
+              activeColors: cloudTheme.activeColors || prev.activeColors,
+              consoleBg: cloudTheme.consoleBg || prev.consoleBg,
+              deletedSystemSchemeIds: cloudTheme.deletedSystemSchemeIds || prev.deletedSystemSchemeIds
+            }));
+          }
+          // 加载材质配置
+          if (config.theme?.materialSettings) {
+            setMaterialSettings(prev => ({ ...prev, ...config.theme.materialSettings }));
+          }
+          if (config.theme?.userMaterialPresets) {
+            setUserMaterialPresets(config.theme.userMaterialPresets);
+          }
+          // 兼容旧版 modeSwitch
           if (config.theme?.modeSwitch) {
             setModeSwitchMaterial(config.theme.modeSwitch);
-            localStorage.setItem('button_material_settings', JSON.stringify({ modeSwitch: config.theme.modeSwitch }));
           }
+          setHasHydratedFromCloud(true);
+        } else {
+          setHasHydratedFromCloud(true);
         }
       });
+    } else {
+      setHasHydratedFromCloud(true); // 未登录时直接标记
     }
   }, [currentUser, loadCloudConfig]);
 
@@ -173,24 +316,57 @@ const App: React.FC = () => {
   useEffect(() => {
     const handler = setTimeout(() => {
       // Always save to local storage
-      saveSettings(settings); // Helper function defined above
+      saveSettings(settings);
       savePlanetSceneSettings(planetSettings);
-      if (modeSwitchMaterial) {
-        localStorage.setItem('button_material_settings', JSON.stringify({ modeSwitch: modeSwitchMaterial }));
-      }
+      saveThemeConfig(themeConfig);
+      saveMaterialSettings(materialSettings);
+      saveUserMaterialPresets(userMaterialPresets);
 
-      // If logged in, save to cloud
-      if (currentUser) {
+      // If logged in and hydrated, save to cloud
+      if (currentUser && hasHydratedFromCloud) {
         saveCloudConfig({
           settings: settings as any,
           planetScene: planetSettings as any,
-          theme: { modeSwitch: modeSwitchMaterial }
+          theme: {
+            modeSwitch: modeSwitchMaterial,
+            themeConfig: {
+              activeSchemeId: themeConfig.activeSchemeId,
+              activeColors: themeConfig.activeColors,
+              consoleBg: themeConfig.consoleBg,
+              deletedSystemSchemeIds: themeConfig.deletedSystemSchemeIds
+            },
+            materialSettings,
+            userMaterialPresets
+          }
         });
       }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(handler);
-  }, [settings, planetSettings, modeSwitchMaterial, currentUser, saveCloudConfig]);
+  }, [settings, planetSettings, modeSwitchMaterial, themeConfig, materialSettings, userMaterialPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
+
+  // 应用主题 CSS 变量
+  useEffect(() => {
+    const root = document.documentElement;
+    const { activeColors, consoleBg } = themeConfig;
+
+    // 控制台背景色
+    root.style.setProperty('--custom-dark-bg', consoleBg);
+
+    // 5色主题变量
+    root.style.setProperty('--custom-primary', activeColors.primary);
+    root.style.setProperty('--custom-secondary', activeColors.secondary);
+    root.style.setProperty('--custom-text-accent', activeColors.textAccent);
+    root.style.setProperty('--custom-decoration', activeColors.decoration);
+    root.style.setProperty('--custom-edit-bar', activeColors.editBar);
+
+    // 计算 secondary 的 RGB 格式（用于透明度混合）
+    const hexToRgb = (hex: string) => {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '165, 180, 252';
+    };
+    root.style.setProperty('--custom-secondary-rgb', hexToRgb(activeColors.secondary));
+  }, [themeConfig.activeColors, themeConfig.consoleBg]);
 
   // 读取模式切换按钮的材质设置 (Initial local load only)
   useEffect(() => {
@@ -899,6 +1075,12 @@ const App: React.FC = () => {
             appMode={appMode}
             modeSwitchMaterial={modeSwitchMaterial}
             setModeSwitchMaterial={setModeSwitchMaterial}
+            themeConfig={themeConfig}
+            setThemeConfig={setThemeConfig}
+            materialSettings={materialSettings}
+            setMaterialSettings={setMaterialSettings}
+            userMaterialPresets={userMaterialPresets}
+            setUserMaterialPresets={setUserMaterialPresets}
           />
         </div>
 
@@ -1186,6 +1368,7 @@ const App: React.FC = () => {
             gestureEnabled={gestureEnabled}
             setGestureEnabled={setGestureEnabled}
             overlayMode={overlayMode}
+            materialSettings={materialSettings}
           />
         </div>
       </div>

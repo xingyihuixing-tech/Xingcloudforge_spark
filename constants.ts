@@ -3425,3 +3425,284 @@ export const ENERGY_BODY_PRESETS = {
     globalOpacity: 1.0
   }
 };
+
+// ==================== 配色方案预设（22个系统预设） ====================
+import type { ThemeColors, ColorScheme, ButtonMaterialConfig, MaterialType, GlassParams, NeonParams, CrystalParams, NeumorphismParams, HolographicParams, MaterialSettings, MaterialPreset } from './types';
+
+export const DEFAULT_THEME_COLORS: ThemeColors = {
+  primary: '#6366F1',
+  secondary: '#A5B4FC',
+  textAccent: '#818CF8',
+  decoration: '#4F46E5',
+  editBar: '#14B8A6'
+};
+
+export const DEFAULT_COLOR_SCHEMES: Record<string, ColorScheme> = {
+  midnight: {
+    name: '午夜星空',
+    colors: { primary: '#6366F1', secondary: '#A5B4FC', textAccent: '#818CF8', decoration: '#4F46E5', editBar: '#14B8A6' },
+    isSystem: true
+  },
+  auroraWarm: {
+    name: '极光冷暖',
+    colors: { primary: '#22D3EE', secondary: '#F59E0B', textAccent: '#A78BFA', decoration: '#60A5FA', editBar: '#22D3EE' },
+    isSystem: true
+  },
+  cyberMagenta: {
+    name: '赛博粉蓝',
+    colors: { primary: '#00E5FF', secondary: '#FF8E53', textAccent: '#FF6EC7', decoration: '#9B59B6', editBar: '#00E5FF' },
+    isSystem: true
+  },
+  deepOcean: {
+    name: '深海青蓝',
+    colors: { primary: '#14B8A6', secondary: '#38BDF8', textAccent: '#84CC16', decoration: '#0EA5E9', editBar: '#14B8A6' },
+    isSystem: true
+  },
+  solarIndigo: {
+    name: '金冠靛蓝',
+    colors: { primary: '#F4B400', secondary: '#6366F1', textAccent: '#FF6EC7', decoration: '#7C3AED', editBar: '#F4B400' },
+    isSystem: true
+  },
+  emeraldFlame: {
+    name: '翡翠火焰',
+    colors: { primary: '#34D399', secondary: '#FB923C', textAccent: '#60A5FA', decoration: '#10B981', editBar: '#34D399' },
+    isSystem: true
+  },
+  lavaNebula: {
+    name: '熔岩星云',
+    colors: { primary: '#EF4444', secondary: '#F59E0B', textAccent: '#60A5FA', decoration: '#FB7185', editBar: '#EF4444' },
+    isSystem: true
+  },
+  glacierMint: {
+    name: '冰川薄荷',
+    colors: { primary: '#7DE2D1', secondary: '#9BDCFD', textAccent: '#B9A5FF', decoration: '#5AD1E2', editBar: '#7DE2D1' },
+    isSystem: true
+  },
+  sakuraNight: {
+    name: '樱夜',
+    colors: { primary: '#F472B6', secondary: '#F59E0B', textAccent: '#60A5FA', decoration: '#D946EF', editBar: '#F472B6' },
+    isSystem: true
+  },
+  noirGold: {
+    name: '黑金',
+    colors: { primary: '#F5C857', secondary: '#86EFAC', textAccent: '#60A5FA', decoration: '#D4AF37', editBar: '#F5C857' },
+    isSystem: true
+  },
+  vaporwave: {
+    name: '蒸汽波',
+    colors: { primary: '#8B5CF6', secondary: '#22D3EE', textAccent: '#FF7AB6', decoration: '#00F5D4', editBar: '#8B5CF6' },
+    isSystem: true
+  },
+  steelCyan: {
+    name: '钢青',
+    colors: { primary: '#06B6D4', secondary: '#94A3B8', textAccent: '#A5B4FC', decoration: '#1E293B', editBar: '#06B6D4' },
+    isSystem: true
+  },
+  desertAurora: {
+    name: '沙漠极光',
+    colors: { primary: '#F59E0B', secondary: '#22D3EE', textAccent: '#FCA5A5', decoration: '#EAB308', editBar: '#F59E0B' },
+    isSystem: true
+  },
+  forestTemple: {
+    name: '森林神殿',
+    colors: { primary: '#22C55E', secondary: '#FDE68A', textAccent: '#60A5FA', decoration: '#16A34A', editBar: '#22C55E' },
+    isSystem: true
+  },
+  stormBlue: {
+    name: '风暴蓝',
+    colors: { primary: '#3B82F6', secondary: '#FCD34D', textAccent: '#22D3EE', decoration: '#8B5CF6', editBar: '#3B82F6' },
+    isSystem: true
+  },
+  cosmicPurple: {
+    name: '宇宙紫',
+    colors: { primary: '#A855F7', secondary: '#EC4899', textAccent: '#38BDF8', decoration: '#7C3AED', editBar: '#A855F7' },
+    isSystem: true
+  },
+  bloodMoon: {
+    name: '血月',
+    colors: { primary: '#DC2626', secondary: '#F97316', textAccent: '#FDE68A', decoration: '#991B1B', editBar: '#DC2626' },
+    isSystem: true
+  },
+  neonCity: {
+    name: '霓虹都市',
+    colors: { primary: '#00FF87', secondary: '#FF00E5', textAccent: '#00D4FF', decoration: '#FFE600', editBar: '#00FF87' },
+    isSystem: true
+  },
+  autumnLeaf: {
+    name: '秋叶',
+    colors: { primary: '#EA580C', secondary: '#84CC16', textAccent: '#FBBF24', decoration: '#C2410C', editBar: '#EA580C' },
+    isSystem: true
+  },
+  arcticFrost: {
+    name: '极地霜',
+    colors: { primary: '#67E8F9', secondary: '#E0E7FF', textAccent: '#A5F3FC', decoration: '#0891B2', editBar: '#67E8F9' },
+    isSystem: true
+  },
+  sunsetGlow: {
+    name: '落日余晖',
+    colors: { primary: '#FB7185', secondary: '#FBBF24', textAccent: '#A78BFA', decoration: '#F43F5E', editBar: '#FB7185' },
+    isSystem: true
+  },
+  bambooZen: {
+    name: '竹林禅',
+    colors: { primary: '#4ADE80', secondary: '#A3E635', textAccent: '#FCD34D', decoration: '#166534', editBar: '#4ADE80' },
+    isSystem: true
+  }
+};
+
+// ==================== 按键材质默认参数 ====================
+
+export const DEFAULT_GLASS_PARAMS: GlassParams = {
+  blur: 12,
+  opacity: 0.1,
+  borderOpacity: 0.15,
+  tint: '#ffffff'
+};
+
+export const DEFAULT_NEON_PARAMS: NeonParams = {
+  glowIntensity: 60,
+  glowSpread: 20,
+  borderGlow: true,
+  textGlow: true,
+  color: '#22d3ee'
+};
+
+export const DEFAULT_CRYSTAL_PARAMS: CrystalParams = {
+  facets: 3,
+  shine: 70,
+  depth: 50,
+  color: '#6366f1',
+  highlightColor: '#a5b4fc',
+  color2: '#06b6d4',
+  highlightColor2: '#67e8f9'
+};
+
+export const DEFAULT_NEUMORPHISM_PARAMS: NeumorphismParams = {
+  elevation: 8,
+  curvature: 50,
+  lightAngle: 145,
+  shadowIntensity: 40,
+  pressDepth: 2,
+  baseColor: '#2a2a35',
+  highlightColor: '#4a4a5a',
+  shadowColor: '#1a1a22'
+};
+
+export const DEFAULT_HOLOGRAPHIC_PARAMS: HolographicParams = {
+  colors: ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96e6a1', '#dda0dd'],
+  speed: 3,
+  angle: 45,
+  shimmer: false,
+  noiseIntensity: 20
+};
+
+export const createDefaultMaterialConfig = (type: MaterialType = 'glass'): ButtonMaterialConfig => ({
+  type,
+  glass: { ...DEFAULT_GLASS_PARAMS },
+  neon: { ...DEFAULT_NEON_PARAMS },
+  crystal: { ...DEFAULT_CRYSTAL_PARAMS },
+  neumorphism: { ...DEFAULT_NEUMORPHISM_PARAMS },
+  holographic: { ...DEFAULT_HOLOGRAPHIC_PARAMS }
+});
+
+// 默认材质设置（简化版：subModuleTabs 为统一配置）
+export const DEFAULT_MATERIAL_SETTINGS: MaterialSettings = {
+  modeSwitch: createDefaultMaterialConfig('crystal'),
+  mainTabs: createDefaultMaterialConfig('neon'),
+  mainTabColors: { basic: '#10b981', visual: '#a78bfa', interact: '#22d3ee' },
+  moduleTabs: createDefaultMaterialConfig('neon'),
+  moduleTabColors: {
+    core: '#10b981', energyBody: '#ef4444', rings: '#a78bfa',
+    afterimage: '#06b6d4', radiation: '#22c55e', fireflies: '#eab308', magicCircle: '#ec4899'
+  },
+  optionButtons: createDefaultMaterialConfig('neumorphism'),
+  subModuleTabs: createDefaultMaterialConfig('neon')  // 统一设置
+};
+
+// ==================== 内置材质预设 ====================
+
+export const BUILT_IN_MATERIAL_PRESETS: MaterialPreset[] = [
+  {
+    id: 'default',
+    name: '🎨 默认',
+    data: { ...DEFAULT_MATERIAL_SETTINGS },
+    isBuiltIn: true
+  },
+  {
+    id: 'glass',
+    name: '🪟 玻璃',
+    data: {
+      modeSwitch: createDefaultMaterialConfig('glass'),
+      mainTabs: createDefaultMaterialConfig('glass'),
+      mainTabColors: { basic: '#3b82f6', visual: '#8b5cf6', interact: '#06b6d4' },
+      moduleTabs: createDefaultMaterialConfig('glass'),
+      moduleTabColors: {
+        core: '#3b82f6', energyBody: '#ef4444', rings: '#8b5cf6',
+        afterimage: '#06b6d4', radiation: '#22c55e', fireflies: '#f59e0b', magicCircle: '#ec4899'
+      },
+      optionButtons: createDefaultMaterialConfig('glass'),
+      subModuleTabs: createDefaultMaterialConfig('glass')
+    },
+    isBuiltIn: true
+  },
+  {
+    id: 'neon',
+    name: '💡 霓虹',
+    data: {
+      modeSwitch: createDefaultMaterialConfig('neon'),
+      mainTabs: createDefaultMaterialConfig('neon'),
+      mainTabColors: { basic: '#22c55e', visual: '#f472b6', interact: '#38bdf8' },
+      moduleTabs: createDefaultMaterialConfig('neon'),
+      moduleTabColors: {
+        core: '#22c55e', energyBody: '#f43f5e', rings: '#d946ef',
+        afterimage: '#0ea5e9', radiation: '#84cc16', fireflies: '#fbbf24', magicCircle: '#a855f7'
+      },
+      optionButtons: createDefaultMaterialConfig('neon'),
+      subModuleTabs: createDefaultMaterialConfig('neon')
+    },
+    isBuiltIn: true
+  },
+  {
+    id: 'crystal',
+    name: '💎 水晶',
+    data: {
+      modeSwitch: createDefaultMaterialConfig('crystal'),
+      mainTabs: createDefaultMaterialConfig('crystal'),
+      mainTabColors: { basic: '#60a5fa', visual: '#c084fc', interact: '#2dd4bf' },
+      moduleTabs: createDefaultMaterialConfig('crystal'),
+      moduleTabColors: {
+        core: '#60a5fa', energyBody: '#fb7185', rings: '#c084fc',
+        afterimage: '#22d3ee', radiation: '#4ade80', fireflies: '#facc15', magicCircle: '#e879f9'
+      },
+      optionButtons: createDefaultMaterialConfig('crystal'),
+      subModuleTabs: createDefaultMaterialConfig('crystal')
+    },
+    isBuiltIn: true
+  },
+  {
+    id: 'holographic',
+    name: '🌈 全息',
+    data: {
+      modeSwitch: createDefaultMaterialConfig('holographic'),
+      mainTabs: createDefaultMaterialConfig('holographic'),
+      mainTabColors: { basic: '#a78bfa', visual: '#f472b6', interact: '#34d399' },
+      moduleTabs: createDefaultMaterialConfig('holographic'),
+      moduleTabColors: {
+        core: '#a78bfa', energyBody: '#fb923c', rings: '#f472b6',
+        afterimage: '#22d3ee', radiation: '#4ade80', fireflies: '#fcd34d', magicCircle: '#c084fc'
+      },
+      optionButtons: createDefaultMaterialConfig('holographic'),
+      subModuleTabs: createDefaultMaterialConfig('holographic')
+    },
+    isBuiltIn: true
+  }
+];
+
+// 默认主题配置
+export const DEFAULT_THEME_CONFIG = {
+  schemes: { ...DEFAULT_COLOR_SCHEMES },
+  activeSchemeId: 'midnight',
+  activeColors: { ...DEFAULT_THEME_COLORS },
+  consoleBg: '#000000',
+  deletedSystemSchemeIds: [] as string[]
+};

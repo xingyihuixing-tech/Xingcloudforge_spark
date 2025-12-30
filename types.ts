@@ -1559,3 +1559,109 @@ export interface NebulaPreset {
   settings: AppSettings;     // 完整配置
   isBuiltIn?: boolean;       // 是否为内置预设
 }
+
+// ==================== 按键材质系统类型 ====================
+
+export type MaterialType = 'glass' | 'neon' | 'crystal' | 'neumorphism' | 'holographic';
+
+export interface GlassParams {
+  blur: number;
+  opacity: number;
+  borderOpacity: number;
+  tint: string;
+  tint2?: string;
+}
+
+export interface NeonParams {
+  glowIntensity: number;
+  glowSpread: number;
+  borderGlow: boolean;
+  textGlow: boolean;
+  color: string;
+  color2?: string;
+}
+
+export interface CrystalParams {
+  facets: number;
+  shine: number;
+  depth: number;
+  color: string;
+  highlightColor: string;
+  color2: string;
+  highlightColor2: string;
+}
+
+export interface NeumorphismParams {
+  elevation: number;
+  curvature: number;
+  lightAngle: number;
+  shadowIntensity: number;
+  pressDepth: number;
+  baseColor: string;
+  highlightColor: string;
+  shadowColor: string;
+}
+
+export interface HolographicParams {
+  colors: string[];
+  colors2?: string[];
+  speed: number;
+  angle: number;
+  shimmer: boolean;
+  noiseIntensity: number;
+}
+
+export interface ButtonMaterialConfig {
+  type: MaterialType;
+  glass: GlassParams;
+  neon: NeonParams;
+  crystal: CrystalParams;
+  neumorphism: NeumorphismParams;
+  holographic: HolographicParams;
+}
+
+// ==================== 主题配置类型 ====================
+
+export interface ThemeColors {
+  primary: string;      // 主交互色
+  secondary: string;    // 次交互色
+  textAccent: string;   // 标题强调
+  decoration: string;   // 装饰线条
+  editBar: string;      // 编辑栏颜色
+}
+
+export interface ColorScheme {
+  name: string;
+  colors: ThemeColors;
+  isSystem?: boolean;
+}
+
+export interface ThemeConfig {
+  schemes: Record<string, ColorScheme>;
+  activeSchemeId: string;
+  activeColors: ThemeColors;
+  consoleBg: string;  // 控制台背景色（独立于方案）
+  deletedSystemSchemeIds: string[];
+}
+
+// ==================== 材质配置类型 ====================
+
+export interface MaterialSettings {
+  modeSwitch: ButtonMaterialConfig;
+  mainTabs: ButtonMaterialConfig;
+  mainTabColors: { basic: string; visual: string; interact: string };
+  moduleTabs: ButtonMaterialConfig;
+  moduleTabColors: {
+    core: string; energyBody: string; rings: string;
+    afterimage: string; radiation: string; fireflies: string; magicCircle: string;
+  };
+  optionButtons: ButtonMaterialConfig;
+  subModuleTabs: ButtonMaterialConfig;  // 统一设置，不再分7个模块
+}
+
+export interface MaterialPreset {
+  id: string;
+  name: string;
+  data: MaterialSettings;
+  isBuiltIn?: boolean;
+}

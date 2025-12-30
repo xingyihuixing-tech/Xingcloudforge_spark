@@ -133,6 +133,7 @@ interface ControlPanelProps {
   gestureEnabled: boolean;
   setGestureEnabled: (enabled: boolean) => void;
   overlayMode?: boolean;  // 互通模式状态
+  materialSettings?: import('../types').MaterialSettings;  // 从 App 传入的材质配置（用于样式生成）
 }
 
 const DepthModeLabels: Record<DepthMode, string> = {
