@@ -1,3 +1,10 @@
+/**
+ * input: App 传入的 themeConfig/materialSettings 与对应 setters
+ * output: 主题配色与按钮材质的配置弹窗
+ * pos: 系统视觉风格配置中心；管理 22 种配色方案与 5 类材质特效
+ * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
+ */
+
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -12,8 +19,7 @@ interface ThemeSettingsModalProps {
     planetSettings?: PlanetSceneSettings;
     setPlanetSettings?: React.Dispatch<React.SetStateAction<PlanetSceneSettings>>;
     appMode?: 'nebula' | 'planet';
-    modeSwitchMaterial?: any;
-    setModeSwitchMaterial?: React.Dispatch<React.SetStateAction<any>>;
+
     // 主题配置
     themeConfig?: ThemeConfig;
     setThemeConfig?: React.Dispatch<React.SetStateAction<ThemeConfig>>;
@@ -28,37 +34,22 @@ interface ThemeSettingsModalProps {
 type TabType = 'background' | 'theme' | 'material';
 
 export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
-    isOpen, onClose, settings, setSettings, planetSettings, setPlanetSettings, appMode, modeSwitchMaterial, setModeSwitchMaterial,
+    isOpen, onClose, settings, setSettings, planetSettings, setPlanetSettings, appMode,
     themeConfig, setThemeConfig,
     materialSettings, setMaterialSettings,
     userMaterialPresets, setUserMaterialPresets
 }) => {
     const [activeTab, setActiveTab] = useState<TabType>('theme');
 
-    // Internal state for material if not provided (fallback)
-    const [localMaterial, setLocalMaterial] = useState<any>(null);
-    const currentMaterial = modeSwitchMaterial || localMaterial;
+
 
     // Use effects to sync or load defaults if needed
 
     if (!isOpen) return null;
 
-    const handleMaterialChange = (type: string, newSettings: any) => {
-        const fullSettings = { type, ...newSettings };
-        if (setModeSwitchMaterial) {
-            setModeSwitchMaterial(fullSettings);
-        } else {
-            setLocalMaterial(fullSettings);
-        }
-        // LocalStorage is handled by App.tsx side effect now
-        localStorage.setItem('button_material_settings', JSON.stringify({ modeSwitch: fullSettings }));
-        window.dispatchEvent(new Event('storage'));
-    };
 
-    const handleThemeColorChange = (color: string) => {
-        document.documentElement.style.setProperty('--ui-primary', color);
-        localStorage.setItem('theme_primary_color', color);
-    };
+
+
 
     // Helper to get current background settings based on mode
     const getBackgroundSettings = () => {

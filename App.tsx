@@ -1,7 +1,7 @@
 /**
  * input: 用户交互与本地存储（settings/planetSceneSettings）、图片处理结果、手势数据
  * output: 应用根组件（模式切换、状态管理、向各场景/控制面板下发 settings 与回调）
- * pos: 全局状态与参数流的中枢（UI -> state -> 渲染组件 uniforms）
+ * pos: 全局状态（含主题/材质配置）与参数流的中枢（UI -> state -> 渲染组件 uniforms）
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  */
 
@@ -250,7 +250,7 @@ const App: React.FC = () => {
   const [planetSettings, setPlanetSettings] = useState<PlanetSceneSettings>(loadPlanetSceneSettings);
   const [appMode, setAppMode] = useState<AppMode>('nebula');
   const [overlayMode, setOverlayMode] = useState(false); // 叠加模式：同时显示星云和星球
-  const [modeSwitchMaterial, setModeSwitchMaterial] = useState<any>(null);
+
   const [data, setData] = useState<ProcessedData | null>(null);
 
   // 主题与材质配置状态（App 作为 SSOT）
@@ -298,10 +298,7 @@ const App: React.FC = () => {
           if (config.theme?.userMaterialPresets) {
             setUserMaterialPresets(config.theme.userMaterialPresets);
           }
-          // 兼容旧版 modeSwitch
-          if (config.theme?.modeSwitch) {
-            setModeSwitchMaterial(config.theme.modeSwitch);
-          }
+
           setHasHydratedFromCloud(true);
         } else {
           setHasHydratedFromCloud(true);
@@ -328,7 +325,7 @@ const App: React.FC = () => {
           settings: settings as any,
           planetScene: planetSettings as any,
           theme: {
-            modeSwitch: modeSwitchMaterial,
+
             themeConfig: {
               activeSchemeId: themeConfig.activeSchemeId,
               activeColors: themeConfig.activeColors,
@@ -343,7 +340,7 @@ const App: React.FC = () => {
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(handler);
-  }, [settings, planetSettings, modeSwitchMaterial, themeConfig, materialSettings, userMaterialPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
+  }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
 
   // 应用主题 CSS 变量
   useEffect(() => {
@@ -368,50 +365,16 @@ const App: React.FC = () => {
     root.style.setProperty('--custom-secondary-rgb', hexToRgb(activeColors.secondary));
   }, [themeConfig.activeColors, themeConfig.consoleBg]);
 
-  // 读取模式切换按钮的材质设置 (Initial local load only)
-  useEffect(() => {
-    const loadMaterial = () => {
-      try {
-        const saved = localStorage.getItem('button_material_settings');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setModeSwitchMaterial(parsed.modeSwitch);
-        }
-      } catch (e) { }
-    };
-    loadMaterial();
-    // 监听storage变化
-    window.addEventListener('storage', loadMaterial);
-    // 定期检查（同页面修改时storage事件不触发）
-    const interval = setInterval(loadMaterial, 1000);
-    return () => {
-      window.removeEventListener('storage', loadMaterial);
-      clearInterval(interval);
-    };
-  }, []);
+
 
   // 生成模式切换按钮样式
   const getModeSwitchStyle = (isActive: boolean, accentColor: string, buttonIndex: number = 0) => {
-    if (!modeSwitchMaterial) {
-      // 默认水晶样式
-      return isActive ? {
-        background: `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}cc 30%, ${accentColor}99 60%, ${accentColor}cc 100%)`,
-        boxShadow: `0 4px 20px ${accentColor}50, inset 0 2px 4px rgba(255,255,255,0.3), inset 0 -2px 4px rgba(0,0,0,0.2)`,
-        border: '1px solid rgba(255,255,255,0.3)',
-        color: 'white',
-        textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-      } : {
-        background: 'linear-gradient(135deg, rgba(50,50,70,0.6) 0%, rgba(30,30,45,0.8) 100%)',
-        boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.05)',
-        border: '1px solid rgba(255,255,255,0.05)',
-        color: 'rgba(180,180,200,0.8)'
-      };
-    }
+    const config = materialSettings.modeSwitch || createDefaultMaterialConfig('glass');
+    const { type } = config;
 
-    const { type } = modeSwitchMaterial;
     switch (type) {
       case 'glass': {
-        const { blur, opacity, borderOpacity } = modeSwitchMaterial.glass;
+        const { blur, opacity, borderOpacity } = config.glass || { blur: 10, opacity: 0.2, borderOpacity: 0.2 };
         return isActive ? {
           background: `rgba(255,255,255,${opacity})`,
           backdropFilter: `blur(${blur}px)`,
@@ -425,7 +388,7 @@ const App: React.FC = () => {
         };
       }
       case 'neon': {
-        const { glowIntensity, glowSpread, borderGlow, textGlow, color: neonColor } = modeSwitchMaterial.neon;
+        const { glowIntensity, glowSpread, borderGlow, textGlow, color: neonColor } = config.neon || { glowIntensity: 80, glowSpread: 10, borderGlow: true, textGlow: true, color: '#22d3ee' };
         const c = accentColor || neonColor;
         const intensity = glowIntensity / 100;
         return isActive ? {
@@ -441,10 +404,10 @@ const App: React.FC = () => {
         };
       }
       case 'crystal': {
-        const { facets, shine, depth, color: crystalColor, highlightColor, color2, highlightColor2 } = modeSwitchMaterial.crystal;
+        const { facets, shine, depth, color: crystalColor, highlightColor, color2, highlightColor2 } = config.crystal || { facets: 3, shine: 60, depth: 40, color: '#6366f1', highlightColor: '#a5b4fc', color2: '#06b6d4', highlightColor2: '#67e8f9' };
         // 根据buttonIndex选择颜色组
-        const c = buttonIndex === 1 ? (color2 || '#06b6d4') : crystalColor;
-        const h = buttonIndex === 1 ? (highlightColor2 || '#67e8f9') : highlightColor;
+        const c = buttonIndex === 1 ? (color2 || '#06b6d4') : (crystalColor || '#6366f1');
+        const h = buttonIndex === 1 ? (highlightColor2 || '#67e8f9') : (highlightColor || '#a5b4fc');
         const shineOpacity = shine / 100;
         const depthOpacity = depth / 100;
         const gradientStops = facets === 2 ? `${c} 0%, ${h} 100%` :
@@ -465,7 +428,7 @@ const App: React.FC = () => {
         };
       }
       case 'neumorphism': {
-        const { elevation, curvature, lightAngle, shadowIntensity, baseColor, highlightColor, shadowColor } = modeSwitchMaterial.neumorphism;
+        const { elevation, curvature, lightAngle, shadowIntensity, baseColor, highlightColor, shadowColor } = config.neumorphism || { elevation: 6, curvature: 20, lightAngle: 145, shadowIntensity: 60, baseColor: '#252530', highlightColor: '#323240', shadowColor: '#1a1a23' };
         const rad = (lightAngle * Math.PI) / 180;
         const offsetX = Math.cos(rad) * elevation;
         const offsetY = Math.sin(rad) * elevation;
@@ -483,7 +446,7 @@ const App: React.FC = () => {
         };
       }
       case 'holographic': {
-        const { colors, angle } = modeSwitchMaterial.holographic;
+        const { colors, angle } = config.holographic || { angle: 135, colors: ['#ff0080', '#7928ca', '#4ade80'] };
         const colorStops = colors.map((c: string, i: number) => `${c} ${(i / (colors.length - 1)) * 100}%`).join(', ');
         return isActive ? {
           background: `linear-gradient(${angle}deg, ${colorStops})`,
@@ -1073,8 +1036,7 @@ const App: React.FC = () => {
             planetSettings={planetSettings}
             setPlanetSettings={setPlanetSettings}
             appMode={appMode}
-            modeSwitchMaterial={modeSwitchMaterial}
-            setModeSwitchMaterial={setModeSwitchMaterial}
+
             themeConfig={themeConfig}
             setThemeConfig={setThemeConfig}
             materialSettings={materialSettings}

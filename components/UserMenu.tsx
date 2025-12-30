@@ -11,8 +11,7 @@ interface UserMenuProps {
     planetSettings?: PlanetSceneSettings;
     setPlanetSettings?: React.Dispatch<React.SetStateAction<PlanetSceneSettings>>;
     appMode?: 'nebula' | 'planet';
-    modeSwitchMaterial?: any;
-    setModeSwitchMaterial?: React.Dispatch<React.SetStateAction<any>>;
+
     // 主题配置
     themeConfig?: ThemeConfig;
     setThemeConfig?: React.Dispatch<React.SetStateAction<ThemeConfig>>;
@@ -26,7 +25,7 @@ interface UserMenuProps {
 
 export const UserMenu: React.FC<UserMenuProps> = ({
     settings, setSettings, planetSettings, setPlanetSettings, appMode,
-    modeSwitchMaterial, setModeSwitchMaterial,
+
     themeConfig, setThemeConfig,
     materialSettings, setMaterialSettings,
     userMaterialPresets, setUserMaterialPresets
@@ -130,8 +129,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                 planetSettings={planetSettings}
                 setPlanetSettings={setPlanetSettings}
                 appMode={appMode}
-                modeSwitchMaterial={modeSwitchMaterial}
-                setModeSwitchMaterial={setModeSwitchMaterial}
+
                 themeConfig={themeConfig}
                 setThemeConfig={setThemeConfig}
                 materialSettings={materialSettings}

@@ -1,6 +1,6 @@
 /**
  * input: App.tsx 传入的 settings 与各类 setSettings/回调；依赖 types.ts/constants.ts 的默认值与枚举
- * output: 控制面板 UI（参数编辑、实例选择、预设/导入导出），驱动 settings 变化
+ * output: 控制面板 UI（参数编辑、实例选择、预设/导入导出，不含主题配置），驱动 settings 变化
  * pos: 全项目参数编辑的唯一入口之一；决定“全局 vs 选中实例”的写入策略
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  */
