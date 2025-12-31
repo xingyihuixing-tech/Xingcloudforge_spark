@@ -1092,6 +1092,54 @@ const RangeControl: React.FC<{
   );
 };
 
+// 流萤头部贴图选择器（支持云端 AI 预设）
+const HeadTextureSelect: React.FC<{
+  value: string;
+  onChange: (value: string) => void;
+}> = ({ value, onChange }) => {
+  const { loadCloudConfig } = useUser();
+  const [cloudPresets, setCloudPresets] = useState<{ id: string; name: string; url: string }[]>([]);
+
+  useEffect(() => {
+    loadCloudConfig().then(config => {
+      if (config?.headTexturePresets) {
+        setCloudPresets(config.headTexturePresets);
+      }
+    });
+  }, [loadCloudConfig]);
+
+  return (
+    <div className="flex items-center gap-2 mt-1">
+      <span className="text-xs text-gray-300 w-16">选择贴图</span>
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(e.target.value)}
+        className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
+      >
+        <option value="">请选择...</option>
+        <optgroup label="内置光效">
+          <option value="/textures/flare1.png">光效 1</option>
+          <option value="/textures/flare2.png">光效 2</option>
+          <option value="/textures/flare3.png">光效 3</option>
+          <option value="/textures/flare4.png">光效 4</option>
+          <option value="/textures/flare5.png">光效 5</option>
+          <option value="/textures/flare6.png">光效 6</option>
+          <option value="/textures/flare7.png">光效 7</option>
+          <option value="/textures/flare8.png">光效 8</option>
+          <option value="/textures/flare9.png">光效 9</option>
+        </optgroup>
+        {cloudPresets.length > 0 && (
+          <optgroup label={`✨ XingSpark (${cloudPresets.length})`}>
+            {cloudPresets.map((preset) => (
+              <option key={preset.id} value={preset.url}>{preset.name}</option>
+            ))}
+          </optgroup>
+        )}
+      </select>
+    </div>
+  );
+};
+
 // 图片下拉选择器组件（支持分类标签页和缩略图预览）
 const ImageSelectDropdown: React.FC<{
   value: string;
@@ -9578,16 +9626,10 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                 {/* ===== 流萤 子Tab ===== */}
                 {planetSubTab === 'fireflies' && (() => {
-                  // 加载云端头部贴图预设
-                  const { loadCloudConfig } = useUser();
-                  const [headTextureCloudPresets, setHeadTextureCloudPresets] = React.useState<{ id: string; name: string; url: string }[]>([]);
-                  React.useEffect(() => {
-                    loadCloudConfig().then(config => {
-                      if (config?.headTexturePresets) {
-                        setHeadTextureCloudPresets(config.headTexturePresets);
-                      }
-                    });
-                  }, [loadCloudConfig]);
+                  // 注意：云端头部贴图预设通过 ImageSelectDropdown 的 cloudPresets 加载
+                  // 不能在 IIFE 中调用 Hooks（违反 React 规则）
+                  // headTextureCloudPresets 直接使用空数组，用户可以使用法阵贴图选择器中的 XingSpark Tab
+                  const headTextureCloudPresets: { id: string; name: string; url: string }[] = [];
 
                   // 自动选中第一个旋转流萤
                   const effectiveSelectedOrbitingFireflyId = selectedOrbitingFireflyId && planet.fireflies.orbitingFireflies.find(f => f.id === selectedOrbitingFireflyId)
@@ -9805,34 +9847,10 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                   </>
                                 )}
                                 {currentOrbitingFirefly.headStyle === 'texture' && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs text-gray-300 w-16">选择贴图</span>
-                                    <select
-                                      value={currentOrbitingFirefly.headTexture || ''}
-                                      onChange={(e) => updateOrbitingFirefly(currentOrbitingFirefly.id, { headTexture: e.target.value })}
-                                      className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
-                                    >
-                                      <option value="">请选择...</option>
-                                      <optgroup label="内置光效">
-                                        <option value="/textures/flare1.png">光效 1</option>
-                                        <option value="/textures/flare2.png">光效 2</option>
-                                        <option value="/textures/flare3.png">光效 3</option>
-                                        <option value="/textures/flare4.png">光效 4</option>
-                                        <option value="/textures/flare5.png">光效 5</option>
-                                        <option value="/textures/flare6.png">光效 6</option>
-                                        <option value="/textures/flare7.png">光效 7</option>
-                                        <option value="/textures/flare8.png">光效 8</option>
-                                        <option value="/textures/flare9.png">光效 9</option>
-                                      </optgroup>
-                                      {headTextureCloudPresets.length > 0 && (
-                                        <optgroup label={`✨ XingSpark (${headTextureCloudPresets.length})`}>
-                                          {headTextureCloudPresets.map((preset: { id: string; name: string; url: string }) => (
-                                            <option key={preset.id} value={preset.url}>{preset.name}</option>
-                                          ))}
-                                        </optgroup>
-                                      )}
-                                    </select>
-                                  </div>
+                                  <HeadTextureSelect
+                                    value={currentOrbitingFirefly.headTexture || ''}
+                                    onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { headTexture: v })}
+                                  />
                                 )}
                                 <RangeControl label="光晕强度" value={currentOrbitingFirefly.glowIntensity ?? 0.5} min={0} max={2} step={0.1} onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { glowIntensity: v })} />
                                 <RangeControl label="脉冲速度" value={currentOrbitingFirefly.pulseSpeed ?? 1} min={0} max={10} step={0.1} onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { pulseSpeed: v })} />
