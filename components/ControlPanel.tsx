@@ -1099,8 +1099,20 @@ const ImageSelectDropdown: React.FC<{
   label?: string;
 }> = ({ value, onChange, label }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [activeCategory, setActiveCategory] = useState<MagicTextureCategory>('cute');
+  const [activeCategory, setActiveCategory] = useState<MagicTextureCategory | 'xingspark'>('cute');
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // 加载云端 AI 预设
+  const { loadCloudConfig } = useUser();
+  const [cloudPresets, setCloudPresets] = useState<{ id: string; name: string; url: string }[]>([]);
+
+  useEffect(() => {
+    loadCloudConfig().then(config => {
+      if (config?.magicCircleTexturePresets) {
+        setCloudPresets(config.magicCircleTexturePresets);
+      }
+    });
+  }, [loadCloudConfig]);
 
   // 点击外部关闭
   useEffect(() => {
@@ -1117,8 +1129,8 @@ const ImageSelectDropdown: React.FC<{
 
   // 获取当前选中项的标签
   const allOptions = MAGIC_CIRCLE_TEXTURES;
-  const currentOption = allOptions.find(o => o.value === value) || allOptions[0];
-  const currentCategoryOptions = MAGIC_CIRCLE_TEXTURES_BY_CATEGORY[activeCategory];
+  const currentOption = allOptions.find(o => o.value === value) || cloudPresets.find(p => p.url === value) || allOptions[0];
+  const currentCategoryOptions = activeCategory === 'xingspark' ? [] : MAGIC_CIRCLE_TEXTURES_BY_CATEGORY[activeCategory];
 
   return (
     <div className="flex items-center gap-2">
@@ -1154,34 +1166,79 @@ const ImageSelectDropdown: React.FC<{
                   {cat.icon}
                 </button>
               ))}
+              {/* XingSpark Tab */}
+              <button
+                onClick={() => setActiveCategory('xingspark')}
+                className={`flex-1 py-1.5 text-[10px] transition-colors ${activeCategory === 'xingspark'
+                  ? 'bg-purple-600 text-white'
+                  : 'text-gray-400 hover:bg-gray-700 hover:text-purple-300'
+                  }`}
+                title={`XingSpark (${cloudPresets.length})`}
+              >
+                ✨
+              </button>
             </div>
 
             {/* 图片网格 */}
             <div className="max-h-48 overflow-y-auto">
-              <div className="grid grid-cols-4 gap-1 p-2">
-                {currentCategoryOptions.map((opt) => (
-                  <button
-                    key={opt.value}
-                    onClick={() => { onChange(opt.value); setIsOpen(false); }}
-                    className={`p-1 rounded transition-colors ${opt.value === value
-                      ? 'bg-blue-600 ring-2 ring-blue-400'
-                      : 'bg-gray-700 hover:bg-gray-600'
-                      }`}
-                    title={opt.label}
-                  >
-                    <div className="w-full aspect-square rounded overflow-hidden bg-black">
-                      <img
-                        src={opt.value}
-                        alt={opt.label}
-                        className="w-full h-full object-contain"
-                        loading="eager"
-                        decoding="async"
-                        onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0'; }}
-                      />
+              {activeCategory === 'xingspark' ? (
+                <div className="grid grid-cols-4 gap-1 p-2">
+                  {cloudPresets.length > 0 ? (
+                    cloudPresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        onClick={() => { onChange(preset.url); setIsOpen(false); }}
+                        className={`p-1 rounded transition-colors ${preset.url === value
+                          ? 'bg-purple-600 ring-2 ring-purple-400'
+                          : 'bg-gray-700 hover:bg-gray-600'
+                          }`}
+                        title={preset.name}
+                      >
+                        <div className="w-full aspect-square rounded overflow-hidden bg-black">
+                          <img
+                            src={preset.url}
+                            alt={preset.name}
+                            className="w-full h-full object-contain"
+                            loading="eager"
+                            decoding="async"
+                            onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0'; }}
+                          />
+                        </div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="col-span-4 text-center py-4 text-gray-400 text-xs">
+                      暂无 AI 生成贴图<br />
+                      <span className="text-gray-500">使用 AI 助手 → 灵感模式 → 法阵图 生成</span>
                     </div>
-                  </button>
-                ))}
-              </div>
+                  )}
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-1 p-2">
+                  {currentCategoryOptions.map((opt) => (
+                    <button
+                      key={opt.value}
+                      onClick={() => { onChange(opt.value); setIsOpen(false); }}
+                      className={`p-1 rounded transition-colors ${opt.value === value
+                        ? 'bg-blue-600 ring-2 ring-blue-400'
+                        : 'bg-gray-700 hover:bg-gray-600'
+                        }`}
+                      title={opt.label}
+                    >
+                      <div className="w-full aspect-square rounded overflow-hidden bg-black">
+                        <img
+                          src={opt.value}
+                          alt={opt.label}
+                          className="w-full h-full object-contain"
+                          loading="eager"
+                          decoding="async"
+                          onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0'; }}
+                        />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
