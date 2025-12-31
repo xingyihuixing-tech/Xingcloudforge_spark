@@ -1042,6 +1042,14 @@ const App: React.FC = () => {
             userMaterialPresets={userMaterialPresets}
             setUserMaterialPresets={setUserMaterialPresets}
           />
+          {/* AI 按钮 */}
+          <button
+            onClick={() => setShowAIPanel(true)}
+            className="ml-2 px-3 py-2 rounded-xl bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-bold transition-all duration-300 shadow-lg hover:shadow-indigo-500/30 flex items-center gap-1"
+            title="打开 AI 助手"
+          >
+            ✨ AI
+          </button>
         </div>
 
         {/* 顶部模式切换栏 - 水晶宝石风格 */}
