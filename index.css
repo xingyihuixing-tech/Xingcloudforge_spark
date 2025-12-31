@@ -2,34 +2,46 @@
 
 /* ===== 莫兰迪主题变量 ===== */
 
+/* ... (Existing variables kept as is) ... */
 /* 深色主题（默认） - 用户可自定义的颜色通过 CSS 变量覆盖 */
-:root, .theme-dark {
+:root,
+.theme-dark {
   --bg: var(--custom-dark-bg, #000000);
   --surface: color-mix(in srgb, var(--bg), #ffffff 8%);
   --panel: color-mix(in srgb, var(--bg), #ffffff 12%);
   --border: color-mix(in srgb, var(--bg), #ffffff 20%);
-  
+
   --text-1: #EDEAE6;
   --text-2: #9A958E;
   --text-disabled: #6B665F;
-  
+
   /* 5 类核心视觉元素（默认午夜星空配色） */
-  --ui-primary: var(--custom-primary, #6366F1);       /* 主交互色（靖蓝紫） */
-  --ui-secondary: var(--custom-secondary, #A5B4FC);   /* 次交互色（淡紫蓝） */
-  --ui-secondary-rgb: var(--custom-secondary-rgb, 165, 180, 252); /* 次交互色RGB格式 */
-  --ui-text-accent: var(--custom-text-accent, #818CF8); /* 标题强调（中紫蓝） */
-  --ui-decoration: var(--custom-decoration, #4F46E5); /* 装饰线条（深靖蓝） */
-  --ui-edit-bar: var(--custom-edit-bar, #14B8A6);     /* 编辑栏（青色） */
-  
+  --ui-primary: var(--custom-primary, #6366F1);
+  /* 主交互色（靖蓝紫） */
+  --ui-secondary: var(--custom-secondary, #A5B4FC);
+  /* 次交互色（淡紫蓝） */
+  --ui-secondary-rgb: var(--custom-secondary-rgb, 165, 180, 252);
+  /* 次交互色RGB格式 */
+  --ui-text-accent: var(--custom-text-accent, #818CF8);
+  /* 标题强调（中紫蓝） */
+  --ui-decoration: var(--custom-decoration, #4F46E5);
+  /* 装饰线条（深靖蓝） */
+  --ui-edit-bar: var(--custom-edit-bar, #14B8A6);
+  /* 编辑栏（青色） */
+
   /* 兼容旧变量名（映射到新变量） */
   --accent: var(--ui-primary);
   --accent-hover: color-mix(in srgb, var(--ui-primary), white 20%);
   --accent-weak: color-mix(in srgb, var(--ui-primary), transparent 70%);
   --accent-2: var(--ui-secondary);
-  
+
   --success: #20A162;
   --warning: #FF9F43;
   --danger: #FF6B6B;
+
+  /* AI 助手变量 */
+  --ai-glow-blue: #00f0ff;
+  --ai-glow-purple: #bc13fe;
 }
 
 
@@ -41,41 +53,57 @@ body {
 
 /* ===== Tailwind 颜色覆盖（适配新变量） ===== */
 
+/* ... (Existing Tailwind overrides kept as is) ... */
 /* 背景色覆盖 */
-.bg-gray-900, .bg-neutral-900, .bg-neutral-900\/90 {
+.bg-gray-900,
+.bg-neutral-900,
+.bg-neutral-900\/90 {
   background-color: var(--bg) !important;
 }
-.bg-gray-800, .bg-gray-800\/50 {
+
+.bg-gray-800,
+.bg-gray-800\/50 {
   background-color: var(--surface) !important;
 }
+
 .bg-gray-700 {
   background-color: var(--panel) !important;
 }
+
 .bg-gray-600 {
   background-color: var(--border) !important;
 }
 
 /* 文本色覆盖 */
-.text-gray-500, .text-gray-400 {
+.text-gray-500,
+.text-gray-400 {
   color: var(--text-2) !important;
 }
-.text-gray-300, .text-gray-200 {
+
+.text-gray-300,
+.text-gray-200 {
   color: var(--text-1) !important;
 }
 
 /* 边框色覆盖 */
-.border-white\/10, .border-gray-700, .border-gray-600 {
+.border-white\/10,
+.border-gray-700,
+.border-gray-600 {
   border-color: var(--border) !important;
 }
 
 /* 按钮色覆盖 - 映射到 primary */
 .bg-blue-600 {
   background-color: var(--ui-primary) !important;
-  color: #fff !important; /* 确保文字对比度 */
+  color: #fff !important;
+  /* 确保文字对比度 */
 }
-.bg-blue-600:hover, .hover\:bg-blue-500:hover {
+
+.bg-blue-600:hover,
+.hover\:bg-blue-500:hover {
   background-color: var(--accent-hover) !important;
 }
+
 .bg-blue-600\/50 {
   background-color: var(--accent-weak) !important;
 }
@@ -85,15 +113,19 @@ body {
   background-color: var(--ui-decoration) !important;
   color: #fff !important;
 }
+
 .bg-orange-600 {
   background-color: var(--warning) !important;
-  color: #fff !important;
 }
-.bg-green-600, .bg-green-600/80 {
+
+.bg-green-600,
+.bg-green-600/80 {
   background-color: var(--success) !important;
   color: #fff !important;
 }
-.bg-red-600, .bg-red-600/50 {
+
+.bg-red-600,
+.bg-red-600/50 {
   background-color: var(--danger) !important;
   color: #fff !important;
 }
@@ -102,12 +134,17 @@ body {
 .text-blue-400 {
   color: var(--ui-text-accent) !important;
 }
-.text-purple-400, .text-purple-300 {
+
+.text-purple-400,
+.text-purple-300 {
   color: var(--ui-decoration) !important;
 }
-.text-orange-400, .text-yellow-400 {
+
+.text-orange-400,
+.text-yellow-400 {
   color: var(--warning) !important;
 }
+
 .text-green-400 {
   color: var(--success) !important;
 }
@@ -120,6 +157,7 @@ input[type="range"] {
   height: 4px;
   border-radius: 2px;
 }
+
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -131,6 +169,7 @@ input[type="range"]::-webkit-slider-thumb {
   cursor: pointer;
   margin-top: -4px;
 }
+
 input[type="range"]::-moz-range-thumb {
   width: 12px;
   height: 12px;
@@ -139,11 +178,13 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 50%;
   cursor: pointer;
 }
+
 input[type="range"]::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 2px;
   background-color: var(--border);
 }
+
 input[type="range"]::-moz-range-track {
   height: 4px;
   border-radius: 2px;
@@ -163,22 +204,26 @@ select {
 }
 
 /* 输入框样式 */
-input[type="text"], input[type="number"] {
+input[type="text"],
+input[type="number"] {
   background-color: var(--surface) !important;
   border: 1px solid var(--border) !important;
   color: var(--text-1) !important;
 }
 
 /* ===== 禁止iPad/移动端长按选中行为 ===== */
-/* 全局禁用长按选中（除输入框外） */
+/* ... (Existing touch styles kept as is) ... */
 body {
-  -webkit-touch-callout: none;  /* iOS禁用长按菜单 */
-  -webkit-user-select: none;    /* Safari禁用选中 */
+  -webkit-touch-callout: none;
+  /* iOS禁用长按菜单 */
+  -webkit-user-select: none;
+  /* Safari禁用选中 */
   -khtml-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  -webkit-tap-highlight-color: transparent; /* 禁用点击高亮 */
+  -webkit-tap-highlight-color: transparent;
+  /* 禁用点击高亮 */
 }
 
 /* 允许输入框正常选中和输入 */
@@ -202,4 +247,117 @@ textarea {
 canvas {
   -webkit-touch-callout: none;
   touch-action: none;
+}
+
+/* ===== XingForge AI 助手动画 ===== */
+
+@keyframes ai-float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes ai-scan {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes ai-pulse-border {
+  0% {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.1), inset 0 0 5px rgba(99, 102, 241, 0.1);
+  }
+
+  50% {
+    border-color: rgba(99, 102, 241, 0.6);
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3), inset 0 0 10px rgba(99, 102, 241, 0.2);
+  }
+
+  100% {
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.1), inset 0 0 5px rgba(99, 102, 241, 0.1);
+  }
+}
+
+@keyframes ai-think-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+    filter: brightness(1.2);
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+}
+
+@keyframes message-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-glass-panel {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 25px 50px -12px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.ai-glow-effect {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: -1;
+  background: radial-gradient(circle at 50% 100%, rgba(99, 102, 241, 0.15), transparent 70%);
+}
+
+.ai-typing-cursor::after {
+  content: '|';
+  animation: blink 1s step-start infinite;
+  color: var(--ui-primary);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
 }

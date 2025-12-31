@@ -9,10 +9,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
+import MaterialEditor from './components/MaterialEditor';
 import GestureHandler from './components/GestureHandler';
-import { UserLogin } from './components/UserLogin';
-import { UserMenu } from './components/UserMenu';
-import { useUser } from './contexts/UserContext';
+import { UserProvider, useUser } from './contexts/UserContext';
+import UserMenu from './components/UserMenu';
+import AIAssistantPanel from './components/AIAssistantPanel';
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
 import {
   DEFAULT_SETTINGS,
@@ -463,6 +464,7 @@ const App: React.FC = () => {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [showAIPanel, setShowAIPanel] = useState(false); // AI 面板状态
   const [fps, setFps] = useState(0);
   const [gestureEnabled, setGestureEnabled] = useState(false);
 
@@ -1053,7 +1055,13 @@ const App: React.FC = () => {
             borderTop: 'none'
           }}
         >
-          <button
+          {/* AI 助手面板 */}
+          <AIAssistantPanel
+            isOpen={showAIPanel}
+            onClose={() => setShowAIPanel(false)}
+            onApplySettings={setSettings}
+            onApplyPlanetSettings={setPlanetSettings}
+          />      <button
             onClick={() => setAppMode('nebula')}
             className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
             style={{
