@@ -13,8 +13,8 @@ import { createPortal } from 'react-dom';
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { REFINE_TEMPLATES, INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
-import { ScopeSelection, createDefaultScopeSelection, suggestScopeFromDescription } from '../utils/ai/schemaBuilder';
-import { buildSystemPrompt, buildUserPrompt, AIMode } from '../utils/ai/promptBuilder';
+import { ScopeSelection, createDefaultScopeSelection } from '../utils/ai/schemaBuilder';
+import { buildSystemPrompt, buildUserPrompt, AIMode, suggestScopeFromDescription } from '../utils/ai/promptBuilder';
 
 // 组件导入
 import { ScopeSelector } from './ai/ScopeSelector';
@@ -209,7 +209,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     mode: activeMode,
                     selection: scopeSelection,
                     isSceneMode: false,
-                    targetPlanetId: activeMode === 'modifier' ? selectedPlanetId : undefined
+                    targetPlanetId: activeMode === 'modifier' ? (selectedPlanetId || undefined) : undefined
                 };
 
                 const systemPrompt = buildSystemPrompt(context);
@@ -308,8 +308,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                             key={mode}
                             onClick={() => setActiveMode(mode)}
                             className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
-                                    ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
-                                    : 'text-white/50 hover:text-white/70'
+                                ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
+                                : 'text-white/50 hover:text-white/70'
                                 }`}
                         >
                             {mode === 'inspiration' ? '🎨 灵感' : mode === 'creator' ? '🪐 创造' : '🔧 修改'}
@@ -359,8 +359,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     key={subMode}
                                     onClick={() => setInspirationSubMode(subMode)}
                                     className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
-                                            ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
-                                            : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                        ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
+                                        : 'bg-white/5 text-white/50 hover:bg-white/10'
                                         }`}
                                 >
                                     {info.icon} {info.name}
@@ -398,10 +398,10 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         >
                             <div
                                 className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.role === 'user'
-                                        ? 'bg-blue-500/30 text-white/90'
-                                        : msg.role === 'system'
-                                            ? 'bg-green-500/20 text-green-200'
-                                            : 'bg-white/10 text-white/80'
+                                    ? 'bg-blue-500/30 text-white/90'
+                                    : msg.role === 'system'
+                                        ? 'bg-green-500/20 text-green-200'
+                                        : 'bg-white/10 text-white/80'
                                     }`}
                             >
                                 {msg.type === 'image' && msg.imageUrl ? (
