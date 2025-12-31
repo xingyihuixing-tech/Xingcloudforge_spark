@@ -1,7 +1,7 @@
 /**
- * XingForge AI - Main Assistant Panel
+ * XingForge AI - Main Assistant Panel (v2.3)
  * 
- * input: isOpen, onClose, settings callbacks
+ * input: isOpen, onClose, planets, settings callbacks
  * output: AI 交互面板 UI
  * pos: AI 系统的主入口组件
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
@@ -14,52 +14,45 @@ import { createPortal } from 'react-dom';
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { REFINE_TEMPLATES, INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
 import { ScopeSelection, createDefaultScopeSelection } from '../utils/ai/schemaBuilder';
-import { buildSystemPrompt, buildUserPrompt, AIMode, suggestScopeFromDescription } from '../utils/ai/promptBuilder';
+import { buildSystemPrompt, buildUserPrompt, suggestScopeFromDescription } from '../utils/ai/promptBuilder';
+import { extractJSON, validateAIOutput, generateRetryPrompt } from '../utils/ai/validator';
+import { convertAIOutputToPlanet, applyAIPatchToPlanet, AISimplifiedOutput } from '../utils/ai/configMerger';
 
 // 组件导入
 import { ScopeSelector } from './ai/ScopeSelector';
 import { PlanetSelector } from './ai/PlanetSelector';
 
+// 类型导入
+import type { PlanetSettings, PlanetSceneSettings } from '../types';
+
 // ============================================
 // 类型定义
 // ============================================
 
+export type AIMode = 'inspiration' | 'creator' | 'modifier';
+
 interface AIAssistantPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    onApplySettings?: (settings: any) => void;
-    onApplyPlanetSettings?: (settings: any) => void;
-    planets?: Array<{ id: string; name: string; enabled: boolean }>;
+    // 创造模式回调
+    onAddPlanet?: (planet: PlanetSettings) => void;
+    // 修改模式回调
+    onUpdatePlanet?: (planetId: string, planet: Partial<PlanetSettings>) => void;
+    // 当前星球场景数据
+    planetSettings?: PlanetSceneSettings;
+    // 灵感模式：应用背景
+    onApplyBackground?: (url: string) => void;
 }
 
 interface ChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
-    type?: 'text' | 'json' | 'image' | 'refined';
+    type?: 'text' | 'json' | 'image' | 'error';
     jsonData?: any;
     imageUrl?: string;
+    subMode?: InspirationSubMode;
 }
-
-// ============================================
-// 辅助函数
-// ============================================
-
-const extractJson = (text: string): any | null => {
-    try {
-        return JSON.parse(text);
-    } catch {
-        const match = text.match(/```json\s*([\s\S]*?)\s*```/);
-        if (match) {
-            try { return JSON.parse(match[1]); } catch { }
-        }
-        const match2 = text.match(/\{[\s\S]*\}/);
-        if (match2) {
-            try { return JSON.parse(match2[0]); } catch { }
-        }
-        return null;
-    }
-};
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
@@ -70,12 +63,13 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     isOpen,
     onClose,
-    onApplySettings,
-    onApplyPlanetSettings,
-    planets = []
+    onAddPlanet,
+    onUpdatePlanet,
+    planetSettings,
+    onApplyBackground
 }) => {
     // === 模式状态 ===
-    const [activeMode, setActiveMode] = useState<AIMode>('inspiration');
+    const [activeMode, setActiveMode] = useState<AIMode>('creator');
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
 
     // === 模型选择 ===
@@ -92,14 +86,14 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
     // === 聊天状态 ===
     const [messages, setMessages] = useState<ChatMessage[]>([
-        { id: '1', role: 'assistant', content: '我是 XingForge AI 助手。选择模式后开始创作！' }
+        { id: '1', role: 'assistant', content: '我是 XingForge AI 助手。选择模式后开始创作！\n\n🪐 **创造模式**: 用自然语言描述星球，AI 生成配置\n🎨 **灵感模式**: 生成背景图、粒子贴图、法阵\n🔧 **修改模式**: 微调现有星球参数' }
     ]);
     const [inputValue, setInputValue] = useState('');
     const [refinedPrompt, setRefinedPrompt] = useState<string | null>(null);
     const [isThinking, setIsThinking] = useState(false);
 
     // === 窗口拖拽 ===
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight - 550 });
+    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight - 600 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -135,6 +129,15 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
+    // 星球列表
+    const planets = planetSettings?.planets?.map(p => ({ id: p.id, name: p.name, enabled: p.enabled })) || [];
+
+    // 获取选中星球的当前配置
+    const getSelectedPlanetConfig = useCallback(() => {
+        if (!selectedPlanetId || !planetSettings) return undefined;
+        return planetSettings.planets.find(p => p.id === selectedPlanetId);
+    }, [selectedPlanetId, planetSettings]);
+
     // === 润色功能 ===
     const handleRefine = useCallback(() => {
         if (!inputValue.trim()) return;
@@ -148,7 +151,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             const suggested = suggestScopeFromDescription(inputValue);
             if (suggested.length > 0 && Object.keys(scopeSelection).length === 0) {
                 const newSelection = createDefaultScopeSelection();
-                // 只保留推荐的效果
                 const filtered: ScopeSelection = {};
                 for (const effect of suggested) {
                     if (newSelection[effect]) {
@@ -158,7 +160,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 setScopeSelection(filtered);
                 setScopeCollapsed(false);
             }
-            setRefinedPrompt(`[AI 推荐配置范围已更新]`);
+            setRefinedPrompt(`[AI 推荐范围已更新: ${suggested.join(', ')}]`);
         }
     }, [inputValue, activeMode, inspirationSubMode, scopeSelection]);
 
@@ -176,7 +178,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
         try {
             if (activeMode === 'inspiration') {
-                // 灵感模式：生成图片
+                // === 灵感模式：生成图片 ===
                 const res = await fetch('/api/ai/image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -194,22 +196,22 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         role: 'assistant',
                         content: `✨ 已生成 ${INSPIRATION_MODE_INFO[inspirationSubMode].name}`,
                         type: 'image',
-                        imageUrl: data.url
+                        imageUrl: data.url,
+                        subMode: inspirationSubMode
                     }]);
                 } else {
-                    setMessages(prev => [...prev, {
-                        id: generateId(),
-                        role: 'assistant',
-                        content: data.error || '图片生成失败'
-                    }]);
+                    throw new Error(data.error || '图片生成失败');
                 }
             } else {
-                // 创造/修改模式：生成 JSON
+                // === 创造/修改模式：生成 JSON ===
+                const currentPlanet = activeMode === 'modifier' ? getSelectedPlanetConfig() : undefined;
+
                 const context = {
                     mode: activeMode,
                     selection: scopeSelection,
                     isSceneMode: false,
-                    targetPlanetId: activeMode === 'modifier' ? (selectedPlanetId || undefined) : undefined
+                    targetPlanetId: activeMode === 'modifier' ? (selectedPlanetId || undefined) : undefined,
+                    currentConfig: currentPlanet
                 };
 
                 const systemPrompt = buildSystemPrompt(context);
@@ -224,42 +226,105 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         messages: [{ role: 'user', content: userPrompt }]
                     })
                 });
+
                 const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.error || 'AI 请求失败');
+                }
+
                 const content = data.content || '';
-                const jsonData = extractJson(content);
+
+                // 提取并验证 JSON
+                const rawJson = extractJSON(content);
+                if (!rawJson) {
+                    throw new Error('AI 返回内容不是有效的 JSON');
+                }
+
+                const validation = validateAIOutput(rawJson);
+
+                if (validation.warnings.length > 0) {
+                    console.log('[AI Validator] Warnings:', validation.warnings);
+                }
+
+                if (!validation.valid || !validation.sanitized) {
+                    throw new Error(validation.errors.join('; '));
+                }
 
                 setMessages(prev => [...prev, {
                     id: generateId(),
                     role: 'assistant',
-                    content: jsonData ? '✨ 已生成配置' : content,
-                    type: jsonData ? 'json' : 'text',
-                    jsonData
+                    content: `✨ ${activeMode === 'creator' ? '星球配置' : '修改建议'}已生成`,
+                    type: 'json',
+                    jsonData: validation.sanitized
                 }]);
             }
         } catch (err: any) {
             setMessages(prev => [...prev, {
                 id: generateId(),
                 role: 'assistant',
-                content: `❌ 错误: ${err.message}`
+                content: `❌ 错误: ${err.message}`,
+                type: 'error'
             }]);
         } finally {
             setIsThinking(false);
         }
-    }, [inputValue, refinedPrompt, activeMode, inspirationSubMode, imageModel, chatModel, scopeSelection, selectedPlanetId, isThinking]);
+    }, [inputValue, refinedPrompt, activeMode, inspirationSubMode, imageModel, chatModel, scopeSelection, selectedPlanetId, isThinking, getSelectedPlanetConfig]);
 
     // === 应用配置 ===
-    const handleApply = useCallback((jsonData: any) => {
-        if (activeMode === 'modifier' && onApplyPlanetSettings) {
-            onApplyPlanetSettings(jsonData);
-        } else if (onApplySettings) {
-            onApplySettings(jsonData);
+    const handleApplyConfig = useCallback((jsonData: AISimplifiedOutput) => {
+        try {
+            if (activeMode === 'creator') {
+                // 创造模式：生成新星球
+                const newPlanet = convertAIOutputToPlanet(jsonData);
+                if (onAddPlanet) {
+                    onAddPlanet(newPlanet);
+                    setMessages(prev => [...prev, {
+                        id: generateId(),
+                        role: 'system',
+                        content: `✅ 星球 "${newPlanet.name}" 已创建！`
+                    }]);
+                }
+            } else if (activeMode === 'modifier' && selectedPlanetId) {
+                // 修改模式：更新现有星球
+                const currentPlanet = getSelectedPlanetConfig();
+                if (currentPlanet && onUpdatePlanet) {
+                    const updatedPlanet = applyAIPatchToPlanet(currentPlanet, jsonData);
+                    onUpdatePlanet(selectedPlanetId, updatedPlanet);
+                    setMessages(prev => [...prev, {
+                        id: generateId(),
+                        role: 'system',
+                        content: `✅ 星球 "${currentPlanet.name}" 已更新！`
+                    }]);
+                }
+            }
+        } catch (err: any) {
+            setMessages(prev => [...prev, {
+                id: generateId(),
+                role: 'system',
+                content: `❌ 应用失败: ${err.message}`,
+                type: 'error'
+            }]);
         }
-        setMessages(prev => [...prev, {
-            id: generateId(),
-            role: 'system',
-            content: '✅ 配置已应用！'
-        }]);
-    }, [activeMode, onApplySettings, onApplyPlanetSettings]);
+    }, [activeMode, selectedPlanetId, getSelectedPlanetConfig, onAddPlanet, onUpdatePlanet]);
+
+    // === 应用图片 ===
+    const handleApplyImage = useCallback((imageUrl: string, subMode: InspirationSubMode) => {
+        if (subMode === 'background' && onApplyBackground) {
+            onApplyBackground(imageUrl);
+            setMessages(prev => [...prev, {
+                id: generateId(),
+                role: 'system',
+                content: '✅ 背景图已应用！'
+            }]);
+        } else {
+            // TODO: 法阵和粒子形状的应用
+            setMessages(prev => [...prev, {
+                id: generateId(),
+                role: 'system',
+                content: `⚠️ ${subMode} 应用功能开发中...`
+            }]);
+        }
+    }, [onApplyBackground]);
 
     if (!isOpen) return null;
 
@@ -286,33 +351,26 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 <div className="drag-handle flex items-center justify-between px-4 py-3 border-b border-white/10 cursor-move">
                     <div className="flex items-center gap-2">
                         <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 animate-pulse" />
-                        <span className="text-white/90 font-semibold">XINGFORGE AI</span>
+                        <span className="text-white/90 font-semibold">XINGFORGE AI v2.3</span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setShowSettings(!showSettings)}
-                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white/90"
-                        >
-                            ⚙️
-                        </button>
-                        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60">
-                            ✕
-                        </button>
+                        <button onClick={() => setShowSettings(!showSettings)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white/90">⚙️</button>
+                        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60">✕</button>
                     </div>
                 </div>
 
                 {/* 模式切换 */}
                 <div className="flex border-b border-white/10">
-                    {(['inspiration', 'creator', 'modifier'] as AIMode[]).map(mode => (
+                    {(['creator', 'inspiration', 'modifier'] as AIMode[]).map(mode => (
                         <button
                             key={mode}
                             onClick={() => setActiveMode(mode)}
                             className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
-                                ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
-                                : 'text-white/50 hover:text-white/70'
+                                    ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
+                                    : 'text-white/50 hover:text-white/70'
                                 }`}
                         >
-                            {mode === 'inspiration' ? '🎨 灵感' : mode === 'creator' ? '🪐 创造' : '🔧 修改'}
+                            {mode === 'creator' ? '🪐 创造' : mode === 'inspiration' ? '🎨 灵感' : '🔧 修改'}
                         </button>
                     ))}
                 </div>
@@ -359,8 +417,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     key={subMode}
                                     onClick={() => setInspirationSubMode(subMode)}
                                     className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
-                                        ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
-                                        : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                            ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
+                                            : 'bg-white/5 text-white/50 hover:bg-white/10'
                                         }`}
                                 >
                                     {info.icon} {info.name}
@@ -370,22 +428,34 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     </div>
                 )}
 
-                {/* 创造/修改模式配置 */}
-                {(activeMode === 'creator' || activeMode === 'modifier') && (
-                    <div className="p-3 border-b border-white/10 space-y-2">
-                        {activeMode === 'modifier' && (
-                            <PlanetSelector
-                                planets={planets}
-                                selectedId={selectedPlanetId}
-                                onChange={setSelectedPlanetId}
-                            />
-                        )}
+                {/* 创造模式配置 */}
+                {activeMode === 'creator' && (
+                    <div className="p-3 border-b border-white/10">
                         <ScopeSelector
                             selection={scopeSelection}
                             onChange={setScopeSelection}
                             collapsed={scopeCollapsed}
                             onToggleCollapse={() => setScopeCollapsed(!scopeCollapsed)}
                         />
+                    </div>
+                )}
+
+                {/* 修改模式配置 */}
+                {activeMode === 'modifier' && (
+                    <div className="p-3 border-b border-white/10 space-y-2">
+                        <PlanetSelector
+                            planets={planets}
+                            selectedId={selectedPlanetId}
+                            onChange={setSelectedPlanetId}
+                        />
+                        {selectedPlanetId && (
+                            <ScopeSelector
+                                selection={scopeSelection}
+                                onChange={setScopeSelection}
+                                collapsed={scopeCollapsed}
+                                onToggleCollapse={() => setScopeCollapsed(!scopeCollapsed)}
+                            />
+                        )}
                     </div>
                 )}
 
@@ -398,28 +468,36 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         >
                             <div
                                 className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.role === 'user'
-                                    ? 'bg-blue-500/30 text-white/90'
-                                    : msg.role === 'system'
-                                        ? 'bg-green-500/20 text-green-200'
-                                        : 'bg-white/10 text-white/80'
+                                        ? 'bg-blue-500/30 text-white/90'
+                                        : msg.role === 'system'
+                                            ? 'bg-green-500/20 text-green-200'
+                                            : msg.type === 'error'
+                                                ? 'bg-red-500/20 text-red-200'
+                                                : 'bg-white/10 text-white/80'
                                     }`}
                             >
                                 {msg.type === 'image' && msg.imageUrl ? (
                                     <div>
                                         <img src={msg.imageUrl} alt="Generated" className="max-w-full rounded-lg mb-2" />
                                         <p className="text-sm">{msg.content}</p>
+                                        <button
+                                            onClick={() => handleApplyImage(msg.imageUrl!, msg.subMode || 'background')}
+                                            className="mt-2 px-3 py-1 bg-green-500/30 text-green-200 rounded-lg text-sm hover:bg-green-500/40"
+                                        >
+                                            ⚡ 应用到{msg.subMode === 'background' ? '背景' : msg.subMode === 'magicCircle' ? '法阵' : '贴图'}
+                                        </button>
                                     </div>
                                 ) : msg.type === 'json' && msg.jsonData ? (
                                     <div>
                                         <p className="text-sm mb-2">{msg.content}</p>
-                                        <pre className="text-xs bg-black/30 p-2 rounded overflow-x-auto max-h-[100px]">
-                                            {JSON.stringify(msg.jsonData, null, 2).slice(0, 500)}...
+                                        <pre className="text-xs bg-black/30 p-2 rounded overflow-x-auto max-h-[80px]">
+                                            {JSON.stringify(msg.jsonData, null, 2).slice(0, 400)}...
                                         </pre>
                                         <button
-                                            onClick={() => handleApply(msg.jsonData)}
+                                            onClick={() => handleApplyConfig(msg.jsonData)}
                                             className="mt-2 px-3 py-1 bg-green-500/30 text-green-200 rounded-lg text-sm hover:bg-green-500/40"
                                         >
-                                            ⚡ 应用配置
+                                            ⚡ {activeMode === 'creator' ? '创建星球' : '应用修改'}
                                         </button>
                                     </div>
                                 ) : (
@@ -438,23 +516,18 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     <div ref={messagesEndRef} />
                 </div>
 
-                {/* 润色提示词显示 */}
+                {/* 润色区 */}
                 {refinedPrompt && (
                     <div className="px-3 py-2 bg-purple-500/10 border-t border-purple-400/20">
                         <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-purple-300">✨ 润色后的提示词 (可编辑)</span>
-                            <button
-                                onClick={() => setRefinedPrompt(null)}
-                                className="text-xs text-white/40 hover:text-white/60"
-                            >
-                                取消
-                            </button>
+                            <span className="text-xs text-purple-300">✨ 润色后的提示词</span>
+                            <button onClick={() => setRefinedPrompt(null)} className="text-xs text-white/40 hover:text-white/60">取消</button>
                         </div>
                         <textarea
                             value={refinedPrompt}
                             onChange={e => setRefinedPrompt(e.target.value)}
                             className="w-full bg-black/30 text-white/80 text-sm rounded-lg p-2 resize-none border border-purple-400/20"
-                            rows={3}
+                            rows={2}
                         />
                     </div>
                 )}
@@ -471,7 +544,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 activeMode === 'inspiration'
                                     ? '描述你想要的图片...'
                                     : activeMode === 'creator'
-                                        ? '描述你想要的星球...'
+                                        ? '描述你想要的星球 (如: 冰蓝色的水晶星球，带有光环)'
                                         : '描述要修改的内容...'
                             }
                             className="flex-1 bg-white/10 text-white/90 placeholder-white/30 rounded-xl px-4 py-2 text-sm border border-white/10 focus:border-blue-400/50 focus:outline-none"
@@ -481,7 +554,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                             disabled={!inputValue.trim()}
                             className="px-3 py-2 rounded-xl text-sm font-medium bg-purple-500/30 text-purple-200 hover:bg-purple-500/40 disabled:opacity-30"
                         >
-                            ✨ 润色
+                            ✨
                         </button>
                         <button
                             onClick={handleSend}
@@ -496,9 +569,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 {/* 状态栏 */}
                 <div className="px-3 py-1.5 border-t border-white/5 flex items-center justify-between text-xs text-white/30">
                     <span>
-                        {activeMode === 'inspiration' ? IMAGE_MODELS.find(m => m.id === imageModel)?.name : CHAT_MODELS.find(m => m.id === chatModel)?.name}
+                        {activeMode === 'inspiration'
+                            ? IMAGE_MODELS.find(m => m.id === imageModel)?.name
+                            : CHAT_MODELS.find(m => m.id === chatModel)?.name}
                     </span>
-                    <span>Powered by XingForge</span>
+                    <span>v2.3 | configMerger + validator</span>
                 </div>
             </div>
         </div>,

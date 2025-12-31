@@ -1,35 +1,31 @@
-/**
- * XingForge AI - README
- * 
- * 一旦我所属的文件夹有所变化，请更新我。
- */
+# XingForge AI Utilities
 
-# AI 工具模块
+一旦我所属的文件夹有所变化，请更新我。
 
 ## 文件清单
 
-| 文件 | 功能 | 输入 | 输出 |
-|------|------|------|------|
-| `modelConfig.ts` | 模型常量 & 路由逻辑 | modelId | proxy config |
-| `refineTemplates.ts` | 灵感模式润色模板 | 用户描述 | 润色后提示词 |
-| `schemaBuilder.ts` | 动态 Schema 生成 | ScopeSelection | JSON Schema |
-| `promptBuilder.ts` | System Prompt 构建 | mode + selection | 完整 Prompt |
+| 文件 | 功能 |
+|------|------|
+| `modelConfig.ts` | 模型常量与路由逻辑 (唯一真理源) |
+| `schemaBuilder.ts` | 11种效果类型 Schema 生成 |
+| `promptBuilder.ts` | System Prompt 构建 |
+| `refineTemplates.ts` | 灵感模式润色模板 |
+| `configMerger.ts` | AI输出→PlanetSettings 转换 |
+| `validator.ts` | JSON提取/校验/AutoFix |
 
-## 依赖关系
+## 数据流
 
 ```
-promptBuilder.ts
-  └─> schemaBuilder.ts
-        └─> types.ts (类型引用)
-
-modelConfig.ts (独立)
-refineTemplates.ts (独立)
+用户输入 → promptBuilder → AI API → validator.extractJSON
+                                         ↓
+                                   validateAIOutput
+                                         ↓
+                              configMerger.convertAIOutputToPlanet
+                                         ↓
+                                   PlanetSettings (完整)
 ```
 
-## 使用流程
+## 路由规则
 
-1. 用户选择模式 (灵感/创造/修改)
-2. 用户勾选范围 → `schemaBuilder.buildSchemaFromSelection()`
-3. 构建 Prompt → `promptBuilder.buildSystemPrompt()`
-4. 选择模型 → `modelConfig.getProxyConfig()`
-5. 发送请求 → `api/ai/chat.ts`
+- **Jimiai**: Claude系列, Gemini 3 Pro (非image)
+- **Xuai**: Gemini Image系列, Gemini Thinking
