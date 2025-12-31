@@ -3,12 +3,11 @@
  * 
  * input: POST { prompt, model, subMode }
  * output: { url: string, raw: string }
- * pos: 后端 API 端点，使用 modelConfig.ts 路由 + 校验生图模型
+ * pos: 后端 API 端点
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getProxyConfig, isImageModel, DEFAULT_IMAGE_MODEL } from '../../utils/ai/modelConfig';
 
 // 子模式提示词模板
 const SUB_MODE_PROMPTS: Record<string, (prompt: string) => string> = {
@@ -24,6 +23,13 @@ const SUB_MODE_PROMPTS: Record<string, (prompt: string) => string> = {
     default: (prompt: string) =>
         `Generate an image: ${prompt}`
 };
+
+// 生图模型
+const IMAGE_MODELS = [
+    'gemini-3-pro-image-preview',
+    'gemini-2.5-flash-image',
+    'gemini-3-pro-image-preview-flatfee'
+];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // CORS
@@ -47,17 +53,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 校验模型能力
-    const targetModel = model || DEFAULT_IMAGE_MODEL;
-    if (!isImageModel(targetModel)) {
+    const targetModel = model || 'gemini-3-pro-image-preview';
+    if (!IMAGE_MODELS.includes(targetModel)) {
         return res.status(400).json({
-            error: `Model ${targetModel} does not support image generation`
+            error: `Model ${targetModel} does not support image generation. Use: ${IMAGE_MODELS.join(', ')}`
         });
     }
 
-    const { baseUrl, apiKey } = getProxyConfig(targetModel);
+    // 直接访问环境变量
+    const baseUrl = process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1';
+    const apiKey = process.env.IMAGE_API_KEY;
 
     if (!apiKey) {
-        return res.status(500).json({ error: 'Image Config Missing' });
+        console.error('Missing IMAGE_API_KEY');
+        console.error('Available env keys:', Object.keys(process.env).filter(k => k.includes('API') || k.includes('PROXY')));
+        return res.status(500).json({ error: 'Image API Config Missing - Check Vercel Environment Variables' });
     }
 
     try {
@@ -86,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!proxyRes.ok) {
             const errorText = await proxyRes.text();
             console.error('Image API Error:', proxyRes.status, errorText);
-            throw new Error(`Image API Error: ${proxyRes.status}`);
+            return res.status(500).json({ error: `Image API Error: ${proxyRes.status} - ${errorText.slice(0, 200)}` });
         }
 
         const data = await proxyRes.json();
@@ -102,7 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
             return res.status(200).json({ url: cleanUrl, raw: content });
         } else {
-            return res.status(200).json({ error: 'No image URL found', raw: content });
+            return res.status(200).json({ error: 'No image URL found in response', raw: content });
         }
 
     } catch (error: any) {

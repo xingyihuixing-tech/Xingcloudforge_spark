@@ -138,60 +138,57 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         return planetSettings.planets.find(p => p.id === selectedPlanetId);
     }, [selectedPlanetId, planetSettings]);
 
-    // === 润色功能 ===
-    const handleRefine = useCallback(() => {
-        if (!inputValue.trim()) return;
+    // === 润色功能 (调用 AI API) ===
+    const [isRefining, setIsRefining] = useState(false);
 
-        if (activeMode === 'inspiration') {
-            // 灵感模式：使用模板润色
-            const template = REFINE_TEMPLATES[inspirationSubMode];
-            const refined = template(inputValue.trim());
-            setRefinedPrompt(refined);
-        } else {
-            // 创造/修改模式：生成详细的星球描述提示词
-            const userInput = inputValue.trim();
+    const handleRefine = useCallback(async () => {
+        if (!inputValue.trim() || isRefining) return;
 
-            // 智能推荐范围
-            const suggested = suggestScopeFromDescription(userInput);
-            if (suggested.length > 0 && Object.keys(scopeSelection).length === 0) {
-                const newSelection = createDefaultScopeSelection();
-                const filtered: ScopeSelection = {};
-                for (const effect of suggested) {
-                    if (newSelection[effect]) {
-                        filtered[effect] = newSelection[effect];
+        setIsRefining(true);
+
+        try {
+            const res = await fetch('/api/ai/refine', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: inputValue.trim(),
+                    mode: activeMode,
+                    subMode: activeMode === 'inspiration' ? inspirationSubMode : undefined
+                })
+            });
+
+            const data = await res.json();
+
+            if (data.refined) {
+                setRefinedPrompt(data.refined);
+
+                // 创造/修改模式：同时推荐范围
+                if (activeMode !== 'inspiration') {
+                    const suggested = suggestScopeFromDescription(inputValue);
+                    if (suggested.length > 0 && Object.keys(scopeSelection).length === 0) {
+                        const newSelection = createDefaultScopeSelection();
+                        const filtered: ScopeSelection = {};
+                        for (const effect of suggested) {
+                            if (newSelection[effect]) {
+                                filtered[effect] = newSelection[effect];
+                            }
+                        }
+                        setScopeSelection(filtered);
+                        setScopeCollapsed(false);
                     }
                 }
-                setScopeSelection(filtered);
-                setScopeCollapsed(false);
+            } else {
+                console.error('Refine error:', data.error);
+                // 失败时使用原始输入
+                setRefinedPrompt(inputValue.trim());
             }
-
-            // 创造模式的润色模板
-            const creatorRefineTemplate = (input: string) => {
-                const parts = [];
-                parts.push(`创建一个完整的星球配置:`);
-                parts.push(`主题描述: ${input}`);
-                parts.push('');
-                parts.push('要求:');
-                parts.push('- 生成富有创意的中文名称');
-                parts.push('- 参数值要有美学考量，不要使用默认值');
-                parts.push('- 颜色搭配要协调统一');
-                if (suggested.length > 0) {
-                    parts.push(`- 重点配置以下效果: ${suggested.join(', ')}`);
-                }
-                return parts.join('\n');
-            };
-
-            const modifierRefineTemplate = (input: string) => {
-                return `修改现有星球配置:\n${input}\n\n要求:\n- 只修改与描述相关的参数\n- 保持其他参数不变\n- 不要修改名称`;
-            };
-
-            const refined = activeMode === 'creator'
-                ? creatorRefineTemplate(userInput)
-                : modifierRefineTemplate(userInput);
-
-            setRefinedPrompt(refined);
+        } catch (err) {
+            console.error('Refine fetch error:', err);
+            setRefinedPrompt(inputValue.trim());
+        } finally {
+            setIsRefining(false);
         }
-    }, [inputValue, activeMode, inspirationSubMode, scopeSelection]);
+    }, [inputValue, activeMode, inspirationSubMode, scopeSelection, isRefining]);
 
     // === 发送消息 ===
     const handleSend = useCallback(async () => {
@@ -580,10 +577,10 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         />
                         <button
                             onClick={handleRefine}
-                            disabled={!inputValue.trim()}
-                            className="px-3 py-2 rounded-xl text-sm font-medium bg-purple-500/30 text-purple-200 hover:bg-purple-500/40 disabled:opacity-30"
+                            disabled={!inputValue.trim() || isRefining}
+                            className={`px-3 py-2 rounded-xl text-sm font-medium bg-purple-500/30 text-purple-200 hover:bg-purple-500/40 disabled:opacity-30 ${isRefining ? 'animate-pulse' : ''}`}
                         >
-                            ✨
+                            {isRefining ? '...' : '✨'}
                         </button>
                         <button
                             onClick={handleSend}

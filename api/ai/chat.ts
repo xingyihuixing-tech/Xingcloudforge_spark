@@ -3,12 +3,11 @@
  * 
  * input: POST { messages, systemPrompt, model }
  * output: { content: string }
- * pos: 后端 API 端点，使用 modelConfig.ts 路由
+ * pos: 后端 API 端点
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getProxyConfig, DEFAULT_CHAT_MODEL } from '../../utils/ai/modelConfig';
 
 export const config = {
     api: {
@@ -17,6 +16,14 @@ export const config = {
         },
     },
 };
+
+// Xuai 代理的模型 ID
+const XUAI_MODELS = [
+    'gemini-3-pro-image-preview',
+    'gemini-2.5-flash-image',
+    'gemini-3-pro-image-preview-flatfee',
+    'gemini-3-pro-preview-thinking'
+];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // CORS
@@ -39,13 +46,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'Invalid messages format' });
     }
 
-    // 使用统一路由
-    const targetModel = model || DEFAULT_CHAT_MODEL;
-    const { baseUrl, apiKey } = getProxyConfig(targetModel);
+    // 确定代理
+    const targetModel = model || 'claude-sonnet-4-5-20250929';
+    const useXuai = XUAI_MODELS.includes(targetModel);
+
+    const baseUrl = useXuai
+        ? (process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1')
+        : (process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1');
+
+    const apiKey = useXuai
+        ? process.env.IMAGE_API_KEY
+        : process.env.CHAT_API_KEY;
 
     if (!apiKey) {
-        console.error('Missing API Key for model:', targetModel);
-        return res.status(500).json({ error: 'Server AI Configuration Missing' });
+        console.error('Missing API Key for model:', targetModel, 'useXuai:', useXuai);
+        console.error('Available env keys:', Object.keys(process.env).filter(k => k.includes('API') || k.includes('PROXY')));
+        return res.status(500).json({ error: 'Server AI Configuration Missing - Check Vercel Environment Variables' });
     }
 
     try {
@@ -76,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!proxyRes.ok) {
             const errorText = await proxyRes.text();
             console.error('Proxy Error:', proxyRes.status, errorText);
-            throw new Error(`Proxy API Error: ${proxyRes.status}`);
+            return res.status(500).json({ error: `Proxy API Error: ${proxyRes.status} - ${errorText.slice(0, 200)}` });
         }
 
         const data = await proxyRes.json();
