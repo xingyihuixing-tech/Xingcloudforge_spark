@@ -9578,6 +9578,17 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                 {/* ===== 流萤 子Tab ===== */}
                 {planetSubTab === 'fireflies' && (() => {
+                  // 加载云端头部贴图预设
+                  const { loadCloudConfig } = useUser();
+                  const [headTextureCloudPresets, setHeadTextureCloudPresets] = React.useState<{ id: string; name: string; url: string }[]>([]);
+                  React.useEffect(() => {
+                    loadCloudConfig().then(config => {
+                      if (config?.headTexturePresets) {
+                        setHeadTextureCloudPresets(config.headTexturePresets);
+                      }
+                    });
+                  }, [loadCloudConfig]);
+
                   // 自动选中第一个旋转流萤
                   const effectiveSelectedOrbitingFireflyId = selectedOrbitingFireflyId && planet.fireflies.orbitingFireflies.find(f => f.id === selectedOrbitingFireflyId)
                     ? selectedOrbitingFireflyId
@@ -9802,15 +9813,24 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                       className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
                                     >
                                       <option value="">请选择...</option>
-                                      <option value="/textures/flare1.png">光效 1</option>
-                                      <option value="/textures/flare2.png">光效 2</option>
-                                      <option value="/textures/flare3.png">光效 3</option>
-                                      <option value="/textures/flare4.png">光效 4</option>
-                                      <option value="/textures/flare5.png">光效 5</option>
-                                      <option value="/textures/flare6.png">光效 6</option>
-                                      <option value="/textures/flare7.png">光效 7</option>
-                                      <option value="/textures/flare8.png">光效 8</option>
-                                      <option value="/textures/flare9.png">光效 9</option>
+                                      <optgroup label="内置光效">
+                                        <option value="/textures/flare1.png">光效 1</option>
+                                        <option value="/textures/flare2.png">光效 2</option>
+                                        <option value="/textures/flare3.png">光效 3</option>
+                                        <option value="/textures/flare4.png">光效 4</option>
+                                        <option value="/textures/flare5.png">光效 5</option>
+                                        <option value="/textures/flare6.png">光效 6</option>
+                                        <option value="/textures/flare7.png">光效 7</option>
+                                        <option value="/textures/flare8.png">光效 8</option>
+                                        <option value="/textures/flare9.png">光效 9</option>
+                                      </optgroup>
+                                      {headTextureCloudPresets.length > 0 && (
+                                        <optgroup label={`✨ XingSpark (${headTextureCloudPresets.length})`}>
+                                          {headTextureCloudPresets.map((preset: { id: string; name: string; url: string }) => (
+                                            <option key={preset.id} value={preset.url}>{preset.name}</option>
+                                          ))}
+                                        </optgroup>
+                                      )}
                                     </select>
                                   </div>
                                 )}
