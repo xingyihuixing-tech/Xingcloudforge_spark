@@ -76,6 +76,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+    const [configVersion, setConfigVersion] = useState(0); // 用于触发云配置刷新
 
     // 初始化加载
     useEffect(() => {
@@ -427,7 +428,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             }
         }
         return config;
-    }, [currentUser?.id, isOnline]);
+    }, [currentUser?.id, isOnline, configVersion]);
 
     const saveCloudConfig = async (config: Partial<UserConfig>) => {
         if (!currentUser) return false;
@@ -452,6 +453,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
                 if (res.ok) {
                     setSyncStatus('synced');
+                    setConfigVersion(v => v + 1); // 触发依赖组件刷新云配置
                     return true;
                 } else {
                     setSyncStatus('error');
