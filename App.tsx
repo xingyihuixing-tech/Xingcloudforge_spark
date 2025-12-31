@@ -1313,6 +1313,7 @@ const App: React.FC = () => {
       <AIAssistantPanel
         isOpen={showAIPanel}
         onClose={() => setShowAIPanel(false)}
+        userId={currentUser?.id}
         planetSettings={planetSettings}
         onAddPlanet={(planet) => {
           setPlanetSettings(prev => ({
@@ -1332,6 +1333,28 @@ const App: React.FC = () => {
             ...prev,
             background: { ...prev.background, panoramaUrl: url, enabled: true }
           }));
+        }}
+        onSaveHeadTexture={async (preset) => {
+          // 保存到云配置
+          const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
+          const headTexturePresets = config.headTexturePresets || [];
+          headTexturePresets.push(preset);
+          await saveCloudConfig({ ...config, headTexturePresets });
+          console.log('Saved head texture preset:', preset.name);
+        }}
+        onSaveBackground={async (preset) => {
+          const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
+          const backgroundPresets = config.backgroundPresets || [];
+          backgroundPresets.push(preset);
+          await saveCloudConfig({ ...config, backgroundPresets });
+          console.log('Saved background preset:', preset.name);
+        }}
+        onSaveMagicCircleTexture={async (preset) => {
+          const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
+          const magicCircleTexturePresets = config.magicCircleTexturePresets || [];
+          magicCircleTexturePresets.push(preset);
+          await saveCloudConfig({ ...config, magicCircleTexturePresets });
+          console.log('Saved magic circle texture preset:', preset.name);
         }}
       />
     </div >

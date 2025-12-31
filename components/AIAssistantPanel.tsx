@@ -1,7 +1,7 @@
 /**
- * XingForge AI - Main Assistant Panel (v2.3)
+ * XingForge AI - Main Assistant Panel (Inspiration Mode v2.0)
  * 
- * input: isOpen, onClose, planets, settings callbacks
+ * input: isOpen, onClose, callbacks for presets
  * output: AI 交互面板 UI
  * pos: AI 系统的主入口组件
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
@@ -12,17 +12,9 @@ import { createPortal } from 'react-dom';
 
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
-import { REFINE_TEMPLATES, INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
-import { ScopeSelection, createDefaultScopeSelection } from '../utils/ai/schemaBuilder';
-import { buildSystemPrompt, buildUserPrompt, suggestScopeFromDescription } from '../utils/ai/promptBuilder';
-import { extractJSON, validateAIOutput, generateRetryPrompt } from '../utils/ai/validator';
-import { convertAIOutputToPlanet, applyAIPatchToPlanet, AISimplifiedOutput } from '../utils/ai/configMerger';
+import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
 
-// 组件导入
-import { ScopeSelector } from './ai/ScopeSelector';
-import { PlanetSelector } from './ai/PlanetSelector';
-
-// 类型导入
+// 类型
 import type { PlanetSettings, PlanetSceneSettings } from '../types';
 
 // ============================================
@@ -31,16 +23,27 @@ import type { PlanetSettings, PlanetSceneSettings } from '../types';
 
 export type AIMode = 'inspiration' | 'creator' | 'modifier';
 
+// AI 生成预设
+export interface AIGeneratedPreset {
+    id: string;
+    name: string;
+    url: string;
+    createdAt: number;
+}
+
 interface AIAssistantPanelProps {
     isOpen: boolean;
     onClose: () => void;
-    // 创造模式回调
-    onAddPlanet?: (planet: PlanetSettings) => void;
-    // 修改模式回调
-    onUpdatePlanet?: (planetId: string, planet: Partial<PlanetSettings>) => void;
-    // 当前星球场景数据
+    // 当前用户 ID
+    userId?: string;
+    // 灵感模式回调
+    onSaveHeadTexture?: (preset: AIGeneratedPreset) => void;
+    onSaveBackground?: (preset: AIGeneratedPreset) => void;
+    onSaveMagicCircleTexture?: (preset: AIGeneratedPreset) => void;
+    // 创造/修改模式
     planetSettings?: PlanetSceneSettings;
-    // 灵感模式：应用背景
+    onAddPlanet?: (planet: PlanetSettings) => void;
+    onUpdatePlanet?: (planetId: string, planet: Partial<PlanetSettings>) => void;
     onApplyBackground?: (url: string) => void;
 }
 
@@ -48,13 +51,57 @@ interface ChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
-    type?: 'text' | 'json' | 'image' | 'error';
-    jsonData?: any;
+    type?: 'text' | 'image' | 'error';
     imageUrl?: string;
     subMode?: InspirationSubMode;
+    suggestedName?: string;
 }
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
+
+// ============================================
+// 图片放大 Modal
+// ============================================
+
+const ImageModal: React.FC<{
+    imageUrl: string | null;
+    onClose: () => void;
+}> = ({ imageUrl, onClose }) => {
+    if (!imageUrl) return null;
+
+    return createPortal(
+        <div
+            className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/80"
+            onClick={onClose}
+        >
+            <div className="relative max-w-[90vw] max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                <button
+                    onClick={onClose}
+                    className="absolute -top-10 right-0 text-white/60 hover:text-white text-xl"
+                >
+                    ✕ 关闭
+                </button>
+                <img src={imageUrl} alt="Preview" className="max-w-full max-h-[85vh] rounded-lg" />
+                <div className="mt-2 flex gap-2 justify-center">
+                    <a
+                        href={imageUrl}
+                        download
+                        className="px-3 py-1 bg-white/10 text-white/80 rounded-lg text-sm hover:bg-white/20"
+                    >
+                        📥 下载
+                    </a>
+                    <button
+                        onClick={() => navigator.clipboard.writeText(imageUrl)}
+                        className="px-3 py-1 bg-white/10 text-white/80 rounded-lg text-sm hover:bg-white/20"
+                    >
+                        📋 复制 URL
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    );
+};
 
 // ============================================
 // 主组件
@@ -63,13 +110,17 @@ const generateId = () => Math.random().toString(36).substring(2, 9);
 const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     isOpen,
     onClose,
+    userId,
+    onSaveHeadTexture,
+    onSaveBackground,
+    onSaveMagicCircleTexture,
+    planetSettings,
     onAddPlanet,
     onUpdatePlanet,
-    planetSettings,
     onApplyBackground
 }) => {
     // === 模式状态 ===
-    const [activeMode, setActiveMode] = useState<AIMode>('creator');
+    const [activeMode, setActiveMode] = useState<AIMode>('inspiration');
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
 
     // === 模型选择 ===
@@ -77,23 +128,31 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
     const [showSettings, setShowSettings] = useState(false);
 
-    // === 范围选择 ===
-    const [scopeSelection, setScopeSelection] = useState<ScopeSelection>({});
-    const [scopeCollapsed, setScopeCollapsed] = useState(true);
-
-    // === 修改模式 ===
-    const [selectedPlanetId, setSelectedPlanetId] = useState<string | null>(null);
+    // === 输入状态 ===
+    const [inputValue, setInputValue] = useState('');
+    const [uploadedImage, setUploadedImage] = useState<string | null>(null);
+    const [isRefining, setIsRefining] = useState(false);
+    const [isGenerating, setIsGenerating] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // === 聊天状态 ===
     const [messages, setMessages] = useState<ChatMessage[]>([
-        { id: '1', role: 'assistant', content: '我是 XingForge AI 助手。选择模式后开始创作！\n\n🪐 **创造模式**: 用自然语言描述星球，AI 生成配置\n🎨 **灵感模式**: 生成背景图、粒子贴图、法阵\n🔧 **修改模式**: 微调现有星球参数' }
+        {
+            id: '1',
+            role: 'assistant',
+            content: '🎨 **灵感模式**\n\n选择子功能后，输入描述并点击 ✨ 润色或直接发送。\n\n支持上传参考图片进行分析。'
+        }
     ]);
-    const [inputValue, setInputValue] = useState('');
-    const [refinedPrompt, setRefinedPrompt] = useState<string | null>(null);
-    const [isThinking, setIsThinking] = useState(false);
+
+    // === 图片预览 ===
+    const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+    // === 保存状态 ===
+    const [editingName, setEditingName] = useState<{ id: string; name: string } | null>(null);
+    const [savingId, setSavingId] = useState<string | null>(null);
 
     // === 窗口拖拽 ===
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight - 600 });
+    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 320, y: 100 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -129,18 +188,26 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
-    // 星球列表
-    const planets = planetSettings?.planets?.map(p => ({ id: p.id, name: p.name, enabled: p.enabled })) || [];
+    // === 图片上传 ===
+    const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
 
-    // 获取选中星球的当前配置
-    const getSelectedPlanetConfig = useCallback(() => {
-        if (!selectedPlanetId || !planetSettings) return undefined;
-        return planetSettings.planets.find(p => p.id === selectedPlanetId);
-    }, [selectedPlanetId, planetSettings]);
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            setUploadedImage(event.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+    }, []);
 
-    // === 润色功能 (调用 AI API) ===
-    const [isRefining, setIsRefining] = useState(false);
+    const clearUploadedImage = useCallback(() => {
+        setUploadedImage(null);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
+    }, []);
 
+    // === 润色功能 (调用 AI) ===
     const handleRefine = useCallback(async () => {
         if (!inputValue.trim() || isRefining) return;
 
@@ -153,135 +220,96 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 body: JSON.stringify({
                     prompt: inputValue.trim(),
                     mode: activeMode,
-                    subMode: activeMode === 'inspiration' ? inspirationSubMode : undefined
+                    subMode: activeMode === 'inspiration' ? inspirationSubMode : undefined,
+                    imageBase64: uploadedImage || undefined
                 })
             });
 
             const data = await res.json();
 
             if (data.refined) {
-                setRefinedPrompt(data.refined);
-
-                // 创造/修改模式：同时推荐范围
-                if (activeMode !== 'inspiration') {
-                    const suggested = suggestScopeFromDescription(inputValue);
-                    if (suggested.length > 0 && Object.keys(scopeSelection).length === 0) {
-                        const newSelection = createDefaultScopeSelection();
-                        const filtered: ScopeSelection = {};
-                        for (const effect of suggested) {
-                            if (newSelection[effect]) {
-                                filtered[effect] = newSelection[effect];
-                            }
-                        }
-                        setScopeSelection(filtered);
-                        setScopeCollapsed(false);
-                    }
-                }
+                // 润色结果替换输入框
+                setInputValue(data.refined);
             } else {
                 console.error('Refine error:', data.error);
-                // 失败时使用原始输入
-                setRefinedPrompt(inputValue.trim());
             }
         } catch (err) {
             console.error('Refine fetch error:', err);
-            setRefinedPrompt(inputValue.trim());
         } finally {
             setIsRefining(false);
         }
-    }, [inputValue, activeMode, inspirationSubMode, scopeSelection, isRefining]);
+    }, [inputValue, activeMode, inspirationSubMode, uploadedImage, isRefining]);
 
-    // === 发送消息 ===
+    // === 发送 (生成图像) ===
     const handleSend = useCallback(async () => {
-        const prompt = refinedPrompt || inputValue.trim();
-        if (!prompt || isThinking) return;
+        if (!inputValue.trim() || isGenerating) return;
+
+        const prompt = inputValue.trim();
 
         // 添加用户消息
-        const userMsg: ChatMessage = { id: generateId(), role: 'user', content: prompt };
+        const userMsg: ChatMessage = {
+            id: generateId(),
+            role: 'user',
+            content: uploadedImage ? `[附图] ${prompt}` : prompt
+        };
         setMessages(prev => [...prev, userMsg]);
         setInputValue('');
-        setRefinedPrompt(null);
-        setIsThinking(true);
+        setIsGenerating(true);
 
         try {
             if (activeMode === 'inspiration') {
-                // === 灵感模式：生成图片 ===
+                // 灵感模式：生成图片
                 const res = await fetch('/api/ai/image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         prompt: prompt,
                         model: imageModel,
-                        subMode: inspirationSubMode
+                        subMode: inspirationSubMode,
+                        imageBase64: uploadedImage || undefined
                     })
                 });
                 const data = await res.json();
 
                 if (data.url) {
+                    // 获取 AI 命名
+                    let suggestedName = 'AI生成';
+                    try {
+                        const nameRes = await fetch('/api/ai/name', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                imageUrl: data.url,
+                                subMode: inspirationSubMode
+                            })
+                        });
+                        const nameData = await nameRes.json();
+                        suggestedName = nameData.name || suggestedName;
+                    } catch (e) {
+                        console.error('Name API error:', e);
+                    }
+
                     setMessages(prev => [...prev, {
                         id: generateId(),
                         role: 'assistant',
-                        content: `✨ 已生成 ${INSPIRATION_MODE_INFO[inspirationSubMode].name}`,
+                        content: `✨ 生成完成`,
                         type: 'image',
                         imageUrl: data.url,
-                        subMode: inspirationSubMode
+                        subMode: inspirationSubMode,
+                        suggestedName
                     }]);
+
+                    // 清理上传的图片
+                    clearUploadedImage();
                 } else {
                     throw new Error(data.error || '图片生成失败');
                 }
             } else {
-                // === 创造/修改模式：生成 JSON ===
-                const currentPlanet = activeMode === 'modifier' ? getSelectedPlanetConfig() : undefined;
-
-                const context = {
-                    mode: activeMode,
-                    selection: scopeSelection,
-                    isSceneMode: false,
-                    targetPlanetId: activeMode === 'modifier' ? (selectedPlanetId || undefined) : undefined,
-                    currentConfig: currentPlanet
-                };
-
-                const systemPrompt = buildSystemPrompt(context);
-                const userPrompt = buildUserPrompt(prompt, context);
-
-                const res = await fetch('/api/ai/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: chatModel,
-                        systemPrompt,
-                        messages: [{ role: 'user', content: userPrompt }]
-                    })
-                });
-
-                const data = await res.json();
-                if (!res.ok) {
-                    throw new Error(data.error || 'AI 请求失败');
-                }
-
-                const content = data.content || '';
-
-                // 提取并验证 JSON
-                const rawJson = extractJSON(content);
-                if (!rawJson) {
-                    throw new Error('AI 返回内容不是有效的 JSON');
-                }
-
-                const validation = validateAIOutput(rawJson);
-
-                if (validation.warnings.length > 0) {
-                    console.log('[AI Validator] Warnings:', validation.warnings);
-                }
-
-                if (!validation.valid || !validation.sanitized) {
-                    throw new Error(validation.errors.join('; '));
-                }
-
+                // TODO: 创造/修改模式
                 setMessages(prev => [...prev, {
                     id: generateId(),
-                    role: 'assistant',
-                    content: `✨ ${activeMode === 'creator' ? '星球配置' : '修改建议'}已生成`,
-                    type: 'json',
-                    jsonData: validation.sanitized
+                    role: 'system',
+                    content: '创造/修改模式开发中...'
                 }]);
             }
         } catch (err: any) {
@@ -292,65 +320,79 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 type: 'error'
             }]);
         } finally {
-            setIsThinking(false);
+            setIsGenerating(false);
         }
-    }, [inputValue, refinedPrompt, activeMode, inspirationSubMode, imageModel, chatModel, scopeSelection, selectedPlanetId, isThinking, getSelectedPlanetConfig]);
+    }, [inputValue, activeMode, inspirationSubMode, imageModel, uploadedImage, isGenerating, clearUploadedImage]);
 
-    // === 应用配置 ===
-    const handleApplyConfig = useCallback((jsonData: AISimplifiedOutput) => {
+    // === 保存预设 ===
+    const handleSavePreset = useCallback(async (msg: ChatMessage, customName?: string) => {
+        if (!msg.imageUrl || !userId || savingId) return;
+
+        setSavingId(msg.id);
+
         try {
-            if (activeMode === 'creator') {
-                // 创造模式：生成新星球
-                const newPlanet = convertAIOutputToPlanet(jsonData);
-                if (onAddPlanet) {
-                    onAddPlanet(newPlanet);
-                    setMessages(prev => [...prev, {
-                        id: generateId(),
-                        role: 'system',
-                        content: `✅ 星球 "${newPlanet.name}" 已创建！`
-                    }]);
+            // 1. 下载图片
+            const imgRes = await fetch(msg.imageUrl);
+            const blob = await imgRes.blob();
+
+            // 2. 上传到云端
+            const name = customName || msg.suggestedName || 'AI生成';
+            const typeMap: Record<InspirationSubMode, string> = {
+                particleShape: 'headTexture',
+                background: 'background',
+                magicCircle: 'magicCircleTexture'
+            };
+            const fileType = typeMap[msg.subMode || 'magicCircle'];
+
+            const uploadRes = await fetch(
+                `/api/upload?userId=${userId}&type=${fileType}&fileName=${encodeURIComponent(name)}.png`,
+                {
+                    method: 'POST',
+                    body: blob
                 }
-            } else if (activeMode === 'modifier' && selectedPlanetId) {
-                // 修改模式：更新现有星球
-                const currentPlanet = getSelectedPlanetConfig();
-                if (currentPlanet && onUpdatePlanet) {
-                    const updatedPlanet = applyAIPatchToPlanet(currentPlanet, jsonData);
-                    onUpdatePlanet(selectedPlanetId, updatedPlanet);
-                    setMessages(prev => [...prev, {
-                        id: generateId(),
-                        role: 'system',
-                        content: `✅ 星球 "${currentPlanet.name}" 已更新！`
-                    }]);
-                }
+            );
+            const uploadData = await uploadRes.json();
+
+            if (!uploadData.url) {
+                throw new Error('上传失败');
             }
+
+            // 3. 创建预设
+            const preset: AIGeneratedPreset = {
+                id: generateId(),
+                name,
+                url: uploadData.url,
+                createdAt: Date.now()
+            };
+
+            // 4. 调用对应回调
+            if (msg.subMode === 'particleShape' && onSaveHeadTexture) {
+                onSaveHeadTexture(preset);
+            } else if (msg.subMode === 'background' && onSaveBackground) {
+                onSaveBackground(preset);
+            } else if (msg.subMode === 'magicCircle' && onSaveMagicCircleTexture) {
+                onSaveMagicCircleTexture(preset);
+            }
+
+            setMessages(prev => prev.map(m =>
+                m.id === msg.id
+                    ? { ...m, content: `✅ 已保存: ${name}` }
+                    : m
+            ));
+
         } catch (err: any) {
+            console.error('Save preset error:', err);
             setMessages(prev => [...prev, {
                 id: generateId(),
                 role: 'system',
-                content: `❌ 应用失败: ${err.message}`,
+                content: `❌ 保存失败: ${err.message}`,
                 type: 'error'
             }]);
+        } finally {
+            setSavingId(null);
+            setEditingName(null);
         }
-    }, [activeMode, selectedPlanetId, getSelectedPlanetConfig, onAddPlanet, onUpdatePlanet]);
-
-    // === 应用图片 ===
-    const handleApplyImage = useCallback((imageUrl: string, subMode: InspirationSubMode) => {
-        if (subMode === 'background' && onApplyBackground) {
-            onApplyBackground(imageUrl);
-            setMessages(prev => [...prev, {
-                id: generateId(),
-                role: 'system',
-                content: '✅ 背景图已应用！'
-            }]);
-        } else {
-            // TODO: 法阵和粒子形状的应用
-            setMessages(prev => [...prev, {
-                id: generateId(),
-                role: 'system',
-                content: `⚠️ ${subMode} 应用功能开发中...`
-            }]);
-        }
-    }, [onApplyBackground]);
+    }, [userId, savingId, onSaveHeadTexture, onSaveBackground, onSaveMagicCircleTexture]);
 
     if (!isOpen) return null;
 
@@ -358,251 +400,289 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // 渲染
     // ============================================
 
+    const saveButtonText: Record<InspirationSubMode, string> = {
+        particleShape: '保存到头部样式',
+        background: '保存到背景预设',
+        magicCircle: '保存到法阵贴图'
+    };
+
     return createPortal(
-        <div
-            className="fixed z-[9999]"
-            style={{ left: position.x, top: position.y }}
-            onMouseDown={handleDragStart}
-        >
+        <>
+            <ImageModal imageUrl={previewImage} onClose={() => setPreviewImage(null)} />
+
             <div
-                className="w-[600px] rounded-2xl overflow-hidden shadow-2xl"
-                style={{
-                    background: 'linear-gradient(180deg, rgba(15,15,25,0.98) 0%, rgba(10,10,20,0.98) 100%)',
-                    backdropFilter: 'blur(20px)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    boxShadow: '0 0 60px rgba(100,100,255,0.1)'
-                }}
+                className="fixed z-[9999]"
+                style={{ left: position.x, top: position.y }}
+                onMouseDown={handleDragStart}
             >
-                {/* 标题栏 */}
-                <div className="drag-handle flex items-center justify-between px-4 py-3 border-b border-white/10 cursor-move">
-                    <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 animate-pulse" />
-                        <span className="text-white/90 font-semibold">XINGFORGE AI v2.3</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setShowSettings(!showSettings)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white/90">⚙️</button>
-                        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60">✕</button>
-                    </div>
-                </div>
-
-                {/* 模式切换 */}
-                <div className="flex border-b border-white/10">
-                    {(['creator', 'inspiration', 'modifier'] as AIMode[]).map(mode => (
-                        <button
-                            key={mode}
-                            onClick={() => setActiveMode(mode)}
-                            className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
-                                ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
-                                : 'text-white/50 hover:text-white/70'
-                                }`}
-                        >
-                            {mode === 'creator' ? '🪐 创造' : mode === 'inspiration' ? '🎨 灵感' : '🔧 修改'}
-                        </button>
-                    ))}
-                </div>
-
-                {/* 设置面板 */}
-                {showSettings && (
-                    <div className="p-3 border-b border-white/10 bg-black/30">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs text-white/50 mb-1 block">对话模型</label>
-                                <select
-                                    value={chatModel}
-                                    onChange={e => setChatModel(e.target.value)}
-                                    className="w-full bg-white/10 text-white/80 text-sm rounded-lg px-2 py-1.5 border border-white/10"
-                                >
-                                    {CHAT_MODELS.map(m => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="text-xs text-white/50 mb-1 block">生图模型</label>
-                                <select
-                                    value={imageModel}
-                                    onChange={e => setImageModel(e.target.value)}
-                                    className="w-full bg-white/10 text-white/80 text-sm rounded-lg px-2 py-1.5 border border-white/10"
-                                >
-                                    {IMAGE_MODELS.map(m => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </select>
-                            </div>
+                <div
+                    className="w-[640px] rounded-2xl overflow-hidden shadow-2xl"
+                    style={{
+                        background: 'linear-gradient(180deg, rgba(15,15,25,0.98) 0%, rgba(10,10,20,0.98) 100%)',
+                        backdropFilter: 'blur(20px)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        boxShadow: '0 0 60px rgba(100,100,255,0.1)'
+                    }}
+                >
+                    {/* 标题栏 */}
+                    <div className="drag-handle flex items-center justify-between px-4 py-3 border-b border-white/10 cursor-move">
+                        <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 animate-pulse" />
+                            <span className="text-white/90 font-semibold">XINGFORGE AI</span>
+                            <span className="text-white/40 text-xs">灵感模式 v2.0</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setShowSettings(!showSettings)} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white/90">⚙️</button>
+                            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60">✕</button>
                         </div>
                     </div>
-                )}
 
-                {/* 灵感模式子选项 */}
-                {activeMode === 'inspiration' && (
-                    <div className="flex gap-2 p-3 border-b border-white/10">
-                        {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => {
-                            const info = INSPIRATION_MODE_INFO[subMode];
-                            return (
-                                <button
-                                    key={subMode}
-                                    onClick={() => setInspirationSubMode(subMode)}
-                                    className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
-                                        ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
-                                        : 'bg-white/5 text-white/50 hover:bg-white/10'
-                                        }`}
-                                >
-                                    {info.icon} {info.name}
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {/* 创造模式配置 */}
-                {activeMode === 'creator' && (
-                    <div className="p-3 border-b border-white/10">
-                        <ScopeSelector
-                            selection={scopeSelection}
-                            onChange={setScopeSelection}
-                            collapsed={scopeCollapsed}
-                            onToggleCollapse={() => setScopeCollapsed(!scopeCollapsed)}
-                        />
-                    </div>
-                )}
-
-                {/* 修改模式配置 */}
-                {activeMode === 'modifier' && (
-                    <div className="p-3 border-b border-white/10 space-y-2">
-                        <PlanetSelector
-                            planets={planets}
-                            selectedId={selectedPlanetId}
-                            onChange={setSelectedPlanetId}
-                        />
-                        {selectedPlanetId && (
-                            <ScopeSelector
-                                selection={scopeSelection}
-                                onChange={setScopeSelection}
-                                collapsed={scopeCollapsed}
-                                onToggleCollapse={() => setScopeCollapsed(!scopeCollapsed)}
-                            />
-                        )}
-                    </div>
-                )}
-
-                {/* 消息列表 */}
-                <div className="h-[200px] overflow-y-auto p-3 space-y-3">
-                    {messages.map(msg => (
-                        <div
-                            key={msg.id}
-                            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                            <div
-                                className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.role === 'user'
-                                    ? 'bg-blue-500/30 text-white/90'
-                                    : msg.role === 'system'
-                                        ? 'bg-green-500/20 text-green-200'
-                                        : msg.type === 'error'
-                                            ? 'bg-red-500/20 text-red-200'
-                                            : 'bg-white/10 text-white/80'
+                    {/* 模式切换 */}
+                    <div className="flex border-b border-white/10">
+                        {(['inspiration', 'creator', 'modifier'] as AIMode[]).map(mode => (
+                            <button
+                                key={mode}
+                                onClick={() => setActiveMode(mode)}
+                                className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
+                                        ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
+                                        : 'text-white/50 hover:text-white/70'
                                     }`}
                             >
-                                {msg.type === 'image' && msg.imageUrl ? (
-                                    <div>
-                                        <img src={msg.imageUrl} alt="Generated" className="max-w-full rounded-lg mb-2" />
-                                        <p className="text-sm">{msg.content}</p>
-                                        <button
-                                            onClick={() => handleApplyImage(msg.imageUrl!, msg.subMode || 'background')}
-                                            className="mt-2 px-3 py-1 bg-green-500/30 text-green-200 rounded-lg text-sm hover:bg-green-500/40"
-                                        >
-                                            ⚡ 应用到{msg.subMode === 'background' ? '背景' : msg.subMode === 'magicCircle' ? '法阵' : '贴图'}
-                                        </button>
-                                    </div>
-                                ) : msg.type === 'json' && msg.jsonData ? (
-                                    <div>
-                                        <p className="text-sm mb-2">{msg.content}</p>
-                                        <pre className="text-xs bg-black/30 p-2 rounded overflow-x-auto max-h-[80px]">
-                                            {JSON.stringify(msg.jsonData, null, 2).slice(0, 400)}...
-                                        </pre>
-                                        <button
-                                            onClick={() => handleApplyConfig(msg.jsonData)}
-                                            className="mt-2 px-3 py-1 bg-green-500/30 text-green-200 rounded-lg text-sm hover:bg-green-500/40"
-                                        >
-                                            ⚡ {activeMode === 'creator' ? '创建星球' : '应用修改'}
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                                )}
-                            </div>
-                        </div>
-                    ))}
-                    {isThinking && (
-                        <div className="flex justify-start">
-                            <div className="bg-white/10 rounded-xl px-4 py-2 text-white/60 animate-pulse">
-                                思考中...
+                                {mode === 'inspiration' ? '🎨 灵感' : mode === 'creator' ? '🪐 创造' : '🔧 修改'}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* 设置面板 */}
+                    {showSettings && (
+                        <div className="p-3 border-b border-white/10 bg-black/30">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-white/50 mb-1 block">对话模型</label>
+                                    <select
+                                        value={chatModel}
+                                        onChange={e => setChatModel(e.target.value)}
+                                        className="w-full bg-white/10 text-white/80 text-sm rounded-lg px-2 py-1.5 border border-white/10"
+                                    >
+                                        {CHAT_MODELS.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-white/50 mb-1 block">生图模型</label>
+                                    <select
+                                        value={imageModel}
+                                        onChange={e => setImageModel(e.target.value)}
+                                        className="w-full bg-white/10 text-white/80 text-sm rounded-lg px-2 py-1.5 border border-white/10"
+                                    >
+                                        {IMAGE_MODELS.map(m => (
+                                            <option key={m.id} value={m.id}>{m.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     )}
-                    <div ref={messagesEndRef} />
-                </div>
 
-                {/* 润色区 */}
-                {refinedPrompt && (
-                    <div className="px-3 py-2 bg-purple-500/10 border-t border-purple-400/20">
-                        <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-purple-300">✨ 润色后的提示词</span>
-                            <button onClick={() => setRefinedPrompt(null)} className="text-xs text-white/40 hover:text-white/60">取消</button>
+                    {/* 灵感子模式 */}
+                    {activeMode === 'inspiration' && (
+                        <div className="flex gap-2 p-3 border-b border-white/10">
+                            {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => {
+                                const info = INSPIRATION_MODE_INFO[subMode];
+                                return (
+                                    <button
+                                        key={subMode}
+                                        onClick={() => setInspirationSubMode(subMode)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
+                                                ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
+                                                : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                            }`}
+                                    >
+                                        {info.icon} {info.name}
+                                    </button>
+                                );
+                            })}
                         </div>
-                        <textarea
-                            value={refinedPrompt}
-                            onChange={e => setRefinedPrompt(e.target.value)}
-                            className="w-full bg-black/30 text-white/80 text-sm rounded-lg p-2 resize-none border border-purple-400/20"
-                            rows={2}
-                        />
-                    </div>
-                )}
+                    )}
 
-                {/* 输入区 */}
-                <div className="p-3 border-t border-white/10">
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={inputValue}
-                            onChange={e => setInputValue(e.target.value)}
-                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                            placeholder={
-                                activeMode === 'inspiration'
-                                    ? '描述你想要的图片...'
-                                    : activeMode === 'creator'
-                                        ? '描述你想要的星球 (如: 冰蓝色的水晶星球，带有光环)'
-                                        : '描述要修改的内容...'
-                            }
-                            className="flex-1 bg-white/10 text-white/90 placeholder-white/30 rounded-xl px-4 py-2 text-sm border border-white/10 focus:border-blue-400/50 focus:outline-none"
-                        />
-                        <button
-                            onClick={handleRefine}
-                            disabled={!inputValue.trim() || isRefining}
-                            className={`px-3 py-2 rounded-xl text-sm font-medium bg-purple-500/30 text-purple-200 hover:bg-purple-500/40 disabled:opacity-30 ${isRefining ? 'animate-pulse' : ''}`}
-                        >
-                            {isRefining ? '...' : '✨'}
-                        </button>
-                        <button
-                            onClick={handleSend}
-                            disabled={isThinking || (!inputValue.trim() && !refinedPrompt)}
-                            className="px-4 py-2 rounded-xl text-sm font-medium bg-blue-500/30 text-blue-200 hover:bg-blue-500/40 disabled:opacity-30"
-                        >
-                            ➤
-                        </button>
-                    </div>
-                </div>
+                    {/* 消息列表 */}
+                    <div className="h-[280px] overflow-y-auto p-3 space-y-3">
+                        {messages.map(msg => (
+                            <div
+                                key={msg.id}
+                                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                                <div
+                                    className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.role === 'user'
+                                            ? 'bg-blue-500/30 text-white/90'
+                                            : msg.role === 'system'
+                                                ? 'bg-green-500/20 text-green-200'
+                                                : msg.type === 'error'
+                                                    ? 'bg-red-500/20 text-red-200'
+                                                    : 'bg-white/10 text-white/80'
+                                        }`}
+                                >
+                                    {msg.type === 'image' && msg.imageUrl ? (
+                                        <div>
+                                            <img
+                                                src={msg.imageUrl}
+                                                alt="Generated"
+                                                className="max-w-full max-h-[200px] rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                                onClick={() => setPreviewImage(msg.imageUrl!)}
+                                            />
+                                            <p className="text-xs text-white/50 mt-1">点击图片放大查看</p>
 
-                {/* 状态栏 */}
-                <div className="px-3 py-1.5 border-t border-white/5 flex items-center justify-between text-xs text-white/30">
-                    <span>
-                        {activeMode === 'inspiration'
-                            ? IMAGE_MODELS.find(m => m.id === imageModel)?.name
-                            : CHAT_MODELS.find(m => m.id === chatModel)?.name}
-                    </span>
-                    <span>v2.3 | configMerger + validator</span>
+                                            {/* 保存区域 */}
+                                            {msg.subMode && (
+                                                <div className="mt-3 p-2 bg-black/20 rounded-lg">
+                                                    {editingName?.id === msg.id ? (
+                                                        <div className="flex gap-2 items-center">
+                                                            <input
+                                                                type="text"
+                                                                value={editingName.name}
+                                                                onChange={e => setEditingName({ ...editingName, name: e.target.value })}
+                                                                className="flex-1 bg-white/10 text-white/90 text-sm rounded px-2 py-1 border border-white/20"
+                                                                placeholder="输入名称"
+                                                            />
+                                                            <button
+                                                                onClick={() => handleSavePreset(msg, editingName.name)}
+                                                                disabled={savingId === msg.id}
+                                                                className="px-2 py-1 bg-green-500/30 text-green-200 rounded text-sm hover:bg-green-500/40 disabled:opacity-50"
+                                                            >
+                                                                {savingId === msg.id ? '...' : '确定'}
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setEditingName(null)}
+                                                                className="px-2 py-1 bg-white/10 text-white/60 rounded text-sm hover:bg-white/20"
+                                                            >
+                                                                取消
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex gap-2 items-center">
+                                                            <span className="text-sm text-white/60">名称:</span>
+                                                            <span className="text-sm text-white/80">{msg.suggestedName}</span>
+                                                            <button
+                                                                onClick={() => setEditingName({ id: msg.id, name: msg.suggestedName || '' })}
+                                                                className="text-xs text-white/40 hover:text-white/60"
+                                                            >
+                                                                ✏️
+                                                            </button>
+                                                            <div className="flex-1" />
+                                                            <button
+                                                                onClick={() => handleSavePreset(msg)}
+                                                                disabled={savingId === msg.id || !userId}
+                                                                className="px-3 py-1 bg-blue-500/30 text-blue-200 rounded-lg text-sm hover:bg-blue-500/40 disabled:opacity-50"
+                                                            >
+                                                                {savingId === msg.id ? '保存中...' : `💾 ${saveButtonText[msg.subMode]}`}
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                    {!userId && (
+                                                        <p className="text-xs text-yellow-300/60 mt-1">⚠️ 请先登录以保存预设</p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        {isGenerating && (
+                            <div className="flex justify-start">
+                                <div className="bg-white/10 rounded-xl px-4 py-2 text-white/60 animate-pulse">
+                                    🎨 生成中...
+                                </div>
+                            </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* 上传图片预览 */}
+                    {uploadedImage && (
+                        <div className="px-3 py-2 bg-purple-500/10 border-t border-purple-400/20">
+                            <div className="flex items-center gap-2">
+                                <img src={uploadedImage} alt="Upload" className="h-12 w-12 object-cover rounded" />
+                                <span className="text-xs text-purple-200 flex-1">已上传参考图片</span>
+                                <button onClick={clearUploadedImage} className="text-xs text-white/40 hover:text-white/60">✕ 移除</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 输入区 */}
+                    <div className="p-3 border-t border-white/10">
+                        <div className="flex gap-2 items-end">
+                            {/* 图片上传按钮 */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                onChange={handleImageUpload}
+                                className="hidden"
+                            />
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="p-2 rounded-xl bg-white/10 text-white/60 hover:bg-white/15 hover:text-white/80"
+                                title="上传参考图片"
+                            >
+                                📎
+                            </button>
+
+                            {/* 输入框 */}
+                            <textarea
+                                value={inputValue}
+                                onChange={e => setInputValue(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSend();
+                                    }
+                                }}
+                                placeholder={
+                                    activeMode === 'inspiration'
+                                        ? `描述你想要的${INSPIRATION_MODE_INFO[inspirationSubMode].name}...`
+                                        : '描述你的需求...'
+                                }
+                                className="flex-1 bg-white/10 text-white/90 placeholder-white/30 rounded-xl px-4 py-2 text-sm border border-white/10 focus:border-blue-400/50 focus:outline-none resize-none"
+                                rows={2}
+                            />
+
+                            {/* 润色按钮 */}
+                            <button
+                                onClick={handleRefine}
+                                disabled={!inputValue.trim() || isRefining}
+                                className={`px-3 py-2 rounded-xl text-sm font-medium bg-purple-500/30 text-purple-200 hover:bg-purple-500/40 disabled:opacity-30 ${isRefining ? 'animate-pulse' : ''}`}
+                                title="AI 润色提示词"
+                            >
+                                {isRefining ? '...' : '✨'}
+                            </button>
+
+                            {/* 发送按钮 */}
+                            <button
+                                onClick={handleSend}
+                                disabled={isGenerating || !inputValue.trim()}
+                                className="px-4 py-2 rounded-xl text-sm font-medium bg-blue-500/30 text-blue-200 hover:bg-blue-500/40 disabled:opacity-30"
+                            >
+                                ➤
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* 状态栏 */}
+                    <div className="px-3 py-1.5 border-t border-white/5 flex items-center justify-between text-xs text-white/30">
+                        <span>
+                            {activeMode === 'inspiration'
+                                ? `生图: ${IMAGE_MODELS.find(m => m.id === imageModel)?.name}`
+                                : `对话: ${CHAT_MODELS.find(m => m.id === chatModel)?.name}`}
+                        </span>
+                        <span>Enter 发送 | Shift+Enter 换行</span>
+                    </div>
                 </div>
             </div>
-        </div>,
+        </>,
         document.body
     );
 };

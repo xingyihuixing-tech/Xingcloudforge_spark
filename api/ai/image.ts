@@ -1,27 +1,44 @@
 /**
- * XingForge AI - Image Generation API Endpoint
+ * XingForge AI - Image Generation API (Multimodal)
  * 
- * input: POST { prompt, model, subMode }
+ * input: POST { prompt, model, subMode, imageBase64? }
  * output: { url: string, raw: string }
- * pos: 后端 API 端点
+ * pos: 后端 API 端点，支持参考图片
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// 子模式提示词模板
-const SUB_MODE_PROMPTS: Record<string, (prompt: string) => string> = {
-    particleShape: (prompt: string) =>
-        `Generate a particle texture image: ${prompt}. Style: pure black background (#000000), white/light glowing pattern, 256x256 pixels, square PNG, clean geometric shape, sharp edges, suitable for particle system sprite.`,
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '10mb',
+        },
+    },
+};
 
-    background: (prompt: string) =>
-        `Generate a cosmic background: ${prompt}. Style: 16:9 landscape (1920x1080), deep space theme, no text/watermarks, high resolution, rich but comfortable colors, stars/nebula/galaxies.`,
+// 子模式生成提示词
+const SUB_MODE_PROMPTS = {
+    particleShape: {
+        noImage: (prompt: string) =>
+            `Generate a particle sprite texture: ${prompt}. Requirements: Pure black background (#000000), white/light glowing pattern, 1:1 square aspect ratio (256x256 pixels), soft glow edges, suitable for particle system.`,
+        withImage: (prompt: string) =>
+            `Based on the reference image and user description, generate a particle sprite texture: ${prompt}. Requirements: Pure black background (#000000), extract main shape and apply white/light glow effect, 1:1 square aspect ratio (256x256 pixels).`
+    },
 
-    magicCircle: (prompt: string) =>
-        `Generate a magic circle pattern: ${prompt}. Style: pure black background (#000000), glowing neon/energy lines, strictly center-symmetric geometric structure, 512x512 pixels, square PNG with transparency, intricate runes and geometric details.`,
+    background: {
+        noImage: (prompt: string) =>
+            `Generate an HDR equirectangular panorama: ${prompt}. Requirements: 2:1 aspect ratio (2048x1024), deep space cosmic theme, no text or watermarks, suitable for 360 degree skybox.`,
+        withImage: (prompt: string) =>
+            `Transform the reference image into an HDR equirectangular panorama: ${prompt}. Requirements: 2:1 aspect ratio, extend scene for 360 degree coverage, maintain original color palette and mood.`
+    },
 
-    default: (prompt: string) =>
-        `Generate an image: ${prompt}`
+    magicCircle: {
+        noImage: (prompt: string) =>
+            `Generate an image: ${prompt}. Requirements: Pure black background (#000000), 1:1 square aspect ratio (512x512 pixels), centered composition.`,
+        withImage: (prompt: string) =>
+            `Create an image with the reference as visual center: ${prompt}. Requirements: Pure black background (#000000), 1:1 square aspect ratio (512x512 pixels), centered design incorporating the reference.`
+    }
 };
 
 // 生图模型
@@ -46,13 +63,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { prompt, model, subMode } = req.body;
+    const { prompt, model, subMode, imageBase64 } = req.body;
 
     if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required' });
     }
 
-    // 校验模型能力
+    // 校验模型
     const targetModel = model || 'gemini-3-pro-image-preview';
     if (!IMAGE_MODELS.includes(targetModel)) {
         return res.status(400).json({
@@ -66,20 +83,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!apiKey) {
         console.error('Missing IMAGE_API_KEY');
-        console.error('Available env keys:', Object.keys(process.env).filter(k => k.includes('API') || k.includes('PROXY')));
-        return res.status(500).json({ error: 'Image API Config Missing - Check Vercel Environment Variables' });
+        return res.status(500).json({ error: 'Image API Config Missing' });
     }
 
     try {
-        const promptBuilder = SUB_MODE_PROMPTS[subMode] || SUB_MODE_PROMPTS.default;
-        const finalPrompt = promptBuilder(prompt);
+        // 获取提示词模板
+        const templates = SUB_MODE_PROMPTS[subMode as keyof typeof SUB_MODE_PROMPTS] || SUB_MODE_PROMPTS.magicCircle;
+        const hasImage = !!imageBase64;
+        const finalPrompt = hasImage ? templates.withImage(prompt) : templates.noImage(prompt);
 
-        console.log(`[Image Gen] Model: ${targetModel}, SubMode: ${subMode || 'default'}`);
+        console.log(`[Image Gen] Model: ${targetModel}, SubMode: ${subMode}, HasImage: ${hasImage}`);
+
+        // 构建消息内容
+        let messageContent: any;
+
+        if (hasImage) {
+            // 多模态消息
+            messageContent = [
+                {
+                    type: 'image_url',
+                    image_url: {
+                        url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`
+                    }
+                },
+                {
+                    type: 'text',
+                    text: finalPrompt
+                }
+            ];
+        } else {
+            messageContent = finalPrompt;
+        }
 
         const payload = {
             model: targetModel,
             messages: [
-                { role: 'user', content: finalPrompt }
+                { role: 'user', content: messageContent }
             ],
             stream: false
         };
@@ -103,16 +142,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const content = data.choices?.[0]?.message?.content || '';
 
         // 提取 URL
-        const urlMatch = content.match(/https?:\/\/[^\s\)]+/);
+        const urlMatch = content.match(/https?:\/\/[^\s\)\]"']+/);
 
         if (urlMatch) {
             let cleanUrl = urlMatch[0];
-            if (cleanUrl.endsWith(')') || cleanUrl.endsWith(']')) {
-                cleanUrl = cleanUrl.slice(0, -1);
+            // 清理尾部标点
+            while (cleanUrl.match(/[\)\]\.,;:'"]+$/)) {
+                cleanUrl = cleanUrl.replace(/[\)\]\.,;:'"]+$/, '');
             }
             return res.status(200).json({ url: cleanUrl, raw: content });
         } else {
-            return res.status(200).json({ error: 'No image URL found in response', raw: content });
+            // 检查是否有 base64 图片
+            const base64Match = content.match(/data:image\/[^;]+;base64,[A-Za-z0-9+/=]+/);
+            if (base64Match) {
+                return res.status(200).json({ url: base64Match[0], raw: content, isBase64: true });
+            }
+            return res.status(200).json({ error: 'No image found in response', raw: content });
         }
 
     } catch (error: any) {

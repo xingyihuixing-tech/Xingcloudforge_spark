@@ -1,58 +1,43 @@
 /**
- * XingForge AI - Prompt Refine API Endpoint
+ * XingForge AI - Prompt Refine API (Multimodal)
  * 
- * input: POST { prompt, mode, subMode }
+ * input: POST { prompt, mode, subMode, imageBase64? }
  * output: { refined: string }
- * pos: 后端 API 端点，使用 AI 润色用户提示词
+ * pos: AI 润色用户提示词，支持图片分析
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-// 润色系统提示词
-const REFINE_SYSTEM_PROMPTS: Record<string, string> = {
-    inspiration_background: `你是一个专业的 AI 绘画提示词优化专家。用户会给你一个简单的背景图描述，你需要将其扩展为详细的英文提示词。
-要求：
-- 输出纯英文，适合 AI 绘图
-- 描述宇宙/星空主题
-- 包含色彩、氛围、构图细节
-- 16:9 横向构图 (1920x1080)
-- 无文字、无水印
-- 只输出润色后的提示词，不要有任何解释`,
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '10mb',
+        },
+    },
+};
 
-    inspiration_particleShape: `你是一个专业的 AI 绘画提示词优化专家。用户会给你一个粒子形状描述，你需要将其扩展为详细的英文提示词。
-要求：
-- 输出纯英文，适合 AI 绘图
-- 纯黑背景 (#000000)
-- 白色或浅色发光图案
-- 256x256 像素，正方形
-- 简洁几何形状，边缘清晰
-- 只输出润色后的提示词，不要有任何解释`,
+// 润色系统提示词 (宽泛版本)
+const REFINE_PROMPTS: Record<string, string> = {
+    // 粒子形状
+    inspiration_particleShape: `请润色以下用于生成粒子贴图的描述，使其更加详细和适合AI绘图。
+直接输出润色后的中文描述，不要添加任何解释或前缀。`,
 
-    inspiration_magicCircle: `你是一个专业的 AI 绘画提示词优化专家。用户会给你一个法阵描述，你需要将其扩展为详细的英文提示词。
-要求：
-- 输出纯英文，适合 AI 绘图
-- 纯黑背景 (#000000)
-- 发光线条效果 (霓虹/能量风格)
-- 严格中心对称的几何结构
-- 512x512 像素，正方形，支持透明
-- 复杂精细的符文/几何细节
-- 只输出润色后的提示词，不要有任何解释`,
+    // 背景图
+    inspiration_background: `请润色以下用于生成星空背景的描述，使其更加详细和适合AI绘图。
+直接输出润色后的中文描述，不要添加任何解释或前缀。`,
 
-    creator: `你是一个专业的星球特效配置专家。用户会给你一个星球描述，你需要将其扩展为详细的配置需求描述。
-要求：
-- 输出中文
-- 描述星球的视觉效果、颜色、氛围
-- 建议使用哪些效果模块（粒子核心、实体核心、能量罩、螺旋环、粒子环、环带等）
-- 描述每个效果的大致参数方向
-- 只输出润色后的描述，不要有任何解释`,
+    // 法阵图 (宽泛，不限主题)
+    inspiration_magicCircle: `请润色以下用于生成图像的描述，使其更加详细和适合AI绘图。
+直接输出润色后的中文描述，不要添加任何解释或前缀。`,
 
-    modifier: `你是一个专业的星球特效配置专家。用户会给你一个修改需求，你需要将其扩展为详细的修改描述。
-要求：
-- 输出中文
-- 明确指出需要修改哪些参数
-- 描述修改的方向和程度
-- 只输出润色后的描述，不要有任何解释`
+    // 创造模式
+    creator: `请润色以下用于创建星球特效的描述，扩展为详细的视觉效果描述。
+直接输出润色后的中文描述，不要添加任何解释或前缀。`,
+
+    // 修改模式
+    modifier: `请润色以下用于修改星球配置的描述，明确指出需要调整的参数方向。
+直接输出润色后的中文描述，不要添加任何解释或前缀。`
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -70,7 +55,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { prompt, mode, subMode } = req.body;
+    const { prompt, mode, subMode, imageBase64 } = req.body;
 
     if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required' });
@@ -82,9 +67,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         systemPromptKey = `inspiration_${subMode}`;
     }
 
-    const systemPrompt = REFINE_SYSTEM_PROMPTS[systemPromptKey] || REFINE_SYSTEM_PROMPTS.creator;
+    const baseSystemPrompt = REFINE_PROMPTS[systemPromptKey] || REFINE_PROMPTS.creator;
 
-    // 使用快速模型
+    // 如果有图片，添加图片分析指令
+    const systemPrompt = imageBase64
+        ? `${baseSystemPrompt}\n\n用户上传了一张参考图片，请分析图片特征并融入你的润色描述中。`
+        : baseSystemPrompt;
+
+    // 使用对话模型
     const baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
     const apiKey = process.env.CHAT_API_KEY;
 
@@ -94,18 +84,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
+        // 构建消息 (支持多模态)
+        let userContent: any;
+
+        if (imageBase64) {
+            // 多模态消息
+            userContent = [
+                {
+                    type: 'image_url',
+                    image_url: {
+                        url: imageBase64.startsWith('data:') ? imageBase64 : `data:image/png;base64,${imageBase64}`
+                    }
+                },
+                {
+                    type: 'text',
+                    text: `用户描述: ${prompt}`
+                }
+            ];
+        } else {
+            userContent = `用户描述: ${prompt}`;
+        }
+
         const payload = {
-            model: 'claude-haiku-4-5-20251001',  // 使用快速模型
+            model: 'claude-haiku-4-5-20251001',  // 快速模型
             messages: [
                 { role: 'system', content: systemPrompt },
-                { role: 'user', content: prompt }
+                { role: 'user', content: userContent }
             ],
             temperature: 0.7,
             stream: false,
             max_tokens: 500
         };
 
-        console.log(`[Refine] Mode: ${mode}, SubMode: ${subMode}`);
+        console.log(`[Refine] Mode: ${mode}, SubMode: ${subMode}, HasImage: ${!!imageBase64}`);
 
         const proxyRes = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
@@ -123,9 +134,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const data = await proxyRes.json();
-        const refined = data.choices?.[0]?.message?.content || prompt;
+        let refined = data.choices?.[0]?.message?.content || prompt;
 
-        return res.status(200).json({ refined: refined.trim() });
+        // 清理结果，只保留纯净的中文描述
+        refined = refined.trim();
+        // 移除可能的引号
+        if ((refined.startsWith('"') && refined.endsWith('"')) ||
+            (refined.startsWith('「') && refined.endsWith('」'))) {
+            refined = refined.slice(1, -1);
+        }
+
+        return res.status(200).json({ refined });
 
     } catch (error: any) {
         console.error('Refine Failed:', error);
