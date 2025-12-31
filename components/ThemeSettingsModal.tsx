@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useUser } from '../contexts/UserContext';
 
 import { AppSettings, PlanetSceneSettings, ThemeConfig, MaterialSettings, MaterialPreset, ButtonMaterialConfig, MaterialType } from '../types';
 import { BACKGROUND_IMAGES, DEFAULT_COLOR_SCHEMES, createDefaultMaterialConfig } from '../constants';
@@ -40,8 +41,20 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     userMaterialPresets, setUserMaterialPresets
 }) => {
     const [activeTab, setActiveTab] = useState<TabType>('theme');
+    const [bgSubTab, setBgSubTab] = useState<'builtin' | 'ai'>('builtin');
 
+    // Cloud presets from user context
+    const { loadCloudConfig } = useUser();
+    const [cloudBackgroundPresets, setCloudBackgroundPresets] = useState<{ id: string; name: string; url: string }[]>([]);
 
+    // Load cloud presets on mount
+    useEffect(() => {
+        loadCloudConfig().then(config => {
+            if (config?.backgroundPresets) {
+                setCloudBackgroundPresets(config.backgroundPresets);
+            }
+        });
+    }, [loadCloudConfig]);
 
     // Use effects to sync or load defaults if needed
 
@@ -128,23 +141,66 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="text-xs text-white/40 uppercase tracking-wider font-semibold mb-2 block">全景图选择</label>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {BACKGROUND_IMAGES.map((img: any) => (
+                                        <div className="flex items-center justify-between mb-2">
+                                            <label className="text-xs text-white/40 uppercase tracking-wider font-semibold">全景图选择</label>
+                                            <div className="flex gap-1">
                                                 <button
-                                                    key={img.value}
-                                                    onClick={() => updateBackground({ panoramaUrl: img.value })}
-                                                    className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2
-                                                        ${currentBg?.panoramaUrl === img.value
-                                                            ? 'bg-cyan-500/20 border-cyan-500/50 text-white'
-                                                            : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
-                                                        }`}
+                                                    onClick={() => setBgSubTab('builtin')}
+                                                    className={`px-2 py-0.5 text-[10px] rounded ${bgSubTab === 'builtin' ? 'bg-cyan-500/20 text-cyan-400' : 'text-white/40 hover:text-white/60'}`}
                                                 >
-                                                    <div className="w-2 h-2 rounded-full bg-cyan-400" style={{ opacity: currentBg?.panoramaUrl === img.value ? 1 : 0 }} />
-                                                    {img.label}
+                                                    内置
                                                 </button>
-                                            ))}
+                                                <button
+                                                    onClick={() => setBgSubTab('ai')}
+                                                    className={`px-2 py-0.5 text-[10px] rounded ${bgSubTab === 'ai' ? 'bg-purple-500/20 text-purple-400' : 'text-white/40 hover:text-white/60'}`}
+                                                >
+                                                    ✨ AI ({cloudBackgroundPresets.length})
+                                                </button>
+                                            </div>
                                         </div>
+
+                                        {bgSubTab === 'builtin' ? (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {BACKGROUND_IMAGES.map((img: any) => (
+                                                    <button
+                                                        key={img.value}
+                                                        onClick={() => updateBackground({ panoramaUrl: img.value })}
+                                                        className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2
+                                                            ${currentBg?.panoramaUrl === img.value
+                                                                ? 'bg-cyan-500/20 border-cyan-500/50 text-white'
+                                                                : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
+                                                            }`}
+                                                    >
+                                                        <div className="w-2 h-2 rounded-full bg-cyan-400" style={{ opacity: currentBg?.panoramaUrl === img.value ? 1 : 0 }} />
+                                                        {img.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {cloudBackgroundPresets.length > 0 ? (
+                                                    cloudBackgroundPresets.map((preset) => (
+                                                        <button
+                                                            key={preset.id}
+                                                            onClick={() => updateBackground({ panoramaUrl: preset.url })}
+                                                            className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2
+                                                                ${currentBg?.panoramaUrl === preset.url
+                                                                    ? 'bg-purple-500/20 border-purple-500/50 text-white'
+                                                                    : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
+                                                                }`}
+                                                        >
+                                                            <div className="w-2 h-2 rounded-full bg-purple-400" style={{ opacity: currentBg?.panoramaUrl === preset.url ? 1 : 0 }} />
+                                                            {preset.name}
+                                                        </button>
+                                                    ))
+                                                ) : (
+                                                    <div className="col-span-2 text-center py-4 text-white/30 text-xs">
+                                                        暂无 AI 生成的背景图<br />
+                                                        <span className="text-white/20">使用 AI 助手 → 灵感模式 → 背景图 生成</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     <RangeControl
