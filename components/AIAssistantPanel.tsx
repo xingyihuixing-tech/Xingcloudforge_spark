@@ -143,12 +143,16 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         if (!inputValue.trim()) return;
 
         if (activeMode === 'inspiration') {
+            // 灵感模式：使用模板润色
             const template = REFINE_TEMPLATES[inspirationSubMode];
             const refined = template(inputValue.trim());
             setRefinedPrompt(refined);
         } else {
-            // 创造/修改模式：智能推荐范围
-            const suggested = suggestScopeFromDescription(inputValue);
+            // 创造/修改模式：生成详细的星球描述提示词
+            const userInput = inputValue.trim();
+
+            // 智能推荐范围
+            const suggested = suggestScopeFromDescription(userInput);
             if (suggested.length > 0 && Object.keys(scopeSelection).length === 0) {
                 const newSelection = createDefaultScopeSelection();
                 const filtered: ScopeSelection = {};
@@ -160,7 +164,32 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 setScopeSelection(filtered);
                 setScopeCollapsed(false);
             }
-            setRefinedPrompt(`[AI 推荐范围已更新: ${suggested.join(', ')}]`);
+
+            // 创造模式的润色模板
+            const creatorRefineTemplate = (input: string) => {
+                const parts = [];
+                parts.push(`创建一个完整的星球配置:`);
+                parts.push(`主题描述: ${input}`);
+                parts.push('');
+                parts.push('要求:');
+                parts.push('- 生成富有创意的中文名称');
+                parts.push('- 参数值要有美学考量，不要使用默认值');
+                parts.push('- 颜色搭配要协调统一');
+                if (suggested.length > 0) {
+                    parts.push(`- 重点配置以下效果: ${suggested.join(', ')}`);
+                }
+                return parts.join('\n');
+            };
+
+            const modifierRefineTemplate = (input: string) => {
+                return `修改现有星球配置:\n${input}\n\n要求:\n- 只修改与描述相关的参数\n- 保持其他参数不变\n- 不要修改名称`;
+            };
+
+            const refined = activeMode === 'creator'
+                ? creatorRefineTemplate(userInput)
+                : modifierRefineTemplate(userInput);
+
+            setRefinedPrompt(refined);
         }
     }, [inputValue, activeMode, inspirationSubMode, scopeSelection]);
 
@@ -366,8 +395,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                             key={mode}
                             onClick={() => setActiveMode(mode)}
                             className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
-                                    ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
-                                    : 'text-white/50 hover:text-white/70'
+                                ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
+                                : 'text-white/50 hover:text-white/70'
                                 }`}
                         >
                             {mode === 'creator' ? '🪐 创造' : mode === 'inspiration' ? '🎨 灵感' : '🔧 修改'}
@@ -417,8 +446,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     key={subMode}
                                     onClick={() => setInspirationSubMode(subMode)}
                                     className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
-                                            ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
-                                            : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                        ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
+                                        : 'bg-white/5 text-white/50 hover:bg-white/10'
                                         }`}
                                 >
                                     {info.icon} {info.name}
@@ -468,12 +497,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         >
                             <div
                                 className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.role === 'user'
-                                        ? 'bg-blue-500/30 text-white/90'
-                                        : msg.role === 'system'
-                                            ? 'bg-green-500/20 text-green-200'
-                                            : msg.type === 'error'
-                                                ? 'bg-red-500/20 text-red-200'
-                                                : 'bg-white/10 text-white/80'
+                                    ? 'bg-blue-500/30 text-white/90'
+                                    : msg.role === 'system'
+                                        ? 'bg-green-500/20 text-green-200'
+                                        : msg.type === 'error'
+                                            ? 'bg-red-500/20 text-red-200'
+                                            : 'bg-white/10 text-white/80'
                                     }`}
                             >
                                 {msg.type === 'image' && msg.imageUrl ? (

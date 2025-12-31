@@ -31,7 +31,7 @@ rendering chunks...
 computing gzip size...
 [2mdist/[22m[32mindex.html                 [39m[1m[2m    2.12 kB[22m[1m[22m[2m 鈹?gzip:   0.90 kB[22m
 [2mdist/[22m[35massets/index-d8RUJbYB.css  [39m[1m[2m    5.04 kB[22m[1m[22m[2m 鈹?gzip:   1.51 kB[22m
-[2mdist/[22m[36massets/index-BKUBjA_Y.js   [39m[1m[33m1,808.49 kB[39m[22m[2m 鈹?gzip: 471.10 kB[22m
+[2mdist/[22m[36massets/index-DwcRNQHQ.js   [39m[1m[33m1,809.49 kB[39m[22m[2m 鈹?gzip: 471.49 kB[22m
 [33m
 (!) Some chunks are larger than 500 kB after min
 ification. Consider:
@@ -42,4 +42,4 @@ cation
 ation-options/#output-manualchunks
 - Adjust chunk size limit for this warning via b
 uild.chunkSizeWarningLimit.[39m
-[32m鉁?built in 3.06s[39m
+[32m鉁?built in 2.95s[39m

@@ -1063,13 +1063,7 @@ const App: React.FC = () => {
             borderTop: 'none'
           }}
         >
-          {/* AI 助手面板 */}
-          <AIAssistantPanel
-            isOpen={showAIPanel}
-            onClose={() => setShowAIPanel(false)}
-            onApplySettings={setSettings}
-            onApplyPlanetSettings={setPlanetSettings}
-          />      <button
+          <button
             onClick={() => setAppMode('nebula')}
             className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
             style={{
@@ -1305,6 +1299,41 @@ const App: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* AI 助手按钮 */}
+      <button
+        onClick={() => setShowAIPanel(true)}
+        className="fixed bottom-6 left-6 z-[200] px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium shadow-lg hover:shadow-xl transition-all hover:scale-105"
+        style={{ backdropFilter: 'blur(10px)' }}
+      >
+        ✨ AI
+      </button>
+
+      {/* AI 助手面板 */}
+      <AIAssistantPanel
+        isOpen={showAIPanel}
+        onClose={() => setShowAIPanel(false)}
+        planetSettings={planetSettings}
+        onAddPlanet={(planet) => {
+          setPlanetSettings(prev => ({
+            ...prev,
+            enabled: true,
+            planets: [...prev.planets, planet]
+          }));
+        }}
+        onUpdatePlanet={(id, updates) => {
+          setPlanetSettings(prev => ({
+            ...prev,
+            planets: prev.planets.map(p => p.id === id ? { ...p, ...updates } : p)
+          }));
+        }}
+        onApplyBackground={(url) => {
+          setPlanetSettings(prev => ({
+            ...prev,
+            background: { ...prev.background, panoramaUrl: url, enabled: true }
+          }));
+        }}
+      />
     </div >
   );
 };
