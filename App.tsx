@@ -9,10 +9,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
-import MaterialEditor from './components/MaterialEditor';
 import GestureHandler from './components/GestureHandler';
 import { UserProvider, useUser } from './contexts/UserContext';
-import UserMenu from './components/UserMenu';
+import { UserMenu } from './components/UserMenu';
+import { UserLogin } from './components/UserLogin';
 import AIAssistantPanel from './components/AIAssistantPanel';
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
 import {
