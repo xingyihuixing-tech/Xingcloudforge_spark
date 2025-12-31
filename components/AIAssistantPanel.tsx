@@ -1,429 +1,509 @@
+/**
+ * XingForge AI - Main Assistant Panel
+ * 
+ * input: isOpen, onClose, settings callbacks
+ * output: AI 交互面板 UI
+ * pos: AI 系统的主入口组件
+ * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
+ */
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { SYSTEM_PROMPT_TEMPLATE } from '../utils/ai/schema';
 
-/**
- * AI Assistant Panel (XingForge AI)
- */
+// 工具导入
+import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
+import { REFINE_TEMPLATES, INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
+import { ScopeSelection, createDefaultScopeSelection, suggestScopeFromDescription } from '../utils/ai/schemaBuilder';
+import { buildSystemPrompt, buildUserPrompt, AIMode } from '../utils/ai/promptBuilder';
+
+// 组件导入
+import { ScopeSelector } from './ai/ScopeSelector';
+import { PlanetSelector } from './ai/PlanetSelector';
+
+// ============================================
+// 类型定义
+// ============================================
 
 interface AIAssistantPanelProps {
     isOpen: boolean;
     onClose: () => void;
     onApplySettings?: (settings: any) => void;
     onApplyPlanetSettings?: (settings: any) => void;
+    planets?: Array<{ id: string; name: string; enabled: boolean }>;
 }
-
-// 提取 JSON 的辅助函数
-const extractJson = (text: string): any | null => {
-    try {
-        return JSON.parse(text);
-    } catch (e) {
-        const match = text.match(/```json\s*([\s\S]*?)\s*```/);
-        if (match) {
-            try { return JSON.parse(match[1]); } catch (e2) { return null; }
-        }
-        const match2 = text.match(/\{[\s\S]*\}/);
-        if (match2) {
-            try { return JSON.parse(match2[0]); } catch (e3) { return null; }
-        }
-        return null;
-    }
-};
-
-type AIChatMode = 'inspiration' | 'creator' | 'modifier';
-
-// === 模型常量定义 ===
-const CHAT_MODELS = [
-    { id: 'claude-sonnet-4-5-20250929', name: 'Claude 3.5 Sonnet (默认)' },
-    { id: 'claude-opus-4-5-20251101', name: 'Claude 3.5 Opus' },
-    { id: 'claude-haiku-4-5-20251001', name: 'Claude 3.5 Haiku' },
-    { id: 'gemini-2.5-pro-thinking-512', name: 'Gemini 2.5 Pro Thinking' },
-    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro Preview' },
-    { id: 'claude-sonnet-4-5-20250929-thinking', name: 'Claude Sonnet Thinking' }
-];
-
-const IMAGE_MODELS = [
-    { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Pro Image (默认)' },
-    { id: 'gemini-3-pro-image-preview-flatfee', name: 'Gemini 3 Pro Flatfee' },
-    { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash Image' },
-    { id: 'gemini-3-pro-preview-thinking', name: 'Gemini 3 Pro Thinking' }
-];
 
 interface ChatMessage {
     id: string;
     role: 'user' | 'assistant' | 'system';
     content: string;
-    type?: 'text' | 'json-code' | 'image';
-    thinking?: boolean;
+    type?: 'text' | 'json' | 'image' | 'refined';
     jsonData?: any;
     imageUrl?: string;
 }
 
-const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({ isOpen, onClose, onApplySettings, onApplyPlanetSettings }) => {
-    // === 状态管理 ===
-    const [activeMode, setActiveMode] = useState<AIChatMode>('inspiration');
+// ============================================
+// 辅助函数
+// ============================================
+
+const extractJson = (text: string): any | null => {
+    try {
+        return JSON.parse(text);
+    } catch {
+        const match = text.match(/```json\s*([\s\S]*?)\s*```/);
+        if (match) {
+            try { return JSON.parse(match[1]); } catch { }
+        }
+        const match2 = text.match(/\{[\s\S]*\}/);
+        if (match2) {
+            try { return JSON.parse(match2[0]); } catch { }
+        }
+        return null;
+    }
+};
+
+const generateId = () => Math.random().toString(36).substring(2, 9);
+
+// ============================================
+// 主组件
+// ============================================
+
+const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
+    isOpen,
+    onClose,
+    onApplySettings,
+    onApplyPlanetSettings,
+    planets = []
+}) => {
+    // === 模式状态 ===
+    const [activeMode, setActiveMode] = useState<AIMode>('inspiration');
+    const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
+
+    // === 模型选择 ===
+    const [chatModel, setChatModel] = useState(DEFAULT_CHAT_MODEL);
+    const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
     const [showSettings, setShowSettings] = useState(false);
 
-    // 模型选择
-    const [chatModel, setChatModel] = useState(CHAT_MODELS[0].id);
-    const [imageModel, setImageModel] = useState(IMAGE_MODELS[0].id);
+    // === 范围选择 ===
+    const [scopeSelection, setScopeSelection] = useState<ScopeSelection>({});
+    const [scopeCollapsed, setScopeCollapsed] = useState(true);
 
-    const [selectedImage, setSelectedImage] = useState<string | null>(null);
+    // === 修改模式 ===
+    const [selectedPlanetId, setSelectedPlanetId] = useState<string | null>(null);
+
+    // === 聊天状态 ===
     const [messages, setMessages] = useState<ChatMessage[]>([
-        { id: '1', role: 'assistant', content: '我是 XingForge AI 助手。您可以让我帮忙画图(灵感模式)、生成星球配置(创造模式)，或者修改当前场景。支持拖拽图片进行分析！' }
+        { id: '1', role: 'assistant', content: '我是 XingForge AI 助手。选择模式后开始创作！' }
     ]);
     const [inputValue, setInputValue] = useState('');
+    const [refinedPrompt, setRefinedPrompt] = useState<string | null>(null);
     const [isThinking, setIsThinking] = useState(false);
 
-    // === 窗口拖拽逻辑 ===
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight - 500 });
+    // === 窗口拖拽 ===
+    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight - 550 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
-    const panelRef = useRef<HTMLDivElement>(null);
+    const messagesEndRef = useRef<HTMLDivElement>(null);
 
+    // 拖拽处理
     const handleDragStart = (e: React.MouseEvent) => {
         if ((e.target as HTMLElement).closest('.drag-handle')) {
             setIsDragging(true);
             dragStartPos.current = { x: e.clientX - position.x, y: e.clientY - position.y };
         }
     };
-    const handleDragMove = useCallback((e: MouseEvent) => {
-        if (isDragging) setPosition({ x: e.clientX - dragStartPos.current.x, y: e.clientY - dragStartPos.current.y });
-    }, [isDragging]);
-    const handleDragEnd = useCallback(() => setIsDragging(false), []);
 
     useEffect(() => {
+        const handleMove = (e: MouseEvent) => {
+            if (isDragging) {
+                setPosition({ x: e.clientX - dragStartPos.current.x, y: e.clientY - dragStartPos.current.y });
+            }
+        };
+        const handleUp = () => setIsDragging(false);
+
         if (isDragging) {
-            window.addEventListener('mousemove', handleDragMove);
-            window.addEventListener('mouseup', handleDragEnd);
-        } else {
-            window.removeEventListener('mousemove', handleDragMove);
-            window.removeEventListener('mouseup', handleDragEnd);
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('mouseup', handleUp);
         }
         return () => {
-            window.removeEventListener('mousemove', handleDragMove);
-            window.removeEventListener('mouseup', handleDragEnd);
+            window.removeEventListener('mousemove', handleMove);
+            window.removeEventListener('mouseup', handleUp);
         };
-    }, [isDragging, handleDragMove, handleDragEnd]);
+    }, [isDragging]);
 
-    // === 文件拖拽逻辑 (Vision) ===
-    const handleFileDrop = (e: React.DragEvent) => {
-        e.preventDefault(); e.stopPropagation();
-        const file = e.dataTransfer.files[0];
-        if (file && file.type.startsWith('image/')) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                if (event.target?.result) setSelectedImage(event.target.result as string);
-            };
-            reader.readAsDataURL(file);
+    // 自动滚动
+    useEffect(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
+
+    // === 润色功能 ===
+    const handleRefine = useCallback(() => {
+        if (!inputValue.trim()) return;
+
+        if (activeMode === 'inspiration') {
+            const template = REFINE_TEMPLATES[inspirationSubMode];
+            const refined = template(inputValue.trim());
+            setRefinedPrompt(refined);
+        } else {
+            // 创造/修改模式：智能推荐范围
+            const suggested = suggestScopeFromDescription(inputValue);
+            if (suggested.length > 0 && Object.keys(scopeSelection).length === 0) {
+                const newSelection = createDefaultScopeSelection();
+                // 只保留推荐的效果
+                const filtered: ScopeSelection = {};
+                for (const effect of suggested) {
+                    if (newSelection[effect]) {
+                        filtered[effect] = newSelection[effect];
+                    }
+                }
+                setScopeSelection(filtered);
+                setScopeCollapsed(false);
+            }
+            setRefinedPrompt(`[AI 推荐配置范围已更新]`);
         }
-    };
+    }, [inputValue, activeMode, inspirationSubMode, scopeSelection]);
 
-    // === 消息发送逻辑 ===
-    const handleSendMessage = async () => {
-        if (!inputValue.trim() && !selectedImage) return;
+    // === 发送消息 ===
+    const handleSend = useCallback(async () => {
+        const prompt = refinedPrompt || inputValue.trim();
+        if (!prompt || isThinking) return;
 
-        const userMsg: ChatMessage = {
-            id: Date.now().toString(),
-            role: 'user',
-            content: inputValue,
-            imageUrl: selectedImage || undefined
-        };
-
+        // 添加用户消息
+        const userMsg: ChatMessage = { id: generateId(), role: 'user', content: prompt };
         setMessages(prev => [...prev, userMsg]);
         setInputValue('');
-        const currentImage = selectedImage;
-        setSelectedImage(null);
+        setRefinedPrompt(null);
         setIsThinking(true);
 
         try {
-            // === 分支 1: 灵感模式 (调用生图 API) ===
-            if (activeMode === 'inspiration' && !currentImage) {
-                const response = await fetch('/api/ai/image', {
+            if (activeMode === 'inspiration') {
+                // 灵感模式：生成图片
+                const res = await fetch('/api/ai/image', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        prompt: inputValue,
-                        model: imageModel
-                    }),
+                        prompt: prompt,
+                        model: imageModel,
+                        subMode: inspirationSubMode
+                    })
                 });
+                const data = await res.json();
 
-                if (!response.ok) throw new Error('Image Gen Failed');
-                const data = await response.json();
-
-                const aiMsg: ChatMessage = {
-                    id: (Date.now() + 1).toString(),
-                    role: 'assistant',
-                    content: '为您生成了以下图片：',
-                    type: 'image',
-                    imageUrl: data.url
+                if (data.url) {
+                    setMessages(prev => [...prev, {
+                        id: generateId(),
+                        role: 'assistant',
+                        content: `✨ 已生成 ${INSPIRATION_MODE_INFO[inspirationSubMode].name}`,
+                        type: 'image',
+                        imageUrl: data.url
+                    }]);
+                } else {
+                    setMessages(prev => [...prev, {
+                        id: generateId(),
+                        role: 'assistant',
+                        content: data.error || '图片生成失败'
+                    }]);
+                }
+            } else {
+                // 创造/修改模式：生成 JSON
+                const context = {
+                    mode: activeMode,
+                    selection: scopeSelection,
+                    isSceneMode: false,
+                    targetPlanetId: activeMode === 'modifier' ? selectedPlanetId : undefined
                 };
-                setMessages(prev => [...prev, aiMsg]);
-                return;
+
+                const systemPrompt = buildSystemPrompt(context);
+                const userPrompt = buildUserPrompt(prompt, context);
+
+                const res = await fetch('/api/ai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        model: chatModel,
+                        systemPrompt,
+                        messages: [{ role: 'user', content: userPrompt }]
+                    })
+                });
+                const data = await res.json();
+                const content = data.content || '';
+                const jsonData = extractJson(content);
+
+                setMessages(prev => [...prev, {
+                    id: generateId(),
+                    role: 'assistant',
+                    content: jsonData ? '✨ 已生成配置' : content,
+                    type: jsonData ? 'json' : 'text',
+                    jsonData
+                }]);
             }
-
-            // === 分支 2: 创造/修改模式 (调用 Chat API) ===
-            const recentHistory = messages.slice(-6).map(m => ({ role: m.role, content: m.content }));
-
-            let currentMessageContent: any = inputValue;
-            if (currentImage) {
-                currentMessageContent = [
-                    { type: 'text', text: inputValue || "Analyze this image" },
-                    { type: 'image_url', image_url: { url: currentImage } }
-                ];
-            }
-
-            recentHistory.push({ role: 'user', content: currentMessageContent });
-
-            const systemPrompt = SYSTEM_PROMPT_TEMPLATE(activeMode);
-
-            const response = await fetch('/api/ai/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    messages: recentHistory,
-                    model: chatModel,
-                    systemPrompt: systemPrompt
-                }),
-            });
-
-            if (!response.ok) throw new Error('AI Response Error');
-
-            const data = await response.json();
-            const jsonData = extractJson(data.content);
-            const isJson = !!jsonData;
-
-            const aiMsg: ChatMessage = {
-                id: (Date.now() + 1).toString(),
+        } catch (err: any) {
+            setMessages(prev => [...prev, {
+                id: generateId(),
                 role: 'assistant',
-                content: data.content,
-                type: isJson ? 'json-code' : 'text',
-                jsonData: jsonData
-            };
-
-            setMessages(prev => [...prev, aiMsg]);
-
-        } catch (error) {
-            console.error('Chat Error:', error);
-            const errorMsg: ChatMessage = {
-                id: Date.now().toString(),
-                role: 'assistant',
-                content: '⚠️ 请求失败，请检查网络或配置。',
-            };
-            setMessages(prev => [...prev, errorMsg]);
+                content: `❌ 错误: ${err.message}`
+            }]);
         } finally {
             setIsThinking(false);
         }
-    };
+    }, [inputValue, refinedPrompt, activeMode, inspirationSubMode, imageModel, chatModel, scopeSelection, selectedPlanetId, isThinking]);
 
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
+    // === 应用配置 ===
+    const handleApply = useCallback((jsonData: any) => {
+        if (activeMode === 'modifier' && onApplyPlanetSettings) {
+            onApplyPlanetSettings(jsonData);
+        } else if (onApplySettings) {
+            onApplySettings(jsonData);
         }
-    };
+        setMessages(prev => [...prev, {
+            id: generateId(),
+            role: 'system',
+            content: '✅ 配置已应用！'
+        }]);
+    }, [activeMode, onApplySettings, onApplyPlanetSettings]);
 
     if (!isOpen) return null;
 
+    // ============================================
+    // 渲染
+    // ============================================
+
     return createPortal(
         <div
-            ref={panelRef}
-            className="fixed z-[9999] flex flex-col ai-glass-panel rounded-2xl overflow-hidden transition-opacity duration-300 animate-[ai-float_6s_ease-in-out_infinite]"
-            style={{
-                left: position.x, top: position.y,
-                width: '600px', height: '450px',
-                opacity: isOpen ? 1 : 0,
-                pointerEvents: 'auto',
-                boxShadow: isThinking ? '0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 20px rgba(99, 102, 241, 0.15)' : '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
-            }}
+            className="fixed z-[9999]"
+            style={{ left: position.x, top: position.y }}
             onMouseDown={handleDragStart}
         >
-            <div className="ai-glow-effect" />
-
-            {/* === 顶部标题栏 === */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 drag-handle cursor-move select-none bg-white/5">
-                <div className="flex items-center gap-2">
-                    <div className="relative w-5 h-5 flex items-center justify-center">
-                        <div className={`absolute inset-0 rounded-full border border-indigo-400 ${isThinking ? 'animate-[spin_2s_linear_infinite]' : ''}`} style={{ borderTopColor: 'transparent' }} />
-                        <div className={`w-3 h-3 rounded-full bg-indigo-500 ${isThinking ? 'animate-pulse' : ''}`} />
+            <div
+                className="w-[600px] rounded-2xl overflow-hidden shadow-2xl"
+                style={{
+                    background: 'linear-gradient(180deg, rgba(15,15,25,0.98) 0%, rgba(10,10,20,0.98) 100%)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    boxShadow: '0 0 60px rgba(100,100,255,0.1)'
+                }}
+            >
+                {/* 标题栏 */}
+                <div className="drag-handle flex items-center justify-between px-4 py-3 border-b border-white/10 cursor-move">
+                    <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 animate-pulse" />
+                        <span className="text-white/90 font-semibold">XINGFORGE AI</span>
                     </div>
-                    <span className="text-sm font-bold text-white tracking-wider flex items-center gap-1">
-                        XINGFORGE <span className="text-indigo-400">AI</span>
-                    </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                    {/* Settings Toggle */}
-                    <button
-                        onClick={() => setShowSettings(!showSettings)}
-                        className={`text-gray-400 hover:text-white transition-colors p-1 rounded hover:bg-white/10 ${showSettings ? 'text-indigo-400 bg-white/10' : ''}`}
-                        title="模型设置"
-                    >
-                        ⚙️
-                    </button>
-                    <button onClick={onClose} className="text-gray-400 hover:text-white w-6 h-6 flex items-center justify-center rounded hover:bg-white/10">✕</button>
-                </div>
-            </div>
-
-            {/* === 设置面板 Overlay === */}
-            {showSettings && (
-                <div className="absolute top-[50px] right-0 w-64 bg-[#1a1b26] border border-white/10 rounded-bl-xl shadow-2xl z-50 p-4 animate-[slide-in-right_0.2s_ease-out]">
-                    <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">Model Configuration</h3>
-                    <div className="mb-4">
-                        <label className="block text-xs text-indigo-300 mb-1">Chat & Logic Model</label>
-                        <select
-                            value={chatModel} onChange={(e) => setChatModel(e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:border-indigo-500 outline-none"
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowSettings(!showSettings)}
+                            className="p-1.5 rounded-lg hover:bg-white/10 text-white/60 hover:text-white/90"
                         >
-                            {CHAT_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
+                            ⚙️
+                        </button>
+                        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-white/60">
+                            ✕
+                        </button>
                     </div>
-                    <div>
-                        <label className="block text-xs text-pink-300 mb-1">Image Generation Model</label>
-                        <select
-                            value={imageModel} onChange={(e) => setImageModel(e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white focus:border-pink-500 outline-none"
+                </div>
+
+                {/* 模式切换 */}
+                <div className="flex border-b border-white/10">
+                    {(['inspiration', 'creator', 'modifier'] as AIMode[]).map(mode => (
+                        <button
+                            key={mode}
+                            onClick={() => setActiveMode(mode)}
+                            className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
+                                    ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
+                                    : 'text-white/50 hover:text-white/70'
+                                }`}
                         >
-                            {IMAGE_MODELS.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                        </select>
-                    </div>
-                </div>
-            )}
-
-            {/* === 主体区域 === */}
-            <div className="flex flex-1 overflow-hidden">
-                {/* 侧边栏 */}
-                <div className="w-14 border-r border-white/10 flex flex-col items-center py-4 gap-4 bg-black/20">
-                    <ModeButton active={activeMode === 'inspiration'} onClick={() => setActiveMode('inspiration')} icon="🎨" tooltip="灵感模式 (绘图)" />
-                    <ModeButton active={activeMode === 'creator'} onClick={() => setActiveMode('creator')} icon="🪐" tooltip="创造模式 (JSON)" />
-                    <ModeButton active={activeMode === 'modifier'} onClick={() => setActiveMode('modifier')} icon="🔧" tooltip="修改模式" />
+                            {mode === 'inspiration' ? '🎨 灵感' : mode === 'creator' ? '🪐 创造' : '🔧 修改'}
+                        </button>
+                    ))}
                 </div>
 
-                {/* 对话区域 */}
-                <div className="flex-1 flex flex-col relative">
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-track-transparent scrollbar-thumb-white/10">
-                        {messages.map(msg => (
-                            <div key={msg.id} className={`flex w-full ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-[message-fade-in_0.3s_ease-out]`}>
-                                <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-br-none' : 'bg-white/10 text-gray-100 rounded-bl-none border border-white/5'
-                                    }`}>
-                                    {msg.type === 'json-code' ? (
-                                        <div className="flex flex-col gap-2">
-                                            <div className="text-xs text-green-400 font-mono mb-1">✨ 生成了新的配置</div>
-                                            <pre className="text-xs bg-black/50 p-2 rounded overflow-x-auto font-mono text-gray-300">
-                                                {JSON.stringify(msg.jsonData, null, 2).slice(0, 150)}...
-                                            </pre>
-                                            <button
-                                                onClick={() => {
-                                                    if (msg.jsonData) {
-                                                        if (msg.jsonData.planetSettings && onApplyPlanetSettings) {
-                                                            onApplyPlanetSettings((prev: any) => ({ ...prev, ...msg.jsonData.planetSettings }));
-                                                            alert('已应用星球配置！');
-                                                        } else if (msg.jsonData.nebulaInstances && onApplySettings) {
-                                                            onApplySettings((prev: any) => ({ ...prev, nebulaInstances: msg.jsonData.nebulaInstances }));
-                                                            alert('已应用星云场景配置！');
-                                                        } else if (msg.jsonData.radius || msg.jsonData.core) {
-                                                            onApplyPlanetSettings((prev: any) => ({ ...prev, ...msg.jsonData }));
-                                                            alert('已应用混合配置！');
-                                                        } else {
-                                                            if (onApplySettings) onApplySettings((prev: any) => ({ ...prev, ...msg.jsonData }));
-                                                            alert('已应用设置！');
-                                                        }
-                                                    }
-                                                }}
-                                                className="mt-1 bg-green-600 hover:bg-green-500 text-white text-xs py-1.5 px-3 rounded flex items-center gap-1"
-                                            >
-                                                ⚡ 立即应用
-                                            </button>
-                                        </div>
-                                    ) : msg.type === 'image' ? (
-                                        <div className="flex flex-col gap-2">
-                                            <span>{msg.content}</span>
-                                            {msg.imageUrl && (
-                                                <img src={msg.imageUrl} alt="Generated" className="rounded-lg shadow-lg border border-white/20 max-w-full h-auto mt-2" />
-                                            )}
-                                        </div>
-                                    ) : (
-                                        msg.content
-                                    )}
-                                    {/* User Upload Preview */}
-                                    {msg.role === 'user' && msg.imageUrl && (
-                                        <img src={msg.imageUrl} alt="Uploaded" className="mt-2 rounded-lg max-h-32 border border-white/20" />
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                        {isThinking && (
-                            <div className="flex justify-start">
-                                <div className="bg-white/5 rounded-2xl px-4 py-2 flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                                    <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Input Area */}
-                    <div className="p-4 pt-2 relative z-10" onDragOver={(e) => e.preventDefault()} onDrop={handleFileDrop}>
-                        {selectedImage && (
-                            <div className="absolute bottom-full left-4 mb-2">
-                                <div className="relative group">
-                                    <img src={selectedImage} alt="Preview" className="h-16 rounded-lg border border-indigo-500 shadow-lg" />
-                                    <button
-                                        onClick={() => setSelectedImage(null)}
-                                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        ✕
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                        <div className="relative group">
-                            <div className={`absolute -inset-0.5 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 opacity-0 transition-opacity duration-300 ${isThinking ? 'opacity-30' : 'group-focus-within:opacity-50'}`} />
-                            <div className="relative flex items-center bg-black/40 rounded-xl border border-white/10 overflow-hidden">
-                                <input
-                                    type="text"
-                                    value={inputValue}
-                                    onChange={(e) => setInputValue(e.target.value)}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder={
-                                        activeMode === 'inspiration' ? '描述想要生成的画面，或拖入参考图...' :
-                                            activeMode === 'creator' ? '描述一个星球场景 (支持拖图分析)...' :
-                                                '输入修改指令...'
-                                    }
-                                    className="flex-1 bg-transparent border-none text-white px-4 py-3 focus:ring-0 placeholder-gray-500 text-sm"
-                                    disabled={isThinking}
-                                />
-                                <button
-                                    onClick={handleSendMessage}
-                                    disabled={!inputValue.trim() || isThinking}
-                                    className={`px-4 py-2 mr-1 rounded-lg transition-all ${inputValue.trim() ? 'bg-indigo-600 text-white' : 'text-gray-600'}`}
+                {/* 设置面板 */}
+                {showSettings && (
+                    <div className="p-3 border-b border-white/10 bg-black/30">
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-white/50 mb-1 block">对话模型</label>
+                                <select
+                                    value={chatModel}
+                                    onChange={e => setChatModel(e.target.value)}
+                                    className="w-full bg-white/10 text-white/80 text-sm rounded-lg px-2 py-1.5 border border-white/10"
                                 >
-                                    ➤
-                                </button>
+                                    {CHAT_MODELS.map(m => (
+                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs text-white/50 mb-1 block">生图模型</label>
+                                <select
+                                    value={imageModel}
+                                    onChange={e => setImageModel(e.target.value)}
+                                    className="w-full bg-white/10 text-white/80 text-sm rounded-lg px-2 py-1.5 border border-white/10"
+                                >
+                                    {IMAGE_MODELS.map(m => (
+                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
-                        <div className="text-[10px] text-gray-500 mt-2 text-center">Powered by Gemini & Claude</div>
                     </div>
+                )}
+
+                {/* 灵感模式子选项 */}
+                {activeMode === 'inspiration' && (
+                    <div className="flex gap-2 p-3 border-b border-white/10">
+                        {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => {
+                            const info = INSPIRATION_MODE_INFO[subMode];
+                            return (
+                                <button
+                                    key={subMode}
+                                    onClick={() => setInspirationSubMode(subMode)}
+                                    className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
+                                            ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
+                                            : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                        }`}
+                                >
+                                    {info.icon} {info.name}
+                                </button>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {/* 创造/修改模式配置 */}
+                {(activeMode === 'creator' || activeMode === 'modifier') && (
+                    <div className="p-3 border-b border-white/10 space-y-2">
+                        {activeMode === 'modifier' && (
+                            <PlanetSelector
+                                planets={planets}
+                                selectedId={selectedPlanetId}
+                                onChange={setSelectedPlanetId}
+                            />
+                        )}
+                        <ScopeSelector
+                            selection={scopeSelection}
+                            onChange={setScopeSelection}
+                            collapsed={scopeCollapsed}
+                            onToggleCollapse={() => setScopeCollapsed(!scopeCollapsed)}
+                        />
+                    </div>
+                )}
+
+                {/* 消息列表 */}
+                <div className="h-[200px] overflow-y-auto p-3 space-y-3">
+                    {messages.map(msg => (
+                        <div
+                            key={msg.id}
+                            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                        >
+                            <div
+                                className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.role === 'user'
+                                        ? 'bg-blue-500/30 text-white/90'
+                                        : msg.role === 'system'
+                                            ? 'bg-green-500/20 text-green-200'
+                                            : 'bg-white/10 text-white/80'
+                                    }`}
+                            >
+                                {msg.type === 'image' && msg.imageUrl ? (
+                                    <div>
+                                        <img src={msg.imageUrl} alt="Generated" className="max-w-full rounded-lg mb-2" />
+                                        <p className="text-sm">{msg.content}</p>
+                                    </div>
+                                ) : msg.type === 'json' && msg.jsonData ? (
+                                    <div>
+                                        <p className="text-sm mb-2">{msg.content}</p>
+                                        <pre className="text-xs bg-black/30 p-2 rounded overflow-x-auto max-h-[100px]">
+                                            {JSON.stringify(msg.jsonData, null, 2).slice(0, 500)}...
+                                        </pre>
+                                        <button
+                                            onClick={() => handleApply(msg.jsonData)}
+                                            className="mt-2 px-3 py-1 bg-green-500/30 text-green-200 rounded-lg text-sm hover:bg-green-500/40"
+                                        >
+                                            ⚡ 应用配置
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                    {isThinking && (
+                        <div className="flex justify-start">
+                            <div className="bg-white/10 rounded-xl px-4 py-2 text-white/60 animate-pulse">
+                                思考中...
+                            </div>
+                        </div>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
+
+                {/* 润色提示词显示 */}
+                {refinedPrompt && (
+                    <div className="px-3 py-2 bg-purple-500/10 border-t border-purple-400/20">
+                        <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-purple-300">✨ 润色后的提示词 (可编辑)</span>
+                            <button
+                                onClick={() => setRefinedPrompt(null)}
+                                className="text-xs text-white/40 hover:text-white/60"
+                            >
+                                取消
+                            </button>
+                        </div>
+                        <textarea
+                            value={refinedPrompt}
+                            onChange={e => setRefinedPrompt(e.target.value)}
+                            className="w-full bg-black/30 text-white/80 text-sm rounded-lg p-2 resize-none border border-purple-400/20"
+                            rows={3}
+                        />
+                    </div>
+                )}
+
+                {/* 输入区 */}
+                <div className="p-3 border-t border-white/10">
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            value={inputValue}
+                            onChange={e => setInputValue(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
+                            placeholder={
+                                activeMode === 'inspiration'
+                                    ? '描述你想要的图片...'
+                                    : activeMode === 'creator'
+                                        ? '描述你想要的星球...'
+                                        : '描述要修改的内容...'
+                            }
+                            className="flex-1 bg-white/10 text-white/90 placeholder-white/30 rounded-xl px-4 py-2 text-sm border border-white/10 focus:border-blue-400/50 focus:outline-none"
+                        />
+                        <button
+                            onClick={handleRefine}
+                            disabled={!inputValue.trim()}
+                            className="px-3 py-2 rounded-xl text-sm font-medium bg-purple-500/30 text-purple-200 hover:bg-purple-500/40 disabled:opacity-30"
+                        >
+                            ✨ 润色
+                        </button>
+                        <button
+                            onClick={handleSend}
+                            disabled={isThinking || (!inputValue.trim() && !refinedPrompt)}
+                            className="px-4 py-2 rounded-xl text-sm font-medium bg-blue-500/30 text-blue-200 hover:bg-blue-500/40 disabled:opacity-30"
+                        >
+                            ➤
+                        </button>
+                    </div>
+                </div>
+
+                {/* 状态栏 */}
+                <div className="px-3 py-1.5 border-t border-white/5 flex items-center justify-between text-xs text-white/30">
+                    <span>
+                        {activeMode === 'inspiration' ? IMAGE_MODELS.find(m => m.id === imageModel)?.name : CHAT_MODELS.find(m => m.id === chatModel)?.name}
+                    </span>
+                    <span>Powered by XingForge</span>
                 </div>
             </div>
         </div>,
         document.body
     );
 };
-
-const ModeButton: React.FC<{ active: boolean; onClick: () => void; icon: string; tooltip: string }> = ({ active, onClick, icon, tooltip }) => (
-    <div className="relative group">
-        <button
-            onClick={onClick}
-            className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg transition-all duration-300 ${active ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(99,102,241,0.5)] scale-110' : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'}`}
-        >
-            {icon}
-        </button>
-        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-2 py-1 bg-black/80 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 border border-white/10">
-            {tooltip}
-        </div>
-    </div>
-);
 
 export default AIAssistantPanel;
