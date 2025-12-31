@@ -8,7 +8,7 @@
  * 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 
 // ============ 类型定义 ============
 
@@ -124,6 +124,36 @@ export function UserProvider({ children }: { children: ReactNode }) {
             window.removeEventListener('offline', handleOffline);
         };
     }, []);
+
+    // 自动同步最新用户资料（如头像），解决"跨设备不同步"问题
+    // 即使走免密登录，也会在后台静默更新到最新状态
+    useEffect(() => {
+        if (!currentUser || !isOnline) return;
+
+        const syncProfile = async () => {
+            try {
+                const res = await fetch('/api/auth');
+                if (res.ok) {
+                    const data = await res.json();
+                    const cloudUser = data.users?.find((u: any) => u.id === currentUser.id);
+                    if (cloudUser) {
+                        // 检查是否有变化（避免不必要的更新）
+                        if (cloudUser.avatar !== currentUser.avatar || cloudUser.name !== currentUser.name) {
+                            console.log('Syncing user profile from cloud:', cloudUser.avatar);
+                            // 保留本地的 token/loginTime 等信息，只更新资料
+                            const updatedUser = { ...currentUser, name: cloudUser.name, avatar: cloudUser.avatar };
+                            setCurrentUser(updatedUser);
+                            updateSavedUsers(updatedUser, false);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to sync user profile', e);
+            }
+        };
+
+        syncProfile();
+    }, [currentUser?.id, isOnline]);
 
     // 更新本地存储
     const updateSavedUsers = (user: User, isLoggedOut: boolean = false) => {
@@ -375,7 +405,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const loadCloudConfig = async () => {
+    const loadCloudConfig = useCallback(async () => {
         if (!currentUser) return null;
 
         const cacheKey = OFFLINE_CONFIG_PREFIX + currentUser.id;
@@ -397,7 +427,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             }
         }
         return config;
-    };
+    }, [currentUser?.id, isOnline]);
 
     const saveCloudConfig = async (config: Partial<UserConfig>) => {
         if (!currentUser) return false;

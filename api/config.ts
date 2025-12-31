@@ -57,6 +57,12 @@ interface UserConfig {
     presets?: Array<Record<string, unknown>>;
     solidCorePresets?: Array<Record<string, unknown>>;
     planetTemplates?: Array<Record<string, unknown>>;
+    // 主题与材质配置
+    theme?: {
+        themeConfig?: Record<string, unknown>;
+        materialSettings?: Record<string, unknown>;
+        userMaterialPresets?: Array<Record<string, unknown>>;
+    };
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -120,6 +126,7 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
                 presets: [],
                 solidCorePresets: [],
                 planetTemplates: [],
+                theme: null,
             }
         });
     }
@@ -152,6 +159,7 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         presets: config.presets ?? existingConfig?.presets ?? [],
         solidCorePresets: config.solidCorePresets ?? existingConfig?.solidCorePresets ?? [],
         planetTemplates: config.planetTemplates ?? existingConfig?.planetTemplates ?? [],
+        theme: config.theme ?? existingConfig?.theme,
     };
 
     await redis!.set(`config:${userId}`, newConfig);

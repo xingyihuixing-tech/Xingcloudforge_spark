@@ -1656,7 +1656,7 @@ export interface MaterialSettings {
     afterimage: string; radiation: string; fireflies: string; magicCircle: string;
   };
   optionButtons: ButtonMaterialConfig;
-  subModuleTabs: ButtonMaterialConfig;  // 统一设置，不再分7个模块
+  subModuleTabs: Record<string, ButtonMaterialConfig>;  // 按模块分开设置
 }
 
 export interface MaterialPreset {

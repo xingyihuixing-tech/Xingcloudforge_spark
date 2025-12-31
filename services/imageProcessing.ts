@@ -829,3 +829,52 @@ export function base64ToBlob(base64: string): Blob {
 
   return new Blob([uInt8Array], { type: contentType });
 }
+
+// Create a thumbnail from base64 image
+export const createThumbnail = (
+  base64: string,
+  maxWidth: number = 200, // Small enough for UI lists
+  quality: number = 0.7
+): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64;
+    img.crossOrigin = "Anonymous";
+
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+
+      // Calculate new dimensions
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(base64); // Fallback to original
+        return;
+      }
+
+      // Better quality scaling
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Compress
+      const thumbnailInfo = canvas.toDataURL('image/jpeg', quality);
+      resolve(thumbnailInfo);
+    };
+
+    img.onerror = () => {
+      console.warn('Failed to create thumbnail');
+      resolve(base64); // Fallback
+    };
+  });
+};

@@ -13,7 +13,7 @@ import GestureHandler from './components/GestureHandler';
 import { UserLogin } from './components/UserLogin';
 import { UserMenu } from './components/UserMenu';
 import { useUser } from './contexts/UserContext';
-import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset } from './types';
+import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
 import {
   DEFAULT_SETTINGS,
   SAMPLE_IMAGES,
@@ -28,6 +28,7 @@ import {
   BUILT_IN_MATERIAL_PRESETS,
   createDefaultMaterialConfig
 } from './constants';
+import { generateMaterialStyle } from './utils/materialStyle';
 import { processImage, ProcessedData, extractDominantColors } from './services/imageProcessing';
 
 // LocalStorage key for settings persistence
@@ -127,7 +128,18 @@ const ensureBackgroundSettings = (settings: AppSettings): AppSettings => {
 // Save settings to localStorage
 const saveSettings = (settings: AppSettings) => {
   try {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    // 智能过滤: 只有当存在有效的云端URL(http开头)时才剔除本地Base64
+    // 这样既防止了 Quota 溢出(正常情况)，又保证了上传窗口期/离线时数据不丢(兜底)
+    const safeSettings = {
+      ...settings,
+      nebulaInstances: settings.nebulaInstances?.map(inst => ({
+        ...inst,
+        imageDataUrl: (inst.imageUrl && inst.imageUrl.startsWith('http'))
+          ? undefined
+          : inst.imageDataUrl
+      }))
+    };
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(safeSettings));
   } catch (e) {
     console.warn('Failed to save settings:', e);
   }
@@ -198,10 +210,11 @@ const loadMaterialSettings = (): MaterialSettings => {
     const saved = localStorage.getItem(MATERIAL_SETTINGS_STORAGE_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      // 兼容旧版 subModuleTabs 为 Record 的结构
-      if (parsed.subModuleTabs && typeof parsed.subModuleTabs === 'object' && parsed.subModuleTabs.core) {
-        // 旧版是 Record<string, ButtonMaterialConfig>，取第一个值
-        parsed.subModuleTabs = parsed.subModuleTabs.core || createDefaultMaterialConfig('neon');
+      // 兼容旧数据：确保 subModuleTabs 为 Record
+      if (parsed.subModuleTabs && parsed.subModuleTabs.type) {
+        // 是单一对象，转换为 Record（以前的逻辑把Record转单一，现在的逻辑把单一转Record）
+        // 但实际上 ControlPanel 和 ThemeSettingsModal 已经处理了，这里只需删除错误的降级逻辑即可
+        // 或者直接保留原样，不做任何处理，直到后面统一迁移
       }
       return { ...DEFAULT_MATERIAL_SETTINGS, ...parsed };
     }
@@ -242,6 +255,36 @@ const saveUserMaterialPresets = (presets: MaterialPreset[]) => {
   }
 };
 
+// 加载星云预设
+const NEBULA_PRESETS_STORAGE_KEY = 'nebula_presets';
+const loadNebulaPresets = (): NebulaPreset[] => {
+  try {
+    const saved = localStorage.getItem(NEBULA_PRESETS_STORAGE_KEY);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('Failed to load nebula presets:', e);
+  }
+  return [];
+};
+
+// 保存星云预设
+const saveNebulaPresets = (presets: NebulaPreset[]) => {
+  try {
+    // 智能过滤: 只有云端URL有效时才剔除Base64
+    const safePresets = presets.map(p => ({
+      ...p,
+      imageDataUrl: (p.imageUrl && p.imageUrl.startsWith('http'))
+        ? undefined
+        : p.imageDataUrl
+    }));
+    localStorage.setItem(NEBULA_PRESETS_STORAGE_KEY, JSON.stringify(safePresets));
+  } catch (e) {
+    console.warn('Failed to save nebula presets:', e);
+  }
+};
+
 const App: React.FC = () => {
   // 用户登录状态
   const { currentUser, isLoading: isUserLoading, saveCloudConfig, loadCloudConfig } = useUser();
@@ -257,6 +300,7 @@ const App: React.FC = () => {
   const [themeConfig, setThemeConfig] = useState<ThemeConfig>(loadThemeConfig);
   const [materialSettings, setMaterialSettings] = useState<MaterialSettings>(loadMaterialSettings);
   const [userMaterialPresets, setUserMaterialPresets] = useState<MaterialPreset[]>(loadUserMaterialPresets);
+  const [nebulaPresets, setNebulaPresets] = useState<NebulaPreset[]>(loadNebulaPresets);
   const [hasHydratedFromCloud, setHasHydratedFromCloud] = useState(false);
 
   // 星云预览模式
@@ -265,46 +309,78 @@ const App: React.FC = () => {
   // 多星云实例的粒子数据缓存
   const [nebulaInstancesData, setNebulaInstancesData] = useState<Map<string, ProcessedData>>(new Map());
 
+  // 追踪已加载云配置的用户ID，防止重复hydration
+  const hasLoadedUserIdRef = useRef<string | null>(null);
+
   // Cloud Sync: Load data on user login
   useEffect(() => {
-    if (currentUser) {
+    // 只有当用户ID真正变化时才加载云配置
+    if (currentUser && hasLoadedUserIdRef.current !== currentUser.id) {
+      hasLoadedUserIdRef.current = currentUser.id;
       loadCloudConfig().then(config => {
         if (config) {
           if (config.settings) {
-            // Merge cloud settings with defaults to ensure valid structure
-            setSettings(prev => ({ ...prev, ...config.settings }));
-            // Also cache locally
-            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ ...DEFAULT_SETTINGS, ...config.settings }));
+            const cloudSettings = config.settings;
+            // Merge cloud settings with defaults, BUT preserve local imageDataUrl if cloud missing it
+            setSettings(prev => {
+              const newSettings = { ...prev, ...cloudSettings };
+              // Smart merge strategies for nebulaInstances
+              if (cloudSettings.nebulaInstances && prev.nebulaInstances) {
+                newSettings.nebulaInstances = cloudSettings.nebulaInstances.map((cloudInst: any) => {
+                  const localInst = prev.nebulaInstances!.find(p => p.id === cloudInst.id);
+                  // If cloud doesn't have image data but local does, keep local
+                  if (localInst && !cloudInst.imageDataUrl && localInst.imageDataUrl) {
+                    return { ...cloudInst, imageDataUrl: localInst.imageDataUrl };
+                  }
+                  return cloudInst;
+                });
+              }
+              return newSettings;
+            });
+            // REMOVED explicit localStorage.setItem here because it was saving the stripped cloud data 
+            // and overwriting valid local data. We rely on the debounced effect to save the merged state.
+          }
+          if (config.presets && Array.isArray(config.presets)) {
+            const cloudPresets = config.presets;
+            setNebulaPresets(prev => {
+              // Smart merge for presets
+              const prevList = prev || [];
+              return cloudPresets.map((cloudPreset: any) => {
+                const localPreset = prevList.find(p => p.id === cloudPreset.id);
+                if (localPreset && !cloudPreset.imageDataUrl && localPreset.imageDataUrl) {
+                  return { ...cloudPreset, imageDataUrl: localPreset.imageDataUrl };
+                }
+                return cloudPreset;
+              }) as NebulaPreset[];
+            });
           }
           if (config.planetScene) {
             setPlanetSettings(prev => ({ ...prev, ...config.planetScene }));
-            localStorage.setItem(PLANET_SCENE_STORAGE_KEY, JSON.stringify(config.planetScene));
+            // REMOVED explicit localStorage write to avoid sync issues
           }
           // 加载主题配置
           if (config.theme?.themeConfig) {
             const cloudTheme = config.theme.themeConfig;
             setThemeConfig(prev => ({
               ...prev,
-              activeSchemeId: cloudTheme.activeSchemeId || prev.activeSchemeId,
-              activeColors: cloudTheme.activeColors || prev.activeColors,
-              consoleBg: cloudTheme.consoleBg || prev.consoleBg,
-              deletedSystemSchemeIds: cloudTheme.deletedSystemSchemeIds || prev.deletedSystemSchemeIds
+              activeSchemeId: (cloudTheme as any).activeSchemeId || prev.activeSchemeId,
+              activeColors: (cloudTheme as any).activeColors || prev.activeColors,
+              consoleBg: (cloudTheme as any).consoleBg || prev.consoleBg,
+              deletedSystemSchemeIds: (cloudTheme as any).deletedSystemSchemeIds || prev.deletedSystemSchemeIds
             }));
           }
           // 加载材质配置
           if (config.theme?.materialSettings) {
-            setMaterialSettings(prev => ({ ...prev, ...config.theme.materialSettings }));
+            setMaterialSettings(prev => ({ ...prev, ...(config.theme!.materialSettings as any) }));
           }
           if (config.theme?.userMaterialPresets) {
-            setUserMaterialPresets(config.theme.userMaterialPresets);
+            setUserMaterialPresets(config.theme.userMaterialPresets as any);
           }
-
-          setHasHydratedFromCloud(true);
-        } else {
-          setHasHydratedFromCloud(true);
         }
+        setHasHydratedFromCloud(true);
       });
-    } else {
+    } else if (!currentUser) {
+      hasLoadedUserIdRef.current = null;
       setHasHydratedFromCloud(true); // 未登录时直接标记
     }
   }, [currentUser, loadCloudConfig]);
@@ -318,11 +394,27 @@ const App: React.FC = () => {
       saveThemeConfig(themeConfig);
       saveMaterialSettings(materialSettings);
       saveUserMaterialPresets(userMaterialPresets);
+      saveNebulaPresets(nebulaPresets);
 
       // If logged in and hydrated, save to cloud
       if (currentUser && hasHydratedFromCloud) {
+        // 过滤掉 imageDataUrl（太大），只同步 imageUrl（云端 URL）
+        const presetsForCloud = nebulaPresets.map(preset => ({
+          ...preset,
+          imageDataUrl: undefined  // 不同步 base64 数据到云端
+        }));
+
+        // 同样过滤掉 settings.nebulaInstances 中的 imageDataUrl
+        const settingsForCloud = {
+          ...settings,
+          nebulaInstances: settings.nebulaInstances?.map(instance => ({
+            ...instance,
+            imageDataUrl: undefined // 不同步 base64 数据到云端
+          }))
+        };
+
         saveCloudConfig({
-          settings: settings as any,
+          settings: settingsForCloud as any,
           planetScene: planetSettings as any,
           theme: {
 
@@ -334,13 +426,14 @@ const App: React.FC = () => {
             },
             materialSettings,
             userMaterialPresets
-          }
+          },
+          presets: presetsForCloud as any[]
         });
       }
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(handler);
-  }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
+  }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, nebulaPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
 
   // 应用主题 CSS 变量
   useEffect(() => {
@@ -367,104 +460,7 @@ const App: React.FC = () => {
 
 
 
-  // 生成模式切换按钮样式
-  const getModeSwitchStyle = (isActive: boolean, accentColor: string, buttonIndex: number = 0) => {
-    const config = materialSettings.modeSwitch || createDefaultMaterialConfig('glass');
-    const { type } = config;
 
-    switch (type) {
-      case 'glass': {
-        const { blur, opacity, borderOpacity } = config.glass || { blur: 10, opacity: 0.2, borderOpacity: 0.2 };
-        return isActive ? {
-          background: `rgba(255,255,255,${opacity})`,
-          backdropFilter: `blur(${blur}px)`,
-          boxShadow: `0 4px 16px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,${borderOpacity})`,
-          border: `1px solid rgba(255,255,255,${borderOpacity})`,
-          color: 'white'
-        } : {
-          background: 'transparent',
-          border: '1px solid transparent',
-          color: 'rgba(156,163,175,0.7)'
-        };
-      }
-      case 'neon': {
-        const { glowIntensity, glowSpread, borderGlow, textGlow, color: neonColor } = config.neon || { glowIntensity: 80, glowSpread: 10, borderGlow: true, textGlow: true, color: '#22d3ee' };
-        const c = accentColor || neonColor;
-        const intensity = glowIntensity / 100;
-        return isActive ? {
-          background: `linear-gradient(180deg, ${c}15 0%, ${c}08 100%)`,
-          boxShadow: `0 0 ${glowSpread}px ${c}${Math.round(intensity * 60).toString(16).padStart(2, '0')}, 0 0 ${glowSpread * 2}px ${c}${Math.round(intensity * 30).toString(16).padStart(2, '0')}${borderGlow ? `, inset 0 0 ${glowSpread}px ${c}10` : ''}`,
-          border: `1px solid ${c}60`,
-          color: c,
-          textShadow: textGlow ? `0 0 10px ${c}, 0 0 20px ${c}80` : 'none'
-        } : {
-          background: 'transparent',
-          border: '1px solid transparent',
-          color: 'rgba(156,163,175,0.7)'
-        };
-      }
-      case 'crystal': {
-        const { facets, shine, depth, color: crystalColor, highlightColor, color2, highlightColor2 } = config.crystal || { facets: 3, shine: 60, depth: 40, color: '#6366f1', highlightColor: '#a5b4fc', color2: '#06b6d4', highlightColor2: '#67e8f9' };
-        // 根据buttonIndex选择颜色组
-        const c = buttonIndex === 1 ? (color2 || '#06b6d4') : (crystalColor || '#6366f1');
-        const h = buttonIndex === 1 ? (highlightColor2 || '#67e8f9') : (highlightColor || '#a5b4fc');
-        const shineOpacity = shine / 100;
-        const depthOpacity = depth / 100;
-        const gradientStops = facets === 2 ? `${c} 0%, ${h} 100%` :
-          facets === 3 ? `${c} 0%, ${h} 50%, ${c} 100%` :
-            facets === 4 ? `${c} 0%, ${h} 30%, ${c} 60%, ${h} 100%` :
-              `${c} 0%, ${h} 25%, ${c} 50%, ${h} 75%, ${c} 100%`;
-        return isActive ? {
-          background: `linear-gradient(135deg, ${gradientStops})`,
-          boxShadow: `0 4px 20px ${c}50, inset 0 2px 4px rgba(255,255,255,${shineOpacity * 0.4}), inset 0 -2px 4px rgba(0,0,0,${depthOpacity * 0.3})`,
-          border: '1px solid rgba(255,255,255,0.3)',
-          color: 'white',
-          textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-        } : {
-          background: 'linear-gradient(135deg, rgba(50,50,70,0.6) 0%, rgba(30,30,45,0.8) 100%)',
-          boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.05)',
-          border: '1px solid rgba(255,255,255,0.05)',
-          color: 'rgba(180,180,200,0.8)'
-        };
-      }
-      case 'neumorphism': {
-        const { elevation, curvature, lightAngle, shadowIntensity, baseColor, highlightColor, shadowColor } = config.neumorphism || { elevation: 6, curvature: 20, lightAngle: 145, shadowIntensity: 60, baseColor: '#252530', highlightColor: '#323240', shadowColor: '#1a1a23' };
-        const rad = (lightAngle * Math.PI) / 180;
-        const offsetX = Math.cos(rad) * elevation;
-        const offsetY = Math.sin(rad) * elevation;
-        const shadowAlpha = shadowIntensity / 100;
-        return isActive ? {
-          background: `linear-gradient(${lightAngle}deg, ${highlightColor} 0%, ${baseColor} ${curvature}%, ${shadowColor} 100%)`,
-          boxShadow: `inset 0 1px 1px rgba(255,255,255,0.2), inset 0 -1px 1px rgba(0,0,0,0.3), ${offsetX}px ${offsetY}px ${elevation * 1.5}px rgba(0,0,0,${shadowAlpha}), 0 1px 2px rgba(0,0,0,0.2)`,
-          borderTop: '1px solid rgba(255,255,255,0.1)',
-          borderBottom: '1px solid rgba(0,0,0,0.3)',
-          color: 'white'
-        } : {
-          background: `linear-gradient(${lightAngle}deg, #252530 0%, #1a1a22 100%)`,
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 2px 4px rgba(0,0,0,0.2)',
-          color: 'rgba(156,163,175,0.7)'
-        };
-      }
-      case 'holographic': {
-        const { colors, angle } = config.holographic || { angle: 135, colors: ['#ff0080', '#7928ca', '#4ade80'] };
-        const colorStops = colors.map((c: string, i: number) => `${c} ${(i / (colors.length - 1)) * 100}%`).join(', ');
-        return isActive ? {
-          background: `linear-gradient(${angle}deg, ${colorStops})`,
-          backgroundSize: '200% 200%',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-          border: '1px solid rgba(255,255,255,0.2)',
-          color: 'white',
-          textShadow: '0 1px 2px rgba(0,0,0,0.5)'
-        } : {
-          background: 'linear-gradient(135deg, rgba(50,50,70,0.6) 0%, rgba(30,30,45,0.8) 100%)',
-          border: '1px solid rgba(255,255,255,0.05)',
-          color: 'rgba(180,180,200,0.8)'
-        };
-      }
-      default:
-        return {};
-    }
-  };
   const [isProcessing, setIsProcessing] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [fps, setFps] = useState(0);
@@ -1061,9 +1057,7 @@ const App: React.FC = () => {
             onClick={() => setAppMode('nebula')}
             className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
             style={{
-              ...getModeSwitchStyle(appMode === 'nebula', '#06b6d4', 0),
-              // Use simple style or inherit from helper? The loop in App.tsx used helper.
-              // Reverting to the simpler "星云" style
+              ...generateMaterialStyle(materialSettings.modeSwitch || createDefaultMaterialConfig('glass'), appMode === 'nebula').style,
               fontFamily: 'inherit'
             }}
           >
@@ -1112,7 +1106,7 @@ const App: React.FC = () => {
             }}
             className="px-4 md:px-6 py-2 md:py-2.5 rounded-xl text-xs md:text-sm font-semibold transition-all duration-300"
             style={{
-              ...getModeSwitchStyle(appMode === 'planet', '#ec4899', 1),
+              ...generateMaterialStyle(materialSettings.modeSwitch || createDefaultMaterialConfig('glass'), appMode === 'planet').style,
               fontFamily: 'inherit'
             }}
           >
@@ -1183,7 +1177,7 @@ const App: React.FC = () => {
         {/* 视角信息面板 - 仅星球模式显示 - 玻璃样式 */}
         {appMode === 'planet' && cameraInfo && (
           <div
-            className="absolute bottom-4 left-4 z-40 rounded-xl p-3"
+            className="absolute bottom-24 md:bottom-8 left-4 z-40 rounded-xl p-3"
             style={{
               background: 'rgba(30,30,40,0.16)',
               backdropFilter: 'blur(16px)',
@@ -1230,7 +1224,7 @@ const App: React.FC = () => {
         {/* 互通模式设置面板 - 仅互通模式+星云模式下显示 - 玻璃样式 */}
         {overlayMode && appMode === 'nebula' && (
           <div
-            className="absolute bottom-4 left-4 z-40 rounded-xl p-3"
+            className="absolute bottom-24 md:bottom-8 left-4 z-40 rounded-xl p-3"
             style={{
               background: 'rgba(30,30,40,0.16)',
               backdropFilter: 'blur(16px)',
@@ -1241,34 +1235,6 @@ const App: React.FC = () => {
             }}
           >
             <span className="text-xs font-medium block mb-2 text-cyan-400">互通模式设置</span>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400 text-[10px] min-w-[40px]">混合:</span>
-              <select
-                value={settings.overlayBlendMode ?? NebulaBlendMode.Additive}
-                onChange={(e) => setSettings(prev => ({ ...prev, overlayBlendMode: e.target.value as NebulaBlendMode }))}
-                className="flex-1 px-2 py-1 rounded text-[10px] cursor-pointer"
-                style={{
-                  background: 'rgba(55,65,81,0.5)',
-                  color: 'white',
-                  border: '1px solid rgba(255,255,255,0.1)'
-                }}
-              >
-                <option value={NebulaBlendMode.Additive}>叠加发光</option>
-                <option value={NebulaBlendMode.Normal}>普通混合</option>
-              </select>
-            </div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-gray-400 text-[10px] min-w-[40px]">亮度:</span>
-              <input
-                type="range"
-                min={0} max={3} step={0.05}
-                value={settings.overlayBrightness ?? 0.5}
-                onChange={(e) => setSettings(prev => ({ ...prev, overlayBrightness: parseFloat(e.target.value) }))}
-                className="flex-1 h-1 rounded-lg appearance-none cursor-pointer"
-                style={{ background: 'rgba(55,65,81,0.5)' }}
-              />
-              <span className="text-white text-[10px] w-8 text-right">{(settings.overlayBrightness ?? 0.5).toFixed(2)}</span>
-            </div>
             <div className="flex items-center gap-2">
               <span className="text-gray-400 text-[10px] min-w-[40px]">辉光:</span>
               <input
@@ -1280,19 +1246,6 @@ const App: React.FC = () => {
                 style={{ background: 'rgba(55,65,81,0.5)' }}
               />
               <span className="text-white text-[10px] w-8 text-right">{(settings.overlayBloomStrength ?? 1.0).toFixed(2)}</span>
-            </div>
-
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-gray-400 text-[10px] min-w-[40px]">补偿:</span>
-              <input
-                type="range"
-                min={0} max={1} step={0.05}
-                value={settings.overlayColorCompensation ?? 1.0}
-                onChange={(e) => setSettings(prev => ({ ...prev, overlayColorCompensation: parseFloat(e.target.value) }))}
-                className="flex-1 h-1 rounded-lg appearance-none cursor-pointer"
-                style={{ background: 'rgba(55,65,81,0.5)' }}
-              />
-              <span className="text-white text-[10px] w-8 text-right">{(settings.overlayColorCompensation ?? 1.0).toFixed(2)}</span>
             </div>
           </div>
         )}
@@ -1331,6 +1284,8 @@ const App: React.FC = () => {
             setGestureEnabled={setGestureEnabled}
             overlayMode={overlayMode}
             materialSettings={materialSettings}
+            nebulaPresets={nebulaPresets}
+            setNebulaPresets={setNebulaPresets}
           />
         </div>
       </div>

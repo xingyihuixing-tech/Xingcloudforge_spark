@@ -85,9 +85,13 @@ async function uploadFile(req: VercelRequest, res: VercelResponse) {
         }
         const buffer = Buffer.concat(chunks);
 
-        // 生成文件路径
+        // 生成文件路径 - 始终包含时间戳防止缓存问题
         const timestamp = Date.now();
-        const safeName = fileName || `${fileType}_${timestamp}`;
+        // 如果是头像类型，使用固定名称+时间戳（每次上传都是不同的 URL）
+        // 否则使用原始文件名（但也加时间戳确保唯一）
+        const baseName = fileName ? fileName.replace(/\.[^.]+$/, '') : fileType;
+        const extension = fileName ? fileName.match(/\.[^.]+$/)?.[0] || '.png' : '.png';
+        const safeName = `${baseName}_${timestamp}${extension}`;
         const pathname = `users/${userId}/${fileType}s/${safeName}`;
 
         // 上传到Blob

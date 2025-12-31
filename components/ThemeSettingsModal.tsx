@@ -76,12 +76,12 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     const currentBg = getBackgroundSettings();
 
     return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-            {/* Click outside to close */}
-            <div className="absolute inset-0" onClick={onClose} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-transparent pointer-events-none">
+            {/* Click outside to close - disabled for right side interaction */}
+            <div className="absolute inset-0 pointer-events-auto" style={{ right: '400px' }} onClick={onClose} />
 
             <div
-                className="relative w-[600px] h-[500px] bg-[#0f1016] border border-white/10 rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300"
+                className="relative w-[600px] h-[500px] bg-[#0f1016] border border-white/10 rounded-2xl flex flex-col shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 pointer-events-auto"
                 style={{ boxShadow: '0 0 50px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.1)' }}
             >
                 {/* Header */}
@@ -175,28 +175,6 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                 <div>
                                     <div className="flex justify-between items-center mb-3">
                                         <label className="text-xs text-white/40 uppercase tracking-wider font-semibold">配色方案 ({Object.keys(themeConfig?.schemes || {}).length})</label>
-                                        <button
-                                            onClick={() => {
-                                                const newId = `custom_${Date.now()}`;
-                                                if (setThemeConfig && themeConfig) {
-                                                    setThemeConfig({
-                                                        ...themeConfig,
-                                                        schemes: {
-                                                            ...themeConfig.schemes,
-                                                            [newId]: {
-                                                                name: '新方案',
-                                                                colors: { ...themeConfig.activeColors },
-                                                                isSystem: false
-                                                            }
-                                                        },
-                                                        activeSchemeId: newId
-                                                    });
-                                                }
-                                            }}
-                                            className="text-xs text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-                                        >
-                                            <i className="fas fa-plus" /> 另存为
-                                        </button>
                                     </div>
                                     <div className="grid grid-cols-2 gap-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-1">
                                         {Object.entries(themeConfig?.schemes || {}).map(([id, scheme]) => (
@@ -285,28 +263,52 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                         ))}
                                     </div>
                                     {/* 保存当前方案按钮 */}
-                                    <button
-                                        onClick={() => {
-                                            if (setThemeConfig && themeConfig && themeConfig.activeSchemeId) {
-                                                const currentScheme = themeConfig.schemes[themeConfig.activeSchemeId];
-                                                if (currentScheme) {
+                                    <div className="flex gap-2 mt-4">
+                                        <button
+                                            onClick={() => {
+                                                if (setThemeConfig && themeConfig && themeConfig.activeSchemeId) {
+                                                    const currentScheme = themeConfig.schemes[themeConfig.activeSchemeId];
+                                                    if (currentScheme) {
+                                                        setThemeConfig({
+                                                            ...themeConfig,
+                                                            schemes: {
+                                                                ...themeConfig.schemes,
+                                                                [themeConfig.activeSchemeId]: {
+                                                                    ...currentScheme,
+                                                                    colors: { ...themeConfig.activeColors }
+                                                                }
+                                                            }
+                                                        });
+                                                    }
+                                                }
+                                            }}
+                                            className="flex-1 py-2 px-3 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-medium hover:bg-cyan-500/30 transition-colors"
+                                        >
+                                            <i className="fas fa-save mr-1" /> 保存到 {themeConfig?.schemes[themeConfig.activeSchemeId]?.name || '当前方案'}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const newId = `custom_${Date.now()}`;
+                                                if (setThemeConfig && themeConfig) {
                                                     setThemeConfig({
                                                         ...themeConfig,
                                                         schemes: {
                                                             ...themeConfig.schemes,
-                                                            [themeConfig.activeSchemeId]: {
-                                                                ...currentScheme,
-                                                                colors: { ...themeConfig.activeColors }
+                                                            [newId]: {
+                                                                name: '新方案',
+                                                                colors: { ...themeConfig.activeColors },
+                                                                isSystem: false
                                                             }
-                                                        }
+                                                        },
+                                                        activeSchemeId: newId
                                                     });
                                                 }
-                                            }
-                                        }}
-                                        className="mt-4 w-full py-2 px-3 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-medium hover:bg-cyan-500/30 transition-colors"
-                                    >
-                                        <i className="fas fa-save mr-1" /> 保存到当前方案
-                                    </button>
+                                            }}
+                                            className="px-4 py-2 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/20 transition-colors"
+                                        >
+                                            <i className="fas fa-plus mr-1" /> 另存为
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* 控制台背景色 */}
@@ -421,10 +423,27 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                     <ButtonGroupSetting
                                         label="子模块Tab"
                                         desc="统一应用于所有子模块"
-                                        config={materialSettings?.subModuleTabs}
+                                        config={(() => {
+                                            const sub = materialSettings?.subModuleTabs;
+                                            if (!sub) return undefined;
+                                            // 兼容旧数据：如果是单一配置对象（有type属性），直接使用
+                                            if ('type' in sub && typeof (sub as any).type === 'string') {
+                                                return sub as any as ButtonMaterialConfig;
+                                            }
+                                            // 新数据：取core作为代表
+                                            return sub['core'];
+                                        })()}
                                         onChange={(config) => {
                                             if (setMaterialSettings && materialSettings) {
-                                                setMaterialSettings({ ...materialSettings, subModuleTabs: config });
+                                                // 确保保存为新的 Record 结构
+                                                const subModuleKeys = ['core', 'energyBody', 'rings', 'afterimage', 'radiation', 'fireflies', 'magicCircle'];
+                                                const newSubModuleTabs: Record<string, ButtonMaterialConfig> = {};
+
+                                                subModuleKeys.forEach(key => {
+                                                    newSubModuleTabs[key] = config;
+                                                });
+
+                                                setMaterialSettings({ ...materialSettings, subModuleTabs: newSubModuleTabs });
                                             }
                                         }}
                                     />
@@ -534,7 +553,87 @@ const RangeControl: React.FC<{ label: string; value: number; min: number; max: n
     </div>
 );
 
-// 按钮组材质设置组件
+// 材质参数编辑器组件
+const MaterialParamEditor: React.FC<{
+    config: ButtonMaterialConfig;
+    onChange: (updates: Partial<ButtonMaterialConfig>) => void;
+}> = ({ config, onChange }) => {
+    const type = config.type;
+
+    return (
+        <div className="mt-3 p-3 rounded-lg bg-black/20 border border-white/5 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            {type === 'glass' && (
+                <>
+                    <RangeControl label="模糊度 (px)" value={config.glass.blur} min={0} max={20} step={1} onChange={(v) => onChange({ glass: { ...config.glass, blur: v } })} />
+                    <RangeControl label="不透明度" value={config.glass.opacity} min={0} max={1} step={0.05} onChange={(v) => onChange({ glass: { ...config.glass, opacity: v } })} />
+                    <div className="flex items-center gap-3">
+                        <label className="text-xs text-white/60 w-16">色调</label>
+                        <input type="color" value={config.glass.tint} onChange={(e) => onChange({ glass: { ...config.glass, tint: e.target.value } })} className="w-6 h-6 rounded cursor-pointer bg-transparent" />
+                    </div>
+                </>
+            )}
+            {type === 'neon' && (
+                <>
+                    <RangeControl label="发光强度" value={config.neon.glowIntensity} min={0} max={20} step={1} onChange={(v) => onChange({ neon: { ...config.neon, glowIntensity: v } })} />
+                    <div className="flex items-center gap-4 py-1">
+                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+                            <input type="checkbox" checked={config.neon.borderGlow} onChange={(e) => onChange({ neon: { ...config.neon, borderGlow: e.target.checked } })} className="rounded bg-white/10 border-white/20 text-cyan-500" />
+                            边框发光
+                        </label>
+                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+                            <input type="checkbox" checked={config.neon.textGlow} onChange={(e) => onChange({ neon: { ...config.neon, textGlow: e.target.checked } })} className="rounded bg-white/10 border-white/20 text-cyan-500" />
+                            文字发光
+                        </label>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <label className="text-xs text-white/60 w-16">主色</label>
+                        <input type="color" value={config.neon.color} onChange={(e) => onChange({ neon: { ...config.neon, color: e.target.value } })} className="w-6 h-6 rounded cursor-pointer bg-transparent" />
+                    </div>
+                </>
+            )}
+            {type === 'crystal' && (
+                <>
+                    <RangeControl label="切面数" value={config.crystal.facets} min={0} max={20} step={1} onChange={(v) => onChange({ crystal: { ...config.crystal, facets: v } })} />
+                    <RangeControl label="光泽度" value={config.crystal.shine} min={0} max={100} step={5} onChange={(v) => onChange({ crystal: { ...config.crystal, shine: v } })} />
+                    <div className="flex items-center gap-3">
+                        <label className="text-xs text-white/60 w-16">主色</label>
+                        <input type="color" value={config.crystal.color} onChange={(e) => onChange({ crystal: { ...config.crystal, color: e.target.value } })} className="w-6 h-6 rounded cursor-pointer bg-transparent" />
+                        <label className="text-xs text-white/60 w-16 ml-2">高光</label>
+                        <input type="color" value={config.crystal.highlightColor} onChange={(e) => onChange({ crystal: { ...config.crystal, highlightColor: e.target.value } })} className="w-6 h-6 rounded cursor-pointer bg-transparent" />
+                    </div>
+                </>
+            )}
+            {type === 'neumorphism' && (
+                <>
+                    <RangeControl label="凸起 (px)" value={config.neumorphism.elevation} min={0} max={20} step={1} onChange={(v) => onChange({ neumorphism: { ...config.neumorphism, elevation: v } })} />
+                    <RangeControl label="光照角度" value={config.neumorphism.lightAngle} min={0} max={360} step={15} onChange={(v) => onChange({ neumorphism: { ...config.neumorphism, lightAngle: v } })} />
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs text-white/60">基础</label>
+                            <input type="color" value={config.neumorphism.baseColor} onChange={(e) => onChange({ neumorphism: { ...config.neumorphism, baseColor: e.target.value } })} className="w-5 h-5 rounded cursor-pointer bg-transparent" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs text-white/60">阴影</label>
+                            <input type="color" value={config.neumorphism.shadowColor} onChange={(e) => onChange({ neumorphism: { ...config.neumorphism, shadowColor: e.target.value } })} className="w-5 h-5 rounded cursor-pointer bg-transparent" />
+                        </div>
+                    </div>
+                </>
+            )}
+            {type === 'holographic' && (
+                <>
+                    <RangeControl label="动画速度" value={config.holographic.speed} min={0} max={10} step={1} onChange={(v) => onChange({ holographic: { ...config.holographic, speed: v } })} />
+                    <RangeControl label="噪点强度" value={config.holographic.noiseIntensity ?? 0.1} min={0} max={1} step={0.1} onChange={(v) => onChange({ holographic: { ...config.holographic, noiseIntensity: v } })} />
+                    <div className="flex items-center gap-4 py-1">
+                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer">
+                            <input type="checkbox" checked={config.holographic.shimmer} onChange={(e) => onChange({ holographic: { ...config.holographic, shimmer: e.target.checked } })} className="rounded bg-white/10 border-white/20 text-cyan-500" />
+                            动态闪烁
+                        </label>
+                    </div>
+                </>
+            )}
+        </div>
+    );
+};
 
 const MATERIAL_TYPE_LABELS: Record<MaterialType, { name: string; icon: string }> = {
     glass: { name: '玻璃', icon: '🪟' },
@@ -550,16 +649,25 @@ const ButtonGroupSetting: React.FC<{
     config?: ButtonMaterialConfig;
     onChange: (config: ButtonMaterialConfig) => void;
 }> = ({ label, desc, config, onChange }) => {
+    const [expanded, setExpanded] = useState(false);
     const currentType = config?.type || 'glass';
 
     return (
-        <div className="p-2 rounded-lg bg-white/5 border border-white/10">
+        <div className="p-2 rounded-lg bg-white/5 border border-white/10 transition-colors hover:border-white/20">
             <div className="flex justify-between items-center mb-2">
                 <div>
                     <span className="text-xs text-white font-medium">{label}</span>
                     <span className="text-[10px] text-white/40 ml-1">{desc}</span>
                 </div>
+                <button
+                    onClick={() => setExpanded(!expanded)}
+                    className={`text-[10px] px-2 py-0.5 rounded transition-colors ${expanded ? 'bg-cyan-500/20 text-cyan-400' : 'text-white/30 hover:text-white hover:bg-white/10'}`}
+                >
+                    {expanded ? '收起参数' : '调整参数'}
+                </button>
             </div>
+
+            {/* 材质类型选择 */}
             <div className="flex gap-1">
                 {(Object.keys(MATERIAL_TYPE_LABELS) as MaterialType[]).map((type) => (
                     <button
@@ -578,6 +686,29 @@ const ButtonGroupSetting: React.FC<{
                     </button>
                 ))}
             </div>
+
+            {/* 详细参数编辑器 */}
+            {expanded && config && (
+                <MaterialParamEditor config={config} onChange={(updates) => {
+                    // 合并更新：确保只更新当前 type 对应的字段
+                    // 注意：updates 也是 Partial<ButtonMaterialConfig>
+                    // 递归合并太麻烦，直接浅合并第一层 key (glass, neon etc)
+                    const newConfig = { ...config };
+                    // 遍历 updates 的 key 并合并
+                    (Object.keys(updates) as Array<keyof ButtonMaterialConfig>).forEach(key => {
+                        if (key === 'type') {
+                            newConfig.type = updates.type as MaterialType;
+                        } else {
+                            // 这里假设 updates[key] 是对象，需要与 config[key] 合并
+                            // 但实际上我们的 MaterialParamEditor 传回的 updates 已经是完整的了吗？
+                            // 不，MaterialParamEditor 传回的是 { glass: { ...old.glass, blur: v } }
+                            // 所以这里直接覆盖即可
+                            (newConfig as any)[key] = (updates as any)[key];
+                        }
+                    });
+                    onChange(newConfig);
+                }} />
+            )}
         </div>
     );
 };

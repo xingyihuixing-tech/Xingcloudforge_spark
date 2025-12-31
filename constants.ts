@@ -3605,7 +3605,7 @@ export const createDefaultMaterialConfig = (type: MaterialType = 'glass'): Butto
   holographic: { ...DEFAULT_HOLOGRAPHIC_PARAMS }
 });
 
-// 默认材质设置（简化版：subModuleTabs 为统一配置）
+// 默认材质设置（简化版：subModuleTabs 为按模块配置）
 export const DEFAULT_MATERIAL_SETTINGS: MaterialSettings = {
   modeSwitch: createDefaultMaterialConfig('crystal'),
   mainTabs: createDefaultMaterialConfig('neon'),
@@ -3616,7 +3616,15 @@ export const DEFAULT_MATERIAL_SETTINGS: MaterialSettings = {
     afterimage: '#06b6d4', radiation: '#22c55e', fireflies: '#eab308', magicCircle: '#ec4899'
   },
   optionButtons: createDefaultMaterialConfig('neumorphism'),
-  subModuleTabs: createDefaultMaterialConfig('neon')  // 统一设置
+  subModuleTabs: {
+    core: createDefaultMaterialConfig('neon'),
+    energyBody: createDefaultMaterialConfig('neon'),
+    rings: createDefaultMaterialConfig('neon'),
+    afterimage: createDefaultMaterialConfig('neon'),
+    radiation: createDefaultMaterialConfig('neon'),
+    fireflies: createDefaultMaterialConfig('neon'),
+    magicCircle: createDefaultMaterialConfig('neon')
+  }
 };
 
 // ==================== 内置材质预设 ====================
@@ -3641,7 +3649,15 @@ export const BUILT_IN_MATERIAL_PRESETS: MaterialPreset[] = [
         afterimage: '#06b6d4', radiation: '#22c55e', fireflies: '#f59e0b', magicCircle: '#ec4899'
       },
       optionButtons: createDefaultMaterialConfig('glass'),
-      subModuleTabs: createDefaultMaterialConfig('glass')
+      subModuleTabs: {
+        core: createDefaultMaterialConfig('glass'),
+        energyBody: createDefaultMaterialConfig('glass'),
+        rings: createDefaultMaterialConfig('glass'),
+        afterimage: createDefaultMaterialConfig('glass'),
+        radiation: createDefaultMaterialConfig('glass'),
+        fireflies: createDefaultMaterialConfig('glass'),
+        magicCircle: createDefaultMaterialConfig('glass')
+      }
     },
     isBuiltIn: true
   },
@@ -3658,7 +3674,15 @@ export const BUILT_IN_MATERIAL_PRESETS: MaterialPreset[] = [
         afterimage: '#0ea5e9', radiation: '#84cc16', fireflies: '#fbbf24', magicCircle: '#a855f7'
       },
       optionButtons: createDefaultMaterialConfig('neon'),
-      subModuleTabs: createDefaultMaterialConfig('neon')
+      subModuleTabs: {
+        core: createDefaultMaterialConfig('neon'),
+        energyBody: createDefaultMaterialConfig('neon'),
+        rings: createDefaultMaterialConfig('neon'),
+        afterimage: createDefaultMaterialConfig('neon'),
+        radiation: createDefaultMaterialConfig('neon'),
+        fireflies: createDefaultMaterialConfig('neon'),
+        magicCircle: createDefaultMaterialConfig('neon')
+      }
     },
     isBuiltIn: true
   },
@@ -3675,7 +3699,15 @@ export const BUILT_IN_MATERIAL_PRESETS: MaterialPreset[] = [
         afterimage: '#22d3ee', radiation: '#4ade80', fireflies: '#facc15', magicCircle: '#e879f9'
       },
       optionButtons: createDefaultMaterialConfig('crystal'),
-      subModuleTabs: createDefaultMaterialConfig('crystal')
+      subModuleTabs: {
+        core: createDefaultMaterialConfig('crystal'),
+        energyBody: createDefaultMaterialConfig('crystal'),
+        rings: createDefaultMaterialConfig('crystal'),
+        afterimage: createDefaultMaterialConfig('crystal'),
+        radiation: createDefaultMaterialConfig('crystal'),
+        fireflies: createDefaultMaterialConfig('crystal'),
+        magicCircle: createDefaultMaterialConfig('crystal')
+      }
     },
     isBuiltIn: true
   },
@@ -3692,7 +3724,15 @@ export const BUILT_IN_MATERIAL_PRESETS: MaterialPreset[] = [
         afterimage: '#22d3ee', radiation: '#4ade80', fireflies: '#fcd34d', magicCircle: '#c084fc'
       },
       optionButtons: createDefaultMaterialConfig('holographic'),
-      subModuleTabs: createDefaultMaterialConfig('holographic')
+      subModuleTabs: {
+        core: createDefaultMaterialConfig('holographic'),
+        energyBody: createDefaultMaterialConfig('holographic'),
+        rings: createDefaultMaterialConfig('holographic'),
+        afterimage: createDefaultMaterialConfig('holographic'),
+        radiation: createDefaultMaterialConfig('holographic'),
+        fireflies: createDefaultMaterialConfig('holographic'),
+        magicCircle: createDefaultMaterialConfig('holographic')
+      }
     },
     isBuiltIn: true
   }

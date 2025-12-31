@@ -4,6 +4,8 @@ import { PlanetAvatar } from './PlanetAvatar';
 import { ThemeSettingsModal } from './ThemeSettingsModal';
 import { SettingsModal } from './SettingsModal';
 import { AppSettings, PlanetSceneSettings, ThemeConfig, MaterialSettings, MaterialPreset } from '../types';
+import { generateMaterialStyle } from '../utils/materialStyle';
+import { createDefaultMaterialConfig } from '../constants';
 
 interface UserMenuProps {
     settings?: AppSettings;
@@ -51,12 +53,8 @@ export const UserMenu: React.FC<UserMenuProps> = ({
             {/* 触发器 */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex items-center gap-2 px-2 py-1.5 md:px-3 md:py-2 rounded-xl transition-all duration-300 hover:bg-white/10 group"
-                style={{
-                    background: 'rgba(20,20,30,0.4)',
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                }}
+                className={`flex items-center gap-2 px-2 py-1.5 md:px-3 md:py-2 rounded-xl transition-all duration-300 hover:bg-white/10 group ${generateMaterialStyle(materialSettings?.optionButtons || createDefaultMaterialConfig('glass'), false).className}`}
+                style={generateMaterialStyle(materialSettings?.optionButtons || createDefaultMaterialConfig('glass'), false).style}
             >
                 <PlanetAvatar userId={currentUser.id} imageUrl={currentUser.avatar} size="sm" className="group-hover:scale-105 transition-transform" />
                 <span className="text-sm text-white/90 font-medium hidden sm:block max-w-[100px] truncate shadow-black drop-shadow-md">
