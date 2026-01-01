@@ -1092,13 +1092,15 @@ const RangeControl: React.FC<{
   );
 };
 
-// 流萤头部贴图选择器（支持云端 AI 预设）
+// 流萤头部贴图选择器（支持云端 AI 预设，含删除功能）
 const HeadTextureSelect: React.FC<{
   value: string;
   onChange: (value: string) => void;
 }> = ({ value, onChange }) => {
-  const { loadCloudConfig } = useUser();
+  const { loadCloudConfig, saveCloudConfig } = useUser();
   const [cloudPresets, setCloudPresets] = useState<{ id: string; name: string; url: string }[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; url: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadCloudConfig().then(config => {
@@ -1108,35 +1110,115 @@ const HeadTextureSelect: React.FC<{
     });
   }, [loadCloudConfig]);
 
+  // 删除预设
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
+    try {
+      // 1. 删除 Blob 文件
+      await fetch(`/api/upload?url=${encodeURIComponent(deleteConfirm.url)}`, { method: 'DELETE' });
+      // 2. 更新云配置
+      const config = await loadCloudConfig();
+      if (config) {
+        const updated = (config.headTexturePresets || []).filter((p: any) => p.id !== deleteConfirm.id);
+        await saveCloudConfig({ ...config, headTexturePresets: updated });
+        setCloudPresets(updated);
+      }
+      // 3. 如果当前选中的被删除，清空选择
+      if (value === deleteConfirm.url) {
+        onChange('');
+      }
+    } catch (err) {
+      console.error('Delete preset failed:', err);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm(null);
+    }
+  };
+
+  // 当前选中的云端预设
+  const selectedCloudPreset = cloudPresets.find(p => p.url === value);
+
   return (
-    <div className="flex items-center gap-2 mt-1">
-      <span className="text-xs text-gray-300 w-16">选择贴图</span>
-      <select
-        value={value || ''}
-        onChange={(e) => onChange(e.target.value)}
-        className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
-      >
-        <option value="">请选择...</option>
-        <optgroup label="内置光效">
-          <option value="/textures/flare1.png">光效 1</option>
-          <option value="/textures/flare2.png">光效 2</option>
-          <option value="/textures/flare3.png">光效 3</option>
-          <option value="/textures/flare4.png">光效 4</option>
-          <option value="/textures/flare5.png">光效 5</option>
-          <option value="/textures/flare6.png">光效 6</option>
-          <option value="/textures/flare7.png">光效 7</option>
-          <option value="/textures/flare8.png">光效 8</option>
-          <option value="/textures/flare9.png">光效 9</option>
-        </optgroup>
-        {cloudPresets.length > 0 && (
-          <optgroup label={`✨ XingSpark (${cloudPresets.length})`}>
-            {cloudPresets.map((preset) => (
-              <option key={preset.id} value={preset.url}>{preset.name}</option>
-            ))}
+    <>
+      <div className="flex items-center gap-2 mt-1">
+        <span className="text-xs text-gray-300 w-16">选择贴图</span>
+        <select
+          value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
+        >
+          <option value="">请选择...</option>
+          <optgroup label="内置光效">
+            <option value="/textures/flare1.png">光效 1</option>
+            <option value="/textures/flare2.png">光效 2</option>
+            <option value="/textures/flare3.png">光效 3</option>
+            <option value="/textures/flare4.png">光效 4</option>
+            <option value="/textures/flare5.png">光效 5</option>
+            <option value="/textures/flare6.png">光效 6</option>
+            <option value="/textures/flare7.png">光效 7</option>
+            <option value="/textures/flare8.png">光效 8</option>
+            <option value="/textures/flare9.png">光效 9</option>
           </optgroup>
+          {cloudPresets.length > 0 && (
+            <optgroup label={`✨ XingSpark (${cloudPresets.length})`}>
+              {cloudPresets.map((preset) => (
+                <option key={preset.id} value={preset.url}>{preset.name}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        {/* 删除按钮（仅当选中云端预设时显示） */}
+        {selectedCloudPreset && (
+          <button
+            onClick={() => setDeleteConfirm(selectedCloudPreset)}
+            className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
+            title="删除此预设"
+          >
+            🗑️
+          </button>
         )}
-      </select>
-    </div>
+      </div>
+
+      {/* 删除确认弹窗 */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60" onClick={() => !isDeleting && setDeleteConfirm(null)}>
+          <div
+            className="w-80 rounded-xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(180deg, rgba(25,25,40,0.98) 0%, rgba(15,15,25,0.98) 100%)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 0 40px rgba(100,100,200,0.2)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/10">
+              <h3 className="text-white font-medium">确认删除</h3>
+            </div>
+            <div className="p-4">
+              <p className="text-white/80 text-sm">确定要删除预设 "{deleteConfirm.name}" 吗？此操作不可撤销。</p>
+            </div>
+            <div className="p-3 flex gap-2 justify-end border-t border-white/10">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-sm text-white/60 hover:text-white/90 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? '删除中...' : '删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };
 
@@ -1151,8 +1233,10 @@ const ImageSelectDropdown: React.FC<{
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // 加载云端 AI 预设
-  const { loadCloudConfig } = useUser();
+  const { loadCloudConfig, saveCloudConfig } = useUser();
   const [cloudPresets, setCloudPresets] = useState<{ id: string; name: string; url: string }[]>([]);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; url: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     loadCloudConfig().then(config => {
@@ -1161,6 +1245,29 @@ const ImageSelectDropdown: React.FC<{
       }
     });
   }, [loadCloudConfig]);
+
+  // 删除预设
+  const handleDeletePreset = async () => {
+    if (!deleteConfirm) return;
+    setIsDeleting(true);
+    try {
+      await fetch(`/api/upload?url=${encodeURIComponent(deleteConfirm.url)}`, { method: 'DELETE' });
+      const config = await loadCloudConfig();
+      if (config) {
+        const updated = (config.magicCircleTexturePresets || []).filter((p: any) => p.id !== deleteConfirm.id);
+        await saveCloudConfig({ ...config, magicCircleTexturePresets: updated });
+        setCloudPresets(updated);
+      }
+      if (value === deleteConfirm.url) {
+        onChange('');
+      }
+    } catch (err) {
+      console.error('Delete preset failed:', err);
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm(null);
+    }
+  };
 
   // 点击外部关闭
   useEffect(() => {
@@ -1233,26 +1340,35 @@ const ImageSelectDropdown: React.FC<{
                 <div className="grid grid-cols-4 gap-1 p-2">
                   {cloudPresets.length > 0 ? (
                     cloudPresets.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => { onChange(preset.url); setIsOpen(false); }}
-                        className={`p-1 rounded transition-colors ${preset.url === value
-                          ? 'bg-purple-600 ring-2 ring-purple-400'
-                          : 'bg-gray-700 hover:bg-gray-600'
-                          }`}
-                        title={preset.name}
-                      >
-                        <div className="w-full aspect-square rounded overflow-hidden bg-black">
-                          <img
-                            src={preset.url}
-                            alt={preset.name}
-                            className="w-full h-full object-contain"
-                            loading="eager"
-                            decoding="async"
-                            onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0'; }}
-                          />
-                        </div>
-                      </button>
+                      <div key={preset.id} className="relative group">
+                        <button
+                          onClick={() => { onChange(preset.url); setIsOpen(false); }}
+                          className={`w-full p-1 rounded transition-colors ${preset.url === value
+                            ? 'bg-purple-600 ring-2 ring-purple-400'
+                            : 'bg-gray-700 hover:bg-gray-600'
+                            }`}
+                          title={preset.name}
+                        >
+                          <div className="w-full aspect-square rounded overflow-hidden bg-black">
+                            <img
+                              src={preset.url}
+                              alt={preset.name}
+                              className="w-full h-full object-contain"
+                              loading="eager"
+                              decoding="async"
+                              onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0'; }}
+                            />
+                          </div>
+                        </button>
+                        {/* 删除按钮 */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirm(preset); }}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                          title="删除"
+                        >
+                          ×
+                        </button>
+                      </div>
                     ))
                   ) : (
                     <div className="col-span-4 text-center py-4 text-gray-400 text-xs">
@@ -1291,6 +1407,45 @@ const ImageSelectDropdown: React.FC<{
           </div>
         )}
       </div>
+
+      {/* 删除确认弹窗 */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60" onClick={() => !isDeleting && setDeleteConfirm(null)}>
+          <div
+            className="w-80 rounded-xl overflow-hidden"
+            style={{
+              background: 'linear-gradient(180deg, rgba(25,25,40,0.98) 0%, rgba(15,15,25,0.98) 100%)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 0 40px rgba(100,100,200,0.2)'
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/10">
+              <h3 className="text-white font-medium">确认删除</h3>
+            </div>
+            <div className="p-4">
+              <p className="text-white/80 text-sm">确定要删除法阵贴图 "{deleteConfirm.name}" 吗？此操作不可撤销。</p>
+            </div>
+            <div className="p-3 flex gap-2 justify-end border-t border-white/10">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-sm text-white/60 hover:text-white/90 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleDeletePreset}
+                disabled={isDeleting}
+                className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? '删除中...' : '删除'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 };

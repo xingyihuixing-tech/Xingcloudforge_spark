@@ -44,8 +44,10 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     const [bgSubTab, setBgSubTab] = useState<'builtin' | 'ai'>('builtin');
 
     // Cloud presets from user context
-    const { loadCloudConfig } = useUser();
+    const { loadCloudConfig, saveCloudConfig } = useUser();
     const [cloudBackgroundPresets, setCloudBackgroundPresets] = useState<{ id: string; name: string; url: string }[]>([]);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; url: string } | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Load cloud presets on mount
     useEffect(() => {
@@ -55,6 +57,29 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
             }
         });
     }, [loadCloudConfig]);
+
+    // 删除背景预设
+    const handleDeletePreset = async () => {
+        if (!deleteConfirm) return;
+        setIsDeleting(true);
+        try {
+            await fetch(`/api/upload?url=${encodeURIComponent(deleteConfirm.url)}`, { method: 'DELETE' });
+            const config = await loadCloudConfig();
+            if (config) {
+                const updated = (config.backgroundPresets || []).filter((p: any) => p.id !== deleteConfirm.id);
+                await saveCloudConfig({ ...config, backgroundPresets: updated });
+                setCloudBackgroundPresets(updated);
+            }
+            if (currentBg?.panoramaUrl === deleteConfirm.url) {
+                updateBackground({ panoramaUrl: '' });
+            }
+        } catch (err) {
+            console.error('Delete preset failed:', err);
+        } finally {
+            setIsDeleting(false);
+            setDeleteConfirm(null);
+        }
+    };
 
     // Use effects to sync or load defaults if needed
 
@@ -180,18 +205,27 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                             <div className="grid grid-cols-2 gap-2">
                                                 {cloudBackgroundPresets.length > 0 ? (
                                                     cloudBackgroundPresets.map((preset) => (
-                                                        <button
-                                                            key={preset.id}
-                                                            onClick={() => updateBackground({ panoramaUrl: preset.url })}
-                                                            className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2
-                                                                ${currentBg?.panoramaUrl === preset.url
-                                                                    ? 'bg-purple-500/20 border-purple-500/50 text-white'
-                                                                    : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
-                                                                }`}
-                                                        >
-                                                            <div className="w-2 h-2 rounded-full bg-purple-400" style={{ opacity: currentBg?.panoramaUrl === preset.url ? 1 : 0 }} />
-                                                            {preset.name}
-                                                        </button>
+                                                        <div key={preset.id} className="relative group">
+                                                            <button
+                                                                onClick={() => updateBackground({ panoramaUrl: preset.url })}
+                                                                className={`w-full p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2
+                                                                    ${currentBg?.panoramaUrl === preset.url
+                                                                        ? 'bg-purple-500/20 border-purple-500/50 text-white'
+                                                                        : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
+                                                                    }`}
+                                                            >
+                                                                <div className="w-2 h-2 rounded-full bg-purple-400" style={{ opacity: currentBg?.panoramaUrl === preset.url ? 1 : 0 }} />
+                                                                {preset.name}
+                                                            </button>
+                                                            {/* 删除按钮 */}
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(preset); }}
+                                                                className="absolute top-1 right-1 w-5 h-5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                                                title="删除"
+                                                            >
+                                                                ×
+                                                            </button>
+                                                        </div>
                                                     ))
                                                 ) : (
                                                     <div className="col-span-2 text-center py-4 text-white/30 text-xs">
@@ -561,6 +595,45 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* 删除确认弹窗 */}
+            {deleteConfirm && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60" onClick={() => !isDeleting && setDeleteConfirm(null)}>
+                    <div
+                        className="w-80 rounded-xl overflow-hidden"
+                        style={{
+                            background: 'linear-gradient(180deg, rgba(25,25,40,0.98) 0%, rgba(15,15,25,0.98) 100%)',
+                            backdropFilter: 'blur(20px)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            boxShadow: '0 0 40px rgba(100,100,200,0.2)'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="p-4 border-b border-white/10">
+                            <h3 className="text-white font-medium">确认删除</h3>
+                        </div>
+                        <div className="p-4">
+                            <p className="text-white/80 text-sm">确定要删除背景预设 "{deleteConfirm.name}" 吗？此操作不可撤销。</p>
+                        </div>
+                        <div className="p-3 flex gap-2 justify-end border-t border-white/10">
+                            <button
+                                onClick={() => setDeleteConfirm(null)}
+                                disabled={isDeleting}
+                                className="px-3 py-1.5 text-sm text-white/60 hover:text-white/90 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleDeletePreset}
+                                disabled={isDeleting}
+                                className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                {isDeleting ? '删除中...' : '删除'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>,
         document.body
     );
