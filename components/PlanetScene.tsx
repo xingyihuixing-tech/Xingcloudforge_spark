@@ -3827,6 +3827,7 @@ uniform float uGlowIntensity;     // 光晕强度 0-2
 uniform float uTime;
 uniform sampler2D uTexture;       // 贴图纹理
 uniform float uUseTexture;        // 是否使用贴图 (0 或 1)
+uniform float uColorMode;         // 颜色模式: 0=solid, 1=texture, 2=tint
 uniform sampler2D uShapeTexture;  // 星云粒子形状纹理图集
 
 varying float vPulse;
@@ -3960,8 +3961,20 @@ void main() {
   else if (style == 3) {
     // 检查是否有贴图
     if (uUseTexture > 0.5) {
-      // 使用 gl_PointCoord
-      vec2 texUV = gl_PointCoord;
+      // 使用 gl_PointCoord，中心化到 [-0.5, 0.5] 范围
+      vec2 texUV = gl_PointCoord - 0.5;
+      
+      // 根据速度方向旋转贴图坐标
+      // 目标：贴图的"下方"(默认 +Y 方向) 应指向速度反方向 (拖尾方向)
+      // vStretchDir 是速度方向，我们需要旋转使得 (0, -1) 对齐到 -vStretchDir
+      if (uVelocityStretch > 0.01 && length(vStretchDir) > 0.01) {
+        // 计算旋转角度：从默认向上 (0,1) 到速度方向
+        float targetAngle = atan(vStretchDir.x, vStretchDir.y);
+        texUV = rotate2D(texUV, -targetAngle);
+      }
+      
+      // 转回 [0, 1] 范围
+      texUV = texUV + 0.5;
       
       // 采样贴图
       vec4 texColor = texture2D(uTexture, texUV);
@@ -3973,8 +3986,20 @@ void main() {
       float texAlpha = texColor.a > 0.01 ? texColor.a : 1.0;
       alpha = texBrightness * texAlpha * noiseVal * 1.5;
       
-      // 颜色混合
-      finalColor = uColor * (0.5 + texBrightness * 0.8);
+      // 颜色混合根据 colorMode
+      // 0=solid: 纯色（忽略贴图颜色）
+      // 1=texture: 贴图原色
+      // 2=tint: 贴图颜色 × 配置颜色
+      if (uColorMode < 0.5) {
+        // solid: 纯色
+        finalColor = uColor * (0.8 + texBrightness * 0.5);
+      } else if (uColorMode < 1.5) {
+        // texture: 使用贴图原色
+        finalColor = texColor.rgb * 1.2;
+      } else {
+        // tint: 贴图颜色 × 配置颜色（旧行为）
+        finalColor = texColor.rgb * uColor * 1.5;
+      }
     } else {
       // 无贴图退化为光点
       float core = 1.0 - smoothstep(0.2, 0.6, dist);
@@ -11024,7 +11049,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         uPulseSpeed: { value: firefly.pulseSpeed ?? 1.0 },
         uTexture: { value: texture },
         uUseTexture: { value: texture ? 1.0 : 0.0 },
-        uShapeTexture: { value: getShapeTexture() }
+        uShapeTexture: { value: getShapeTexture() },
+        uColorMode: { value: firefly.colorMode === 'texture' ? 1.0 : firefly.colorMode === 'tint' ? 2.0 : 0.0 }
       },
       transparent: true,
       blending: THREE.NormalBlending,
@@ -11197,7 +11223,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
           uPulseSpeed: { value: groupSettings.pulseSpeed ?? 1.5 },
           uTexture: { value: texture },
           uUseTexture: { value: texture ? 1.0 : 0.0 },
-          uShapeTexture: { value: getShapeTexture() }
+          uShapeTexture: { value: getShapeTexture() },
+          uColorMode: { value: groupSettings.colorMode === 'texture' ? 1.0 : groupSettings.colorMode === 'tint' ? 2.0 : 0.0 }
         },
         transparent: true,
         blending: THREE.NormalBlending,

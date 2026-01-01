@@ -1272,6 +1272,10 @@ export interface RadiationSystemSettings {
 // plain=普通圆点, flare=N叶星芒, spark=尖锐火花, texture=贴图
 export type FireflyHeadStyle = 'plain' | 'flare' | 'spark' | 'texture';
 
+// 流萤颜色模式
+// solid=纯色(忽略贴图颜色), texture=贴图原色, tint=贴图颜色×配置颜色
+export type FireflyColorMode = 'solid' | 'texture' | 'tint';
+
 // 旋转流萤配置
 export interface OrbitingFireflySettings {
   id: string;
@@ -1289,6 +1293,7 @@ export interface OrbitingFireflySettings {
   brightness: number;          // 亮度 0.5-8
   headStyle: FireflyHeadStyle; // 头部样式
   headTexture: string;         // 贴图路径（texture 样式时使用）
+  colorMode?: FireflyColorMode; // 颜色模式（texture 样式时使用）
   // 星芒参数（flare 样式）
   flareIntensity: number;      // 星芒强度 0-2
   flareLeaves: number;         // 星芒叶片数 4-8
@@ -1333,7 +1338,7 @@ export interface WanderingFireflyGroupSettings {
   brightness: number;          // 亮度 0.5-8
   headStyle: FireflyHeadStyle; // 头部样式
   headTexture: string;         // 贴图路径（texture 样式时使用）
-  // 星芒参数（flare 样式）
+  colorMode?: FireflyColorMode; // 颜色模式（texture 样式时使用）
   flareIntensity: number;      // 星芒强度 0-2
   flareLeaves: number;         // 星芒叶片数 4-8
   flareWidth: number;          // 星芒宽度 0.1-1

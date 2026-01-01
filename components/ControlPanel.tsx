@@ -9847,10 +9847,24 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                   </>
                                 )}
                                 {currentOrbitingFirefly.headStyle === 'texture' && (
-                                  <HeadTextureSelect
-                                    value={currentOrbitingFirefly.headTexture || ''}
-                                    onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { headTexture: v })}
-                                  />
+                                  <>
+                                    <HeadTextureSelect
+                                      value={currentOrbitingFirefly.headTexture || ''}
+                                      onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { headTexture: v })}
+                                    />
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-xs text-gray-300 w-16">颜色模式</span>
+                                      <select
+                                        value={currentOrbitingFirefly.colorMode || 'solid'}
+                                        onChange={(e) => updateOrbitingFirefly(currentOrbitingFirefly.id, { colorMode: e.target.value as any })}
+                                        className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
+                                      >
+                                        <option value="solid">纯色（使用配置颜色）</option>
+                                        <option value="texture">贴图原色</option>
+                                        <option value="tint">混合（贴图×配置色）</option>
+                                      </select>
+                                    </div>
+                                  </>
                                 )}
                                 <RangeControl label="光晕强度" value={currentOrbitingFirefly.glowIntensity ?? 0.5} min={0} max={2} step={0.1} onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { glowIntensity: v })} />
                                 <RangeControl label="脉冲速度" value={currentOrbitingFirefly.pulseSpeed ?? 1} min={0} max={10} step={0.1} onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { pulseSpeed: v })} />
@@ -10079,25 +10093,24 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                   </>
                                 )}
                                 {currentWanderingGroup.headStyle === 'texture' && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-xs text-gray-300 w-16">选择贴图</span>
-                                    <select
+                                  <>
+                                    <HeadTextureSelect
                                       value={currentWanderingGroup.headTexture || ''}
-                                      onChange={(e) => updateWanderingGroup(currentWanderingGroup.id, { headTexture: e.target.value })}
-                                      className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
-                                    >
-                                      <option value="">请选择...</option>
-                                      <option value="/textures/flare1.png">光效 1</option>
-                                      <option value="/textures/flare2.png">光效 2</option>
-                                      <option value="/textures/flare3.png">光效 3</option>
-                                      <option value="/textures/flare4.png">光效 4</option>
-                                      <option value="/textures/flare5.png">光效 5</option>
-                                      <option value="/textures/flare6.png">光效 6</option>
-                                      <option value="/textures/flare7.png">光效 7</option>
-                                      <option value="/textures/flare8.png">光效 8</option>
-                                      <option value="/textures/flare9.png">光效 9</option>
-                                    </select>
-                                  </div>
+                                      onChange={(v) => updateWanderingGroup(currentWanderingGroup.id, { headTexture: v })}
+                                    />
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <span className="text-xs text-gray-300 w-16">颜色模式</span>
+                                      <select
+                                        value={currentWanderingGroup.colorMode || 'solid'}
+                                        onChange={(e) => updateWanderingGroup(currentWanderingGroup.id, { colorMode: e.target.value as any })}
+                                        className="flex-1 px-2 py-1 bg-gray-700 rounded text-xs text-gray-200"
+                                      >
+                                        <option value="solid">纯色（使用配置颜色）</option>
+                                        <option value="texture">贴图原色</option>
+                                        <option value="tint">混合（贴图×配置色）</option>
+                                      </select>
+                                    </div>
+                                  </>
                                 )}
                                 <RangeControl label="光晕强度" value={currentWanderingGroup.glowIntensity ?? 0.5} min={0} max={2} step={0.1} onChange={(v) => updateWanderingGroup(currentWanderingGroup.id, { glowIntensity: v })} />
                                 <RangeControl label="脉冲速度" value={currentWanderingGroup.pulseSpeed ?? 1.5} min={0} max={10} step={0.1} onChange={(v) => updateWanderingGroup(currentWanderingGroup.id, { pulseSpeed: v })} />
