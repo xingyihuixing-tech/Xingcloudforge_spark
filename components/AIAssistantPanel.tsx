@@ -212,6 +212,47 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, []);
 
+    // === 粘贴图片 ===
+    const handlePaste = useCallback((e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (const item of items) {
+            if (item.type.startsWith('image/')) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setUploadedImage(event.target?.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                }
+                break;
+            }
+        }
+    }, []);
+
+    // === 拖拽图片 ===
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const file = e.dataTransfer?.files?.[0];
+        if (file && file.type.startsWith('image/')) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                setUploadedImage(event.target?.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    }, []);
+
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
+
     // === 润色功能 (调用 AI) ===
     const handleRefine = useCallback(async () => {
         if (!inputValue.trim() || isRefining) return;
@@ -621,15 +662,25 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     {uploadedImage && (
                         <div className="px-3 py-2 bg-purple-500/10 border-t border-purple-400/20">
                             <div className="flex items-center gap-2">
-                                <img src={uploadedImage} alt="Upload" className="h-12 w-12 object-cover rounded" />
-                                <span className="text-xs text-purple-200 flex-1">已上传参考图片</span>
+                                <img
+                                    src={uploadedImage}
+                                    alt="Upload"
+                                    className="h-12 w-12 object-cover rounded cursor-pointer hover:opacity-80 transition-opacity"
+                                    onClick={() => setPreviewImage(uploadedImage)}
+                                    title="点击放大预览"
+                                />
+                                <span className="text-xs text-purple-200 flex-1">已上传参考图片 (点击放大)</span>
                                 <button onClick={clearUploadedImage} className="text-xs text-white/40 hover:text-white/60">✕ 移除</button>
                             </div>
                         </div>
                     )}
 
-                    {/* 输入区 */}
-                    <div className="p-3 border-t border-white/10">
+                    {/* 输入区 (支持拖拽图片) */}
+                    <div
+                        className="p-3 border-t border-white/10"
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                    >
                         <div className="flex gap-2 items-end">
                             {/* 图片上传按钮 */}
                             <input
@@ -647,7 +698,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 📎
                             </button>
 
-                            {/* 输入框 */}
+                            {/* 输入框 (支持粘贴图片) */}
                             <textarea
                                 value={inputValue}
                                 onChange={e => setInputValue(e.target.value)}
@@ -657,10 +708,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         handleSend();
                                     }
                                 }}
+                                onPaste={handlePaste}
                                 placeholder={
                                     activeMode === 'inspiration'
-                                        ? `描述你想要的${INSPIRATION_MODE_INFO[inspirationSubMode].name}...`
-                                        : '描述你的需求...'
+                                        ? `描述你想要的${INSPIRATION_MODE_INFO[inspirationSubMode].name}... (可粘贴/拖拽图片)`
+                                        : '描述你的需求... (可粘贴/拖拽图片)'
                                 }
                                 className="flex-1 bg-white/10 text-white/90 placeholder-white/30 rounded-xl px-4 py-2 text-sm border border-white/10 focus:border-blue-400/50 focus:outline-none resize-none"
                                 rows={2}
@@ -698,6 +750,28 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* 图片放大预览 Modal */}
+            {previewImage && (
+                <div
+                    className="fixed inset-0 bg-black/80 flex items-center justify-center z-[10001] cursor-pointer"
+                    onClick={() => setPreviewImage(null)}
+                >
+                    <div className="relative max-w-[90vw] max-h-[90vh]">
+                        <img
+                            src={previewImage}
+                            alt="Preview"
+                            className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                        />
+                        <button
+                            className="absolute top-2 right-2 w-8 h-8 bg-black/50 rounded-full text-white hover:bg-black/70 flex items-center justify-center"
+                            onClick={() => setPreviewImage(null)}
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            )}
         </>,
         document.body
     );
