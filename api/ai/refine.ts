@@ -9,7 +9,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-import { getProxyConfig, DEFAULT_CHAT_MODEL, CHAT_MODELS } from '../../utils/ai/modelConfig';
+// import { getProxyConfig, DEFAULT_CHAT_MODEL, CHAT_MODELS } from '../../utils/ai/modelConfig'; // 移除这行，避免Vercel路径解析失败
 
 export const config = {
     api: {
@@ -101,13 +101,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `${baseSystemPrompt}\n\n用户上传了一张参考图片，请分析图片特征并融入你的润色描述中。`
         : baseSystemPrompt;
 
-    // 使用 modelConfig 获取配置
-    // 这里允许前端传入 model，如果没有则使用默认值
-    const targetModel = model && CHAT_MODELS.some(m => m.id === model) ? model : DEFAULT_CHAT_MODEL;
-    const proxyConfig = getProxyConfig(targetModel);
+    // 内联逻辑：优先使用传入的 model，否则默认 Sonnet
+    // 润色功能统一使用 Chat Proxy (Jimiai)，因为它支持所有主流对话模型
+    const defaultModel = 'claude-sonnet-4-5-20250929';
+    const targetModel = model || defaultModel;
 
-    if (!proxyConfig.apiKey) {
-        console.error('Missing API Key for model:', targetModel);
+    const baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
+    const apiKey = process.env.CHAT_API_KEY;
+
+    if (!apiKey) {
+        console.error('Missing CHAT_API_KEY');
         return res.status(500).json({ error: 'AI Config Missing' });
     }
 
@@ -146,11 +149,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
         console.log(`[Refine] Mode: ${mode}, SubMode: ${subMode}, HasImage: ${!!imageBase64}, Model: ${targetModel}`);
 
-        const proxyRes = await fetch(`${proxyConfig.baseUrl}/chat/completions`, {
+        const proxyRes = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${proxyConfig.apiKey}`
+                'Authorization': `Bearer ${apiKey}`
             },
             body: JSON.stringify(payload)
         });
