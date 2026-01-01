@@ -4501,7 +4501,17 @@ function createEnergyBodyMesh(config: EnergyBodySettings): {
   let shellMesh: THREE.Mesh | null = null;
 
   const rotAxis = getRotationAxis(config.rotationAxis);
-  const { edgeEffect, vertexEffect, shellEffect, organicAnimation } = config;
+  const { edgeEffect, vertexEffect, shellEffect, organicAnimation: rawOrganicAnimation } = config;
+  // 兜底：确保 organicAnimation 不为 undefined
+  const organicAnimation = rawOrganicAnimation ?? {
+    breathingEnabled: false,
+    breathingIntensity: 0.15,
+    breathingSpeed: 0.5,
+    noiseEnabled: false,
+    noiseAmplitude: 0.1,
+    noiseFrequency: 2.0,
+    noiseSpeed: 0.5
+  };
 
   // 閫��憸𡏭𠧧
   const parseColor = (hex: string) => {
@@ -8322,7 +8332,17 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             ebData.group.visible = true;
 
             const rotAxis = getRotationAxis(eb.rotationAxis);
-            const { edgeEffect, vertexEffect, shellEffect, organicAnimation, lightFlow } = eb;
+            const { edgeEffect, vertexEffect, shellEffect, organicAnimation: rawOrganicAnim, lightFlow } = eb;
+            // 兜底：确保 organicAnimation 不为 undefined
+            const organicAnimation = rawOrganicAnim ?? {
+              breathingEnabled: false,
+              breathingIntensity: 0.15,
+              breathingSpeed: 0.5,
+              noiseEnabled: false,
+              noiseAmplitude: 0.1,
+              noiseFrequency: 2.0,
+              noiseSpeed: 0.5
+            };
 
             // ========== �湔鰵�匧��嗆���頝臬�蝟餌�嚗?==========
             if (ebData.graph && ebData.lightPackets.length > 0 && lightFlow.enabled) {
