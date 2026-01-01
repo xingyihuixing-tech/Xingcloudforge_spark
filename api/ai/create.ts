@@ -1,0 +1,198 @@
+/**
+ * AI 创造系统 - 配置生成 API
+ * 
+ * input: POST { selectedModules, modes?, description, baseConfig? }
+ * output: { success, config, warnings, errors }
+ * pos: 接收用户选择，调用 Claude 生成配置，验证并应用
+ * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
+ */
+
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { EffectType } from '../../utils/ai/schemaBuilder';
+import { buildKnowledgeSnippet } from '../../utils/ai/kbBuilder';
+import { validateAndNormalize, parseAIOutput, generateErrorFixPrompt, AIOutput } from '../../utils/ai/configValidator';
+
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '1mb',
+        },
+    },
+};
+
+// 最大回修次数
+const MAX_FIX_ROUNDS = 2;
+
+// 对话模型列表
+const CHAT_MODELS = [
+    'claude-haiku-4-5-20251001',
+    'claude-sonnet-4-20250514',
+    'claude-3-5-sonnet-20240620'
+];
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // CORS
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    const {
+        selectedModules,
+        modes = {},
+        description,
+        model
+    } = req.body;
+
+    // 参数验证
+    if (!selectedModules || !Array.isArray(selectedModules) || selectedModules.length === 0) {
+        return res.status(400).json({ error: 'selectedModules is required and must be a non-empty array' });
+    }
+
+    if (!description || typeof description !== 'string') {
+        return res.status(400).json({ error: 'description is required' });
+    }
+
+    // 验证模块类型
+    const validModules = selectedModules.filter((m: string) =>
+        ['particleCore', 'solidCore', 'energyCore', 'energyBody', 'particleRing',
+            'ringBelt', 'spiralRing', 'particleOrbit', 'particleJet',
+            'rotatingFirefly', 'wanderingFirefly'].includes(m)
+    ) as EffectType[];
+
+    if (validModules.length === 0) {
+        return res.status(400).json({ error: 'No valid modules selected' });
+    }
+
+    // API 配置
+    const baseUrl = process.env.JIMIAI_BASE_URL || 'https://api.jimiai.io/v1';
+    const apiKey = process.env.JIMIAI_API_KEY;
+
+    if (!apiKey) {
+        console.error('Missing JIMIAI_API_KEY');
+        return res.status(500).json({ error: 'API Config Missing' });
+    }
+
+    const targetModel = model && CHAT_MODELS.includes(model) ? model : CHAT_MODELS[0];
+
+    try {
+        // 1. 构建 KB
+        const kb = buildKnowledgeSnippet({
+            selectedModules: validModules,
+            modes,
+            includeExamples: true,
+            includeRules: true,
+            compact: false
+        });
+
+        // 2. 构建 system prompt
+        const systemPrompt = `你是一个星球效果配置专家。
+
+${kb}
+
+请仔细阅读上述规格，根据用户描述生成合理的配置。只输出 JSON，不要添加任何解释。`;
+
+        // 3. 第一次调用
+        let aiOutput = await callClaude(baseUrl, apiKey, targetModel, systemPrompt, description);
+
+        if (!aiOutput) {
+            return res.status(500).json({ error: 'AI 返回内容无法解析为 JSON' });
+        }
+
+        // 4. 验证并归一化
+        let validation = validateAndNormalize(aiOutput, validModules);
+
+        // 5. 回修循环（如有结构性错误）
+        let fixRound = 0;
+        while (validation.errors.length > 0 && fixRound < MAX_FIX_ROUNDS) {
+            fixRound++;
+            console.log(`[Create] Fix round ${fixRound}, errors:`, validation.errors);
+
+            const fixPrompt = generateErrorFixPrompt(validation.errors);
+            aiOutput = await callClaude(baseUrl, apiKey, targetModel, systemPrompt, fixPrompt);
+
+            if (!aiOutput) {
+                break;
+            }
+
+            validation = validateAndNormalize(aiOutput, validModules);
+        }
+
+        // 6. 返回结果
+        if (validation.errors.length > 0) {
+            return res.status(400).json({
+                success: false,
+                errors: validation.errors,
+                warnings: validation.warnings,
+                message: `经过 ${fixRound} 轮修复仍有错误`
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            patch: validation.normalizedPatch,
+            warnings: validation.warnings,
+            fixRounds: fixRound
+        });
+
+    } catch (error: any) {
+        console.error('[Create] Error:', error);
+        return res.status(500).json({
+            error: error.message || 'Internal Server Error'
+        });
+    }
+}
+
+/**
+ * 调用 Claude API
+ */
+async function callClaude(
+    baseUrl: string,
+    apiKey: string,
+    model: string,
+    systemPrompt: string,
+    userPrompt: string
+): Promise<AIOutput | null> {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+            ],
+            temperature: 0.7,
+            max_tokens: 4000
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Create] API Error:', response.status, errorText);
+        throw new Error(`API Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+
+    if (!content) {
+        console.error('[Create] Empty response from AI');
+        return null;
+    }
+
+    console.log('[Create] AI Response:', content.substring(0, 200) + '...');
+
+    return parseAIOutput(content);
+}
