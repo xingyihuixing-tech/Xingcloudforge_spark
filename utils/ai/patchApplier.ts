@@ -19,7 +19,7 @@ import {
     createDefaultEmitter,
     createDefaultOrbitingFirefly,
     createDefaultWanderingGroup
-} from '../../constants';
+} from './serverDefaults';
 
 // ============================================
 // 路径映射配置

@@ -17,6 +17,7 @@
 | **`kbBuilder.ts`** | KB 组装器 (**新**) |
 | **`configValidator.ts`** | 配置验证+归一化 (**新**) |
 | **`patchApplier.ts`** | Patch→PlanetSettings 适配器 (**新**) |
+| **`serverDefaults.ts`** | 服务端默认值 (No-Browser) (**新**) |
 
 ## 数据流 (创造模式 v2)
 

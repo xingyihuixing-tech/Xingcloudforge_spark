@@ -9,6 +9,8 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
+import { getProxyConfig, DEFAULT_CHAT_MODEL, CHAT_MODELS } from '../../utils/ai/modelConfig';
+
 export const config = {
     api: {
         bodyParser: {
@@ -80,7 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { prompt, mode, subMode, imageBase64 } = req.body;
+    const { prompt, mode, subMode, imageBase64, model } = req.body;
 
     if (!prompt) {
         return res.status(400).json({ error: 'Prompt is required' });
@@ -99,12 +101,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `${baseSystemPrompt}\n\n用户上传了一张参考图片，请分析图片特征并融入你的润色描述中。`
         : baseSystemPrompt;
 
-    // 使用对话模型
-    const baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
-    const apiKey = process.env.CHAT_API_KEY;
+    // 使用 modelConfig 获取配置
+    // 这里允许前端传入 model，如果没有则使用默认值
+    const targetModel = model && CHAT_MODELS.some(m => m.id === model) ? model : DEFAULT_CHAT_MODEL;
+    const proxyConfig = getProxyConfig(targetModel);
 
-    if (!apiKey) {
-        console.error('Missing CHAT_API_KEY');
+    if (!proxyConfig.apiKey) {
+        console.error('Missing API Key for model:', targetModel);
         return res.status(500).json({ error: 'AI Config Missing' });
     }
 
@@ -131,7 +134,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
 
         const payload = {
-            model: 'claude-haiku-4-5-20251001',  // 快速模型
+            model: targetModel,
             messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userContent }
@@ -141,13 +144,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             max_tokens: 500
         };
 
-        console.log(`[Refine] Mode: ${mode}, SubMode: ${subMode}, HasImage: ${!!imageBase64}`);
+        console.log(`[Refine] Mode: ${mode}, SubMode: ${subMode}, HasImage: ${!!imageBase64}, Model: ${targetModel}`);
 
-        const proxyRes = await fetch(`${baseUrl}/chat/completions`, {
+        const proxyRes = await fetch(`${proxyConfig.baseUrl}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
+                'Authorization': `Bearer ${proxyConfig.apiKey}`
             },
             body: JSON.stringify(payload)
         });

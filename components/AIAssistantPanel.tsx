@@ -226,7 +226,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     prompt: inputValue.trim(),
                     mode: activeMode,
                     subMode: activeMode === 'inspiration' ? inspirationSubMode : undefined,
-                    imageBase64: uploadedImage || undefined
+                    imageBase64: uploadedImage || undefined,
+                    model: chatModel
                 })
             });
 
