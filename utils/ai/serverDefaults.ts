@@ -92,91 +92,9 @@ export const createDefaultCore = (id: string, name: string = '核心'): PlanetCo
 });
 
 // ==================== 能量体 ====================
-
-export const createDefaultEnergyBody = (id: string, name: string = '能量体'): EnergyBodySettings => ({
-    id,
-    name,
-    enabled: true,
-    polyhedronType: 'icosahedron',
-    subdivisionLevel: 0,
-    radius: 120,
-    spherize: 0,
-    renderMode: 'wireframe',
-    edgeEffect: {
-        width: 1.5,
-        glowIntensity: 1.0,
-        softEdgeFalloff: 0.8,
-        color: '#ffd700',
-        gradientEnabled: true,
-        gradientEndColor: '#ffffff',
-        dashPattern: { enabled: false, dashRatio: 0.6, dashDensity: 10, flowSpeed: 1.0 }
-    },
-    vertexEffect: {
-        enabled: true,
-        size: 3.0,
-        shape: 'circle' as VertexShape, // 假设默认
-        glowIntensity: 1.2,
-        color: '#ffffff'
-    },
-    surfaceEffect: {
-        opacity: 0.3,
-        fresnelPower: 2.0,
-        fresnelColor: '#ffff00',
-        baseColor: '#ffaa00',
-        textureOverlay: { enabled: false, texture: 'noise', scale: 2.0, flowSpeed: 0.2, blendMode: 'add', intensity: 0.5 }
-    },
-    transforms: {
-        rotation: { x: 0, y: 0, z: 0 },
-        scale: { x: 1, y: 1, z: 1 },
-        position: { x: 0, y: 0, z: 0 }
-    },
-    animation: {
-        rotationSpeed: { x: 0.2, y: 0.5, z: 0.1 },
-        pulseEnabled: true,
-        pulseSpeed: 1.5,
-        pulseMinScale: 0.95,
-        pulseMaxScale: 1.05,
-        wobbleEnabled: false,
-        wobbleSpeed: 1.0,
-        wobbleStrength: 0.1
-    },
-    voronoiEffect: {
-        enabled: false,
-        scale: 2.0,
-        thickness: 0.1,
-        speed: 0.5,
-        color: '#ffffff',
-        cellColor: '#000000',
-        cellOpacity: 0
-    },
-    postEffects: {
-        bloomEnabled: true,
-        bloomThreshold: 0.8,
-        bloomIntensity: 1.5, // 修正字段名
-        bloomRadius: 0.5,
-        chromaticAberrationEnabled: false,
-        chromaticAberrationIntensity: 0,
-        vignetteEnabled: false,
-        vignetteIntensity: 0,
-        vignetteRadius: 1.0
-    },
-    blendMode: 'additive',
-    depthWrite: false,
-    // 添加缺失的 organicAnimation 字段
-    organicAnimation: {
-        breathingEnabled: false,
-        breathingIntensity: 0.15,
-        breathingSpeed: 0.5,
-        noiseEnabled: false,
-        noiseAmplitude: 0.1,
-        noiseFrequency: 2.0,
-        noiseSpeed: 0.5
-    },
-    // 添加缺失的 rotationAxis 字段
-    rotationAxis: { ...DEFAULT_ROTATION_AXIS_SETTINGS },
-    rotationSpeed: 0.3,
-    globalOpacity: 0.9
-});
+// 从 constants.ts 导入完整的 createDefaultEnergyBody，确保字段同步
+// 注意：直接导入可能导致循环依赖，所以这里需要重新导出
+export { createDefaultEnergyBody } from '../../constants';
 
 // ==================== 星环系统 ====================
 
