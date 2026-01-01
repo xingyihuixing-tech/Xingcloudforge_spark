@@ -66,7 +66,9 @@ const DEFAULT_GRADIENT_COLOR: GradientColor = {
 
 const DEFAULT_ROTATION_AXIS_SETTINGS: RotationAxisSettings = {
     preset: 'y',
-    customAxis: { x: 0, y: 1, z: 0 }
+    customX: 0,
+    customY: 1,
+    customZ: 0
 };
 
 // ==================== 核心模块 ====================
@@ -159,7 +161,21 @@ export const createDefaultEnergyBody = (id: string, name: string = '能量体'):
         vignetteRadius: 1.0
     },
     blendMode: 'additive',
-    depthWrite: false
+    depthWrite: false,
+    // 添加缺失的 organicAnimation 字段
+    organicAnimation: {
+        breathingEnabled: false,
+        breathingIntensity: 0.15,
+        breathingSpeed: 0.5,
+        noiseEnabled: false,
+        noiseAmplitude: 0.1,
+        noiseFrequency: 2.0,
+        noiseSpeed: 0.5
+    },
+    // 添加缺失的 rotationAxis 字段
+    rotationAxis: { ...DEFAULT_ROTATION_AXIS_SETTINGS },
+    rotationSpeed: 0.3,
+    globalOpacity: 0.9
 });
 
 // ==================== 星环系统 ====================
