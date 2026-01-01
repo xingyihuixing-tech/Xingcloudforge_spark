@@ -155,6 +155,42 @@ function applyInstancePatch(
     for (const [field, value] of Object.entries(inst.fields)) {
         setNestedValue(target, field, value);
     }
+
+    // 对 energyBody 进行必需子对象兜底补全
+    if (effectType === 'energyBody') {
+        ensureEnergyBodyRequiredFields(target);
+    }
+}
+
+/**
+ * 确保 energyBody 实例有所有必需的子对象
+ * 防止渲染/UI 访问 undefined 导致崩溃
+ */
+function ensureEnergyBodyRequiredFields(target: any): void {
+    // organicAnimation 是渲染必需的
+    if (!target.organicAnimation) {
+        target.organicAnimation = {
+            breathingEnabled: false,
+            breathingIntensity: 0.15,
+            breathingSpeed: 0.5,
+            noiseEnabled: false,
+            noiseAmplitude: 0.1,
+            noiseFrequency: 2.0,
+            noiseSpeed: 0.5
+        };
+    }
+    // rotationAxis 是渲染必需的
+    if (!target.rotationAxis) {
+        target.rotationAxis = { preset: 'y', customX: 0, customY: 1, customZ: 0 };
+    }
+    // globalOpacity 默认值
+    if (target.globalOpacity === undefined) {
+        target.globalOpacity = 0.9;
+    }
+    // rotationSpeed 默认值
+    if (target.rotationSpeed === undefined) {
+        target.rotationSpeed = 0.3;
+    }
 }
 
 // ============================================
