@@ -2,6 +2,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "functions": {
+    "api/ai/create.ts": {
+      "includeFiles": "utils/ai/**"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",
