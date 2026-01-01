@@ -11,7 +11,25 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { EffectType } from '../../utils/ai/schemaBuilder';
 import { buildKnowledgeSnippet } from '../../utils/ai/kbBuilder';
 import { validateAndNormalize, parseAIOutput, generateErrorFixPrompt, AIOutput } from '../../utils/ai/configValidator';
-import { getProxyConfig, DEFAULT_CHAT_MODEL, CHAT_MODELS } from '../../utils/ai/modelConfig';
+// 内联 Xuai 模型列表 (不依赖 modelConfig.ts，避免 Vercel 模块解析问题)
+const XUAI_MODELS = [
+    'gemini-3-pro-image-preview',
+    'gemini-2.5-flash-image',
+    'gemini-3-pro-preview-thinking',
+    'gemini-3-pro-image-preview-flatfee'
+];
+const DEFAULT_CHAT_MODEL = 'claude-sonnet-4-5-20250929';
+
+// 内联代理配置函数
+function getProxyConfig(modelId: string): { baseUrl: string; apiKey: string } {
+    const useXuai = XUAI_MODELS.includes(modelId);
+    return {
+        baseUrl: useXuai
+            ? (process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1')
+            : (process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1'),
+        apiKey: (useXuai ? process.env.IMAGE_API_KEY : process.env.CHAT_API_KEY) || ''
+    };
+}
 
 export const config = {
     api: {
@@ -67,7 +85,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 使用 modelConfig 获取正确的代理配置
-    const targetModel = model && CHAT_MODELS.some(m => m.id === model) ? model : DEFAULT_CHAT_MODEL;
+    const targetModel = model || DEFAULT_CHAT_MODEL;
     const proxyConfig = getProxyConfig(targetModel);
 
     if (!proxyConfig.apiKey) {

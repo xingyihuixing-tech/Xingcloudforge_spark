@@ -244,7 +244,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         } finally {
             setIsRefining(false);
         }
-    }, [inputValue, activeMode, inspirationSubMode, uploadedImage, isRefining]);
+    }, [inputValue, activeMode, inspirationSubMode, uploadedImage, isRefining, chatModel]);
 
     // === 发送 (生成图像) ===
     const handleSend = useCallback(async () => {

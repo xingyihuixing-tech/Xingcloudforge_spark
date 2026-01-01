@@ -101,16 +101,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `${baseSystemPrompt}\n\n用户上传了一张参考图片，请分析图片特征并融入你的润色描述中。`
         : baseSystemPrompt;
 
+    // 内联 Xuai 模型列表 (用户明确：这4个属于 Xuai，其他属于 Jimiai)
+    const XUAI_MODELS = [
+        'gemini-3-pro-image-preview',
+        'gemini-2.5-flash-image',
+        'gemini-3-pro-preview-thinking',
+        'gemini-3-pro-image-preview-flatfee'
+    ];
+
     // 内联逻辑：优先使用传入的 model，否则默认 Sonnet
-    // 润色功能统一使用 Chat Proxy (Jimiai)，因为它支持所有主流对话模型
     const defaultModel = 'claude-sonnet-4-5-20250929';
     const targetModel = model || defaultModel;
 
-    const baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
-    const apiKey = process.env.CHAT_API_KEY;
+    // 根据模型确定代理
+    const useXuai = XUAI_MODELS.includes(targetModel);
+    const baseUrl = useXuai
+        ? (process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1')
+        : (process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1');
+    const apiKey = useXuai
+        ? process.env.IMAGE_API_KEY
+        : process.env.CHAT_API_KEY;
 
     if (!apiKey) {
-        console.error('Missing CHAT_API_KEY');
+        console.error('Missing API Key for model:', targetModel, 'useXuai:', useXuai);
         return res.status(500).json({ error: 'AI Config Missing' });
     }
 
