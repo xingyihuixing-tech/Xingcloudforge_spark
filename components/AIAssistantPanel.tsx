@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom';
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
 import { ScopeSelector } from './ai/ScopeSelector';
+import { CreatorModePanel } from './ai/CreatorModePanel';
 import { ScopeSelection, createDefaultScopeSelection } from '../utils/ai/schemaBuilder';
 
 // 类型
@@ -510,20 +511,13 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         </div>
                     )}
 
-                    {/* 创造模式 - 模块选择 */}
-                    {activeMode === 'creator' && (
+                    {/* 创造模式 - 使用新的 CreatorModePanel */}
+                    {activeMode === 'creator' && onAddPlanet && (
                         <div className="p-3 border-b border-white/10">
-                            <ScopeSelector
-                                selection={scopeSelection}
-                                onChange={setScopeSelection}
-                                collapsed={scopeCollapsed}
-                                onToggleCollapse={() => setScopeCollapsed(!scopeCollapsed)}
+                            <CreatorModePanel
+                                onAddPlanet={onAddPlanet}
+                                chatModel={chatModel}
                             />
-                            {Object.keys(scopeSelection).length === 0 && (
-                                <p className="text-xs text-white/40 mt-2">
-                                    请点击上方展开并选择要配置的效果模块
-                                </p>
-                            )}
                         </div>
                     )}
 
