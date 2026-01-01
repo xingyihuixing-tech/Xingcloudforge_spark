@@ -11,6 +11,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { EffectType } from '../../utils/ai/schemaBuilder';
 import { buildKnowledgeSnippet } from '../../utils/ai/kbBuilder';
 import { validateAndNormalize, parseAIOutput, generateErrorFixPrompt, AIOutput } from '../../utils/ai/configValidator';
+import { getProxyConfig, DEFAULT_CHAT_MODEL, CHAT_MODELS } from '../../utils/ai/modelConfig';
 
 export const config = {
     api: {
@@ -22,13 +23,6 @@ export const config = {
 
 // 最大回修次数
 const MAX_FIX_ROUNDS = 2;
-
-// 对话模型列表
-const CHAT_MODELS = [
-    'claude-haiku-4-5-20251001',
-    'claude-sonnet-4-20250514',
-    'claude-3-5-sonnet-20240620'
-];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // CORS
@@ -72,16 +66,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: 'No valid modules selected' });
     }
 
-    // API 配置
-    const baseUrl = process.env.JIMIAI_BASE_URL || 'https://api.jimiai.io/v1';
-    const apiKey = process.env.JIMIAI_API_KEY;
+    // 使用 modelConfig 获取正确的代理配置
+    const targetModel = model && CHAT_MODELS.some(m => m.id === model) ? model : DEFAULT_CHAT_MODEL;
+    const proxyConfig = getProxyConfig(targetModel);
 
-    if (!apiKey) {
-        console.error('Missing JIMIAI_API_KEY');
+    if (!proxyConfig.apiKey) {
+        console.error('Missing API Key for model:', targetModel);
         return res.status(500).json({ error: 'API Config Missing' });
     }
-
-    const targetModel = model && CHAT_MODELS.includes(model) ? model : CHAT_MODELS[0];
 
     try {
         // 1. 构建 KB
@@ -101,7 +93,7 @@ ${kb}
 请仔细阅读上述规格，根据用户描述生成合理的配置。只输出 JSON，不要添加任何解释。`;
 
         // 3. 第一次调用
-        let aiOutput = await callClaude(baseUrl, apiKey, targetModel, systemPrompt, description);
+        let aiOutput = await callClaude(proxyConfig.baseUrl, proxyConfig.apiKey, targetModel, systemPrompt, description);
 
         if (!aiOutput) {
             return res.status(500).json({ error: 'AI 返回内容无法解析为 JSON' });
@@ -116,8 +108,11 @@ ${kb}
             fixRound++;
             console.log(`[Create] Fix round ${fixRound}, errors:`, validation.errors);
 
-            const fixPrompt = generateErrorFixPrompt(validation.errors);
-            aiOutput = await callClaude(baseUrl, apiKey, targetModel, systemPrompt, fixPrompt);
+            // 回修时保留原始描述
+            const fixPrompt = `原始需求: ${description}
+
+${generateErrorFixPrompt(validation.errors)}`;
+            aiOutput = await callClaude(proxyConfig.baseUrl, proxyConfig.apiKey, targetModel, systemPrompt, fixPrompt);
 
             if (!aiOutput) {
                 break;

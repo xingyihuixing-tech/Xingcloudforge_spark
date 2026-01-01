@@ -10,6 +10,16 @@
 import { PlanetSettings } from '../../types';
 import { EffectType } from './schemaBuilder';
 import { AIPatch, InstancePatch } from './configValidator';
+import {
+    createDefaultEnergyBody,
+    createDefaultCore,
+    createDefaultParticleRing,
+    createDefaultContinuousRing,
+    createDefaultOrbiting,
+    createDefaultEmitter,
+    createDefaultOrbitingFirefly,
+    createDefaultWanderingGroup
+} from '../../constants';
 
 // ============================================
 // 路径映射配置
@@ -39,6 +49,32 @@ const EFFECT_PATH_MAP: Record<EffectType, ArrayGetter> = {
     wanderingFirefly: (p) => p.fireflies?.wanderingGroups,
 };
 
+/**
+ * 为指定效果类型创建默认实例
+ */
+function createDefaultInstance(effectType: EffectType, id: string): any {
+    switch (effectType) {
+        case 'particleCore':
+            return createDefaultCore(id, 'AI粒子核心');
+        case 'energyBody':
+            return createDefaultEnergyBody(id, 'AI能量体');
+        case 'particleRing':
+            return createDefaultParticleRing(id, 'AI粒子环');
+        case 'ringBelt':
+            return createDefaultContinuousRing(id, 'AI环带');
+        case 'particleOrbit':
+            return createDefaultOrbiting(id, 'AI粒子环绕');
+        case 'particleJet':
+            return createDefaultEmitter(id, 'AI粒子喷射');
+        case 'rotatingFirefly':
+            return createDefaultOrbitingFirefly(id, 'AI旋转流萤');
+        case 'wanderingFirefly':
+            return createDefaultWanderingGroup(id, 'AI游走流萤');
+        default:
+            return null;
+    }
+}
+
 // ============================================
 // 主应用函数
 // ============================================
@@ -60,13 +96,33 @@ export function applyEffectPatchToPlanet(
             continue;
         }
 
-        const targetArray = getArray(result);
+        let targetArray = getArray(result);
+
+        // 如果数组不存在或为空，自动创建默认实例
         if (!targetArray || !Array.isArray(targetArray)) {
             console.warn(`[patchApplier] 效果 ${effectType} 的目标数组不存在`);
             continue;
         }
 
+        // 如果数组为空，为每个需要的实例创建默认实例
         for (const inst of data.instances) {
+            const indexMatch = inst.id.match(/instance_(\d+)/);
+            const index = indexMatch ? parseInt(indexMatch[1]) - 1 : 0;
+
+            // 确保数组有足够的元素
+            while (targetArray.length <= index) {
+                const newId = `ai-${effectType}-${targetArray.length + 1}`;
+                const defaultInstance = createDefaultInstance(effectType as EffectType, newId);
+                if (defaultInstance) {
+                    defaultInstance.enabled = true;  // 启用新创建的实例
+                    targetArray.push(defaultInstance);
+                    console.log(`[patchApplier] 为 ${effectType} 创建默认实例 ${newId}`);
+                } else {
+                    console.warn(`[patchApplier] 无法为 ${effectType} 创建默认实例`);
+                    break;
+                }
+            }
+
             applyInstancePatch(targetArray, inst, effectType);
         }
     }
