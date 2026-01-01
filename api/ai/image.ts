@@ -92,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const hasImage = !!imageBase64;
         const finalPrompt = hasImage ? templates.withImage(prompt) : templates.noImage(prompt);
 
-        console.log(`[Image Gen] Model: ${targetModel}, SubMode: ${subMode}, HasImage: ${hasImage}`);
+        console.log(`[Image Gen] Model: ${targetModel}, SubMode: ${subMode}, HasImage: ${hasImage}, AspectRatio: ${subMode === 'background' ? '16:9' : '1:1'}`);
 
         // 构建消息内容
         let messageContent: any;
@@ -115,12 +115,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             messageContent = finalPrompt;
         }
 
+        // 根据子模式设置宽高比
+        const aspectRatioConfig: Record<string, { aspectRatio: string; imageSize?: string }> = {
+            particleShape: { aspectRatio: '1:1' },
+            background: { aspectRatio: '16:9', imageSize: '2K' }, // 全景图用宽屏，高分辨率
+            magicCircle: { aspectRatio: '1:1' }
+        };
+        const imageConfig = aspectRatioConfig[subMode as string] || aspectRatioConfig.magicCircle;
+
         const payload = {
             model: targetModel,
             messages: [
                 { role: 'user', content: messageContent }
             ],
-            stream: false
+            stream: false,
+            ...imageConfig // 添加 aspectRatio 和可选的 imageSize
         };
 
         const proxyRes = await fetch(`${baseUrl}/chat/completions`, {
