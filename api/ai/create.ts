@@ -206,8 +206,7 @@ async function callClaude(
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
             ],
-            temperature: 0.7,
-            max_tokens: 4000
+            temperature: 0.7
         })
     });
 

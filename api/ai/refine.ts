@@ -173,8 +173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 { role: 'user', content: userContent }
             ],
             temperature: 0.7,
-            stream: false,
-            max_tokens: 1500
+            stream: false
         };
 
         console.log(`[Refine] Mode: ${mode}, SubMode: ${subMode}, HasImage: ${!!imageBase64}, Model: ${targetModel}`);

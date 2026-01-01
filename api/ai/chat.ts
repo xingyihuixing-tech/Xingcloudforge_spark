@@ -89,8 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             model: targetModel,
             messages: apiMessages,
             temperature: 0.7,
-            stream: false,
-            max_tokens: 8000
+            stream: false
         };
 
         console.log(`[AI Chat] Model: ${targetModel}, Proxy: ${baseUrl}`);
