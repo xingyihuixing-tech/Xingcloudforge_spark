@@ -12,12 +12,23 @@
 | `name.ts` | 命名 API (图片视觉分析) |
 | `create.ts` | **创造模式 API** (AI 生成星球配置) |
 
-## 路由规则 (内联在各 API 中)
+## 路由规则 (双 Key 路由)
 
-| 代理 | 模型 |
-|------|------|
-| Jimiai | Claude 系列, GPT 系列, Gemini Chat |
-| Xuai | `gemini-3-pro-image-preview`, `gemini-2.5-flash-image`, `gemini-3-pro-preview-thinking`, `gemini-3-pro-image-preview-flatfee` |
+| 模型组 | 环境变量 | 模型 |
+|--------|----------|------|
+| Claude | `JIMIAI_API_KEY_CLAUDE` | opus, sonnet, sonnet-thinking, haiku |
+| Gemini Chat | `JIMIAI_API_KEY_GEMINI` | gemini-3-flash-preview, gemini-3-pro-preview |
+| Xuai (生图) | `IMAGE_API_KEY` | gemini-3-pro-image-preview 等 |
+
+## 环境变量
+
+| 变量名 | 用途 |
+|--------|------|
+| `CHAT_PROXY_BASE_URL` | Jimiai 代理地址 |
+| `JIMIAI_API_KEY_CLAUDE` | Claude 系列 Key |
+| `JIMIAI_API_KEY_GEMINI` | Gemini Chat Key |
+| `IMAGE_PROXY_BASE_URL` | Xuai 代理地址 |
+| `IMAGE_API_KEY` | Xuai 生图 Key |
 
 ## 调用流程
 
@@ -28,4 +39,5 @@
 创造模式:
 用户选择模块+描述 → /create → AI生成配置 → 验证+归一化 → 返回 patch
 ```
+
 
