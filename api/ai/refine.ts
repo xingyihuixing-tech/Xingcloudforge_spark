@@ -101,7 +101,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? `${baseSystemPrompt}\n\n用户上传了一张参考图片，请分析图片特征并融入你的润色描述中。`
         : baseSystemPrompt;
 
-    // 内联 Xuai 模型列表 (用户明确：这4个属于 Xuai，其他属于 Jimiai)
+    // 内联模型分组 (双 Key 路由)
+    const CLAUDE_MODELS = [
+        'claude-opus-4-5-20251101',
+        'claude-sonnet-4-5-20250929',
+        'claude-sonnet-4-5-20250929-thinking',
+        'claude-haiku-4-5-20251001'
+    ];
+    const GEMINI_CHAT_MODELS = [
+        'gemini-3-flash-preview',
+        'gemini-3-pro-preview'
+    ];
     const XUAI_MODELS = [
         'gemini-3-pro-image-preview',
         'gemini-2.5-flash-image',
@@ -113,17 +123,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const defaultModel = 'claude-sonnet-4-5-20250929';
     const targetModel = model || defaultModel;
 
-    // 根据模型确定代理
-    const useXuai = XUAI_MODELS.includes(targetModel);
-    const baseUrl = useXuai
-        ? (process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1')
-        : (process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1');
-    const apiKey = useXuai
-        ? process.env.IMAGE_API_KEY
-        : process.env.CHAT_API_KEY;
+    // 根据模型确定代理和 API Key
+    let baseUrl: string;
+    let apiKey: string | undefined;
+
+    if (XUAI_MODELS.includes(targetModel)) {
+        baseUrl = process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1';
+        apiKey = process.env.IMAGE_API_KEY;
+    } else if (GEMINI_CHAT_MODELS.includes(targetModel)) {
+        baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
+        apiKey = process.env.JIMIAI_API_KEY_GEMINI;
+    } else {
+        // 默认 Claude 系列
+        baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
+        apiKey = process.env.JIMIAI_API_KEY_CLAUDE;
+    }
 
     if (!apiKey) {
-        console.error('Missing API Key for model:', targetModel, 'useXuai:', useXuai);
+        console.error('Missing API Key for model:', targetModel);
         return res.status(500).json({ error: 'AI Config Missing' });
     }
 

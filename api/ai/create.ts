@@ -11,7 +11,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { EffectType } from '../../utils/ai/schemaBuilder';
 import { buildKnowledgeSnippet } from '../../utils/ai/kbBuilder';
 import { validateAndNormalize, parseAIOutput, generateErrorFixPrompt, AIOutput } from '../../utils/ai/configValidator';
-// 内联 Xuai 模型列表 (不依赖 modelConfig.ts，避免 Vercel 模块解析问题)
+// 内联模型分组 (双 Key 路由 - 不依赖 modelConfig.ts，避免 Vercel 模块解析问题)
+const CLAUDE_MODELS = [
+    'claude-opus-4-5-20251101',
+    'claude-sonnet-4-5-20250929',
+    'claude-sonnet-4-5-20250929-thinking',
+    'claude-haiku-4-5-20251001'
+];
+const GEMINI_CHAT_MODELS = [
+    'gemini-3-flash-preview',
+    'gemini-3-pro-preview'
+];
 const XUAI_MODELS = [
     'gemini-3-pro-image-preview',
     'gemini-2.5-flash-image',
@@ -22,12 +32,22 @@ const DEFAULT_CHAT_MODEL = 'claude-sonnet-4-5-20250929';
 
 // 内联代理配置函数
 function getProxyConfig(modelId: string): { baseUrl: string; apiKey: string } {
-    const useXuai = XUAI_MODELS.includes(modelId);
+    if (XUAI_MODELS.includes(modelId)) {
+        return {
+            baseUrl: process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1',
+            apiKey: process.env.IMAGE_API_KEY || ''
+        };
+    }
+    if (GEMINI_CHAT_MODELS.includes(modelId)) {
+        return {
+            baseUrl: process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1',
+            apiKey: process.env.JIMIAI_API_KEY_GEMINI || ''
+        };
+    }
+    // 默认 Claude 系列
     return {
-        baseUrl: useXuai
-            ? (process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1')
-            : (process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1'),
-        apiKey: (useXuai ? process.env.IMAGE_API_KEY : process.env.CHAT_API_KEY) || ''
+        baseUrl: process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1',
+        apiKey: process.env.JIMIAI_API_KEY_CLAUDE || ''
     };
 }
 

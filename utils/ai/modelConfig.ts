@@ -15,32 +15,36 @@ export interface ModelInfo {
     id: string;
     name: string;
     desc: string;
-    proxy: 'jimiai' | 'xuai';
-    capability: 'chat' | 'image';  // 所有模型都支持 vision
+    keyGroup: 'claude' | 'gemini' | 'xuai';  // 决定使用哪个 API Key
+    capability: 'chat' | 'image';
 }
 
-// Jimiai 代理模型 (文本+视觉)
-export const JIMIAI_MODELS: ModelInfo[] = [
-    { id: 'claude-sonnet-4-5-20250929', name: 'Claude 4.5 Sonnet', desc: '平衡速度与质量 (推荐)', proxy: 'jimiai', capability: 'chat' },
-    { id: 'claude-opus-4-5-20251101', name: 'Claude 4.5 Opus', desc: '顶级推理能力', proxy: 'jimiai', capability: 'chat' },
-    { id: 'claude-haiku-4-5-20251001', name: 'Claude 4.5 Haiku', desc: '极速响应', proxy: 'jimiai', capability: 'chat' },
-    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', desc: '多模态理解', proxy: 'jimiai', capability: 'chat' },
-    { id: 'gemini-2.5-pro-thinking-512', name: 'Gemini 2.5 Thinking', desc: '深度思考', proxy: 'jimiai', capability: 'chat' },
-    { id: 'claude-sonnet-4-5-20250929-thinking', name: 'Claude Sonnet Thinking', desc: '思维链推理', proxy: 'jimiai', capability: 'chat' },
+// Jimiai 代理 - Claude 系列 (Key1)
+export const CLAUDE_MODELS: ModelInfo[] = [
+    { id: 'claude-opus-4-5-20251101', name: 'Claude 4.5 Opus', desc: '顶级推理能力', keyGroup: 'claude', capability: 'chat' },
+    { id: 'claude-sonnet-4-5-20250929', name: 'Claude 4.5 Sonnet', desc: '平衡速度与质量 (推荐)', keyGroup: 'claude', capability: 'chat' },
+    { id: 'claude-sonnet-4-5-20250929-thinking', name: 'Claude Sonnet Thinking', desc: '思维链推理', keyGroup: 'claude', capability: 'chat' },
+    { id: 'claude-haiku-4-5-20251001', name: 'Claude 4.5 Haiku', desc: '极速响应', keyGroup: 'claude', capability: 'chat' },
 ];
 
-// Xuai 代理模型 (生图+视觉)
+// Jimiai 代理 - Gemini 系列 (Key2)
+export const GEMINI_CHAT_MODELS: ModelInfo[] = [
+    { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', desc: '快速响应', keyGroup: 'gemini', capability: 'chat' },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', desc: '多模态理解', keyGroup: 'gemini', capability: 'chat' },
+];
+
+// Xuai 代理 - 生图模型 (IMAGE_API_KEY)
 export const XUAI_MODELS: ModelInfo[] = [
-    { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Image', desc: '高质量生图 (推荐)', proxy: 'xuai', capability: 'image' },
-    { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash', desc: '快速生图', proxy: 'xuai', capability: 'image' },
-    { id: 'gemini-3-pro-image-preview-flatfee', name: 'Gemini 3 Flatfee', desc: '固定费率', proxy: 'xuai', capability: 'image' },
-    { id: 'gemini-3-pro-preview-thinking', name: 'Gemini 3 Thinking', desc: '深度思考 (Xuai)', proxy: 'xuai', capability: 'chat' },
+    { id: 'gemini-3-pro-image-preview', name: 'Gemini 3 Image', desc: '高质量生图 (推荐)', keyGroup: 'xuai', capability: 'image' },
+    { id: 'gemini-2.5-flash-image', name: 'Gemini 2.5 Flash', desc: '快速生图', keyGroup: 'xuai', capability: 'image' },
+    { id: 'gemini-3-pro-image-preview-flatfee', name: 'Gemini 3 Flatfee', desc: '固定费率', keyGroup: 'xuai', capability: 'image' },
+    { id: 'gemini-3-pro-preview-thinking', name: 'Gemini 3 Thinking', desc: '深度思考 (Xuai)', keyGroup: 'xuai', capability: 'chat' },
 ];
 
 // 合并导出
-export const CHAT_MODELS: ModelInfo[] = JIMIAI_MODELS;
+export const CHAT_MODELS: ModelInfo[] = [...CLAUDE_MODELS, ...GEMINI_CHAT_MODELS];
 export const IMAGE_MODELS: ModelInfo[] = XUAI_MODELS.filter(m => m.capability === 'image');
-export const ALL_MODELS: ModelInfo[] = [...JIMIAI_MODELS, ...XUAI_MODELS];
+export const ALL_MODELS: ModelInfo[] = [...CLAUDE_MODELS, ...GEMINI_CHAT_MODELS, ...XUAI_MODELS];
 
 // ============================================
 // 路由逻辑 (唯一实现)
@@ -51,23 +55,37 @@ export interface ProxyConfig {
     apiKey: string;
 }
 
+// Claude 模型 ID 列表 (用于 API 内联判断)
+export const CLAUDE_MODEL_IDS = CLAUDE_MODELS.map(m => m.id);
+// Gemini Chat 模型 ID 列表
+export const GEMINI_CHAT_MODEL_IDS = GEMINI_CHAT_MODELS.map(m => m.id);
+// Xuai 模型 ID 列表
+export const XUAI_MODEL_IDS = XUAI_MODELS.map(m => m.id);
+
 /**
  * 根据模型 ID 获取代理配置 (唯一路由函数)
  */
 export function getProxyConfig(modelId: string): ProxyConfig {
     const model = ALL_MODELS.find(m => m.id === modelId);
 
-    if (model?.proxy === 'xuai') {
+    if (model?.keyGroup === 'xuai') {
         return {
             baseUrl: process.env.IMAGE_PROXY_BASE_URL || 'https://api.xuai.chat/v1',
             apiKey: process.env.IMAGE_API_KEY || ''
         };
     }
 
-    // 默认走 Jimiai
+    if (model?.keyGroup === 'gemini') {
+        return {
+            baseUrl: process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1',
+            apiKey: process.env.JIMIAI_API_KEY_GEMINI || ''
+        };
+    }
+
+    // 默认走 Claude Key
     return {
         baseUrl: process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1',
-        apiKey: process.env.CHAT_API_KEY || ''
+        apiKey: process.env.JIMIAI_API_KEY_CLAUDE || ''
     };
 }
 
