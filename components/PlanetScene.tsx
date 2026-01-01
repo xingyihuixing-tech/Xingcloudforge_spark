@@ -4501,16 +4501,28 @@ function createEnergyBodyMesh(config: EnergyBodySettings): {
   let shellMesh: THREE.Mesh | null = null;
 
   const rotAxis = getRotationAxis(config.rotationAxis);
-  const { edgeEffect, vertexEffect, shellEffect, organicAnimation: rawOrganicAnimation } = config;
-  // 兜底：确保 organicAnimation 不为 undefined
+  const {
+    edgeEffect: rawEdgeEffect,
+    vertexEffect: rawVertexEffect,
+    shellEffect: rawShellEffect,
+    organicAnimation: rawOrganicAnimation
+  } = config;
+
+  // 兜底：确保所有子对象不为 undefined
+  const edgeEffect = rawEdgeEffect ?? {
+    width: 1.5, glowIntensity: 1.0, softEdgeFalloff: 0.8, color: '#ffd700',
+    gradientEnabled: true, gradientEndColor: '#ffffff',
+    dashPattern: { enabled: false, dashRatio: 0.6, dashDensity: 10, flowSpeed: 1.0 }
+  };
+  const vertexEffect = rawVertexEffect ?? {
+    enabled: true, size: 3.0, shape: 'circle', glowIntensity: 1.2, color: '#ffffff'
+  };
+  const shellEffect = rawShellEffect ?? {
+    opacity: 0.3, fresnelPower: 2.0, fresnelColor: '#ffff00', baseColor: '#ffaa00'
+  };
   const organicAnimation = rawOrganicAnimation ?? {
-    breathingEnabled: false,
-    breathingIntensity: 0.15,
-    breathingSpeed: 0.5,
-    noiseEnabled: false,
-    noiseAmplitude: 0.1,
-    noiseFrequency: 2.0,
-    noiseSpeed: 0.5
+    breathingEnabled: false, breathingIntensity: 0.15, breathingSpeed: 0.5,
+    noiseEnabled: false, noiseAmplitude: 0.1, noiseFrequency: 2.0, noiseSpeed: 0.5
   };
 
   // 閫��憸𡏭𠧧
@@ -8332,16 +8344,37 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             ebData.group.visible = true;
 
             const rotAxis = getRotationAxis(eb.rotationAxis);
-            const { edgeEffect, vertexEffect, shellEffect, organicAnimation: rawOrganicAnim, lightFlow } = eb;
-            // 兜底：确保 organicAnimation 不为 undefined
+            const {
+              edgeEffect: rawEdgeEffect,
+              vertexEffect: rawVertexEffect,
+              shellEffect: rawShellEffect,
+              organicAnimation: rawOrganicAnim,
+              lightFlow: rawLightFlow,
+              edgeBreathing: rawEdgeBreathing
+            } = eb;
+
+            // 兜底：确保所有子对象不为 undefined
+            const edgeEffect = rawEdgeEffect ?? {
+              width: 1.5, glowIntensity: 1.0, softEdgeFalloff: 0.8, color: '#ffd700',
+              gradientEnabled: true, gradientEndColor: '#ffffff',
+              dashPattern: { enabled: false, dashRatio: 0.6, dashDensity: 10, flowSpeed: 1.0 }
+            };
+            const vertexEffect = rawVertexEffect ?? {
+              enabled: true, size: 3.0, shape: 'circle', glowIntensity: 1.2, color: '#ffffff'
+            };
+            const shellEffect = rawShellEffect ?? {
+              opacity: 0.3, fresnelPower: 2.0, fresnelColor: '#ffff00', baseColor: '#ffaa00'
+            };
             const organicAnimation = rawOrganicAnim ?? {
-              breathingEnabled: false,
-              breathingIntensity: 0.15,
-              breathingSpeed: 0.5,
-              noiseEnabled: false,
-              noiseAmplitude: 0.1,
-              noiseFrequency: 2.0,
-              noiseSpeed: 0.5
+              breathingEnabled: false, breathingIntensity: 0.15, breathingSpeed: 0.5,
+              noiseEnabled: false, noiseAmplitude: 0.1, noiseFrequency: 2.0, noiseSpeed: 0.5
+            };
+            const lightFlow = rawLightFlow ?? {
+              enabled: false, pathMode: 'euler', count: 3, speed: 1.0
+            };
+            const edgeBreathing = rawEdgeBreathing ?? {
+              enabled: false, speed: 0.5, glowAmplitude: 0.4, alphaAmplitude: 0.15,
+              noiseMix: 0.3, noiseScale: 2.0, noiseSpeed: 0.3
             };
 
             // ========== �湔鰵�匧��嗆���頝臬�蝟餌�嚗?==========
