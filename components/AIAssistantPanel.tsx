@@ -13,6 +13,8 @@ import { createPortal } from 'react-dom';
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
+import { ScopeSelector } from './ai/ScopeSelector';
+import { ScopeSelection, createDefaultScopeSelection } from '../utils/ai/schemaBuilder';
 
 // 类型
 import type { PlanetSettings, PlanetSceneSettings } from '../types';
@@ -122,6 +124,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === 模式状态 ===
     const [activeMode, setActiveMode] = useState<AIMode>('inspiration');
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
+    const [scopeSelection, setScopeSelection] = useState<ScopeSelection>({});
+    const [scopeCollapsed, setScopeCollapsed] = useState(true);
 
     // === 模型选择 ===
     const [chatModel, setChatModel] = useState(DEFAULT_CHAT_MODEL);
@@ -444,8 +448,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 key={mode}
                                 onClick={() => setActiveMode(mode)}
                                 className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
-                                        ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
-                                        : 'text-white/50 hover:text-white/70'
+                                    ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
+                                    : 'text-white/50 hover:text-white/70'
                                     }`}
                             >
                                 {mode === 'inspiration' ? '🎨 灵感' : mode === 'creator' ? '🪐 创造' : '🔧 修改'}
@@ -495,14 +499,31 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         key={subMode}
                                         onClick={() => setInspirationSubMode(subMode)}
                                         className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
-                                                ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
-                                                : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                            ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
+                                            : 'bg-white/5 text-white/50 hover:bg-white/10'
                                             }`}
                                     >
                                         {info.icon} {info.name}
                                     </button>
                                 );
                             })}
+                        </div>
+                    )}
+
+                    {/* 创造模式 - 模块选择 */}
+                    {activeMode === 'creator' && (
+                        <div className="p-3 border-b border-white/10">
+                            <ScopeSelector
+                                selection={scopeSelection}
+                                onChange={setScopeSelection}
+                                collapsed={scopeCollapsed}
+                                onToggleCollapse={() => setScopeCollapsed(!scopeCollapsed)}
+                            />
+                            {Object.keys(scopeSelection).length === 0 && (
+                                <p className="text-xs text-white/40 mt-2">
+                                    请点击上方展开并选择要配置的效果模块
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -515,12 +536,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                             >
                                 <div
                                     className={`max-w-[85%] rounded-xl px-3 py-2 ${msg.role === 'user'
-                                            ? 'bg-blue-500/30 text-white/90'
-                                            : msg.role === 'system'
-                                                ? 'bg-green-500/20 text-green-200'
-                                                : msg.type === 'error'
-                                                    ? 'bg-red-500/20 text-red-200'
-                                                    : 'bg-white/10 text-white/80'
+                                        ? 'bg-blue-500/30 text-white/90'
+                                        : msg.role === 'system'
+                                            ? 'bg-green-500/20 text-green-200'
+                                            : msg.type === 'error'
+                                                ? 'bg-red-500/20 text-red-200'
+                                                : 'bg-white/10 text-white/80'
                                         }`}
                                 >
                                     {msg.type === 'image' && msg.imageUrl ? (
