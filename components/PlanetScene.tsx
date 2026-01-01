@@ -4490,40 +4490,37 @@ function createEnergyBodyMesh(config: EnergyBodySettings): {
   group.name = `energyBody_${config.id}`;
   group.userData = { energyBodyId: config.id };
 
+  // 深度合并：使用 createDefaultEnergyBody 的完整默认值 + 用户配置覆盖
+  const defaults = createDefaultEnergyBody(config.id, config.name);
+  const mergedConfig: EnergyBodySettings = {
+    ...defaults,
+    ...config,
+    edgeEffect: { ...defaults.edgeEffect, ...(config.edgeEffect || {}) },
+    vertexEffect: { ...defaults.vertexEffect, ...(config.vertexEffect || {}) },
+    shellEffect: { ...defaults.shellEffect, ...(config.shellEffect || {}) },
+    organicAnimation: { ...defaults.organicAnimation, ...(config.organicAnimation || {}) },
+    lightFlow: { ...defaults.lightFlow, ...(config.lightFlow || {}) },
+    edgeBreathing: { ...defaults.edgeBreathing, ...(config.edgeBreathing || {}) },
+    sphericalVoronoi: { ...defaults.sphericalVoronoi, ...(config.sphericalVoronoi || {}) },
+    postEffects: { ...defaults.postEffects, ...(config.postEffects || {}) },
+    tilt: { ...defaults.tilt, ...(config.tilt || {}) },
+    rotationAxis: { ...defaults.rotationAxis, ...(config.rotationAxis || {}) }
+  };
+
+  // 使用合并后的配置
+  const { edgeEffect, vertexEffect, shellEffect, organicAnimation } = mergedConfig;
+
   // 撠���譍�瘛餃��?Bloom layer嚗�鍂鈭𡡞�㗇𥋘�?Bloom嚗?
   group.layers.enable(BLOOM_LAYER);
 
-  // �𥕦遣�箇��牐�雿?
-  const baseGeometry = createPolyhedronGeometry(config.polyhedronType, config.radius, config.subdivisionLevel);
+  // 创建基础几何体
+  const baseGeometry = createPolyhedronGeometry(mergedConfig.polyhedronType, mergedConfig.radius, mergedConfig.subdivisionLevel);
 
   let edgesMesh: THREE.LineSegments | null = null;
   let verticesMesh: THREE.Points | null = null;
   let shellMesh: THREE.Mesh | null = null;
 
-  const rotAxis = getRotationAxis(config.rotationAxis);
-  const {
-    edgeEffect: rawEdgeEffect,
-    vertexEffect: rawVertexEffect,
-    shellEffect: rawShellEffect,
-    organicAnimation: rawOrganicAnimation
-  } = config;
-
-  // 兜底：确保所有子对象不为 undefined
-  const edgeEffect = rawEdgeEffect ?? {
-    width: 1.5, glowIntensity: 1.0, softEdgeFalloff: 0.8, color: '#ffd700',
-    gradientEnabled: true, gradientEndColor: '#ffffff',
-    dashPattern: { enabled: false, dashRatio: 0.6, dashDensity: 10, flowSpeed: 1.0 }
-  };
-  const vertexEffect = rawVertexEffect ?? {
-    enabled: true, size: 3.0, shape: 'circle', glowIntensity: 1.2, color: '#ffffff'
-  };
-  const shellEffect = rawShellEffect ?? {
-    opacity: 0.3, fresnelPower: 2.0, fresnelColor: '#ffff00', baseColor: '#ffaa00'
-  };
-  const organicAnimation = rawOrganicAnimation ?? {
-    breathingEnabled: false, breathingIntensity: 0.15, breathingSpeed: 0.5,
-    noiseEnabled: false, noiseAmplitude: 0.1, noiseFrequency: 2.0, noiseSpeed: 0.5
-  };
+  const rotAxis = getRotationAxis(mergedConfig.rotationAxis);
 
   // 閫��憸𡏭𠧧
   const parseColor = (hex: string) => {
@@ -8330,12 +8327,34 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
           };
 
           meshes.energyBodyData.forEach(ebData => {
-            // 隞舘挽蝵桐葉�瑕����圈�蝵?
-            const eb = planet.energyBodySystem?.energyBodies?.find(e => e.id === ebData.id);
-            // Solo �航��改�憒���?soloId嚗�蘨�曄內 solo ���銝?
+            // 获取用户配置的能量体
+            const rawEb = planet.energyBodySystem?.energyBodies?.find(e => e.id === ebData.id);
+            if (!rawEb) {
+              ebData.group.visible = false;
+              return;
+            }
+
+            // 深度合并：使用 createDefaultEnergyBody 的完整默认值 + 用户配置覆盖
+            const defaults = createDefaultEnergyBody(rawEb.id, rawEb.name);
+            const eb: EnergyBodySettings = {
+              ...defaults,
+              ...rawEb,
+              edgeEffect: { ...defaults.edgeEffect, ...(rawEb.edgeEffect || {}) },
+              vertexEffect: { ...defaults.vertexEffect, ...(rawEb.vertexEffect || {}) },
+              shellEffect: { ...defaults.shellEffect, ...(rawEb.shellEffect || {}) },
+              organicAnimation: { ...defaults.organicAnimation, ...(rawEb.organicAnimation || {}) },
+              lightFlow: { ...defaults.lightFlow, ...(rawEb.lightFlow || {}) },
+              edgeBreathing: { ...defaults.edgeBreathing, ...(rawEb.edgeBreathing || {}) },
+              sphericalVoronoi: { ...defaults.sphericalVoronoi, ...(rawEb.sphericalVoronoi || {}) },
+              postEffects: { ...defaults.postEffects, ...(rawEb.postEffects || {}) },
+              tilt: { ...defaults.tilt, ...(rawEb.tilt || {}) },
+              rotationAxis: { ...defaults.rotationAxis, ...(rawEb.rotationAxis || {}) }
+            };
+
+            // Solo 模式检查
             const soloId = planet.energyBodySystem?.soloId;
             const coreEnabled = planet.energyBodySystem?.coreEnabled !== false;
-            const visible = eb && eb.enabled && planet.energyBodySystem?.enabled && coreEnabled && (!soloId || soloId === eb.id);
+            const visible = eb.enabled && planet.energyBodySystem?.enabled && coreEnabled && (!soloId || soloId === eb.id);
             if (!visible) {
               ebData.group.visible = false;
               return;
@@ -8344,38 +8363,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             ebData.group.visible = true;
 
             const rotAxis = getRotationAxis(eb.rotationAxis);
-            const {
-              edgeEffect: rawEdgeEffect,
-              vertexEffect: rawVertexEffect,
-              shellEffect: rawShellEffect,
-              organicAnimation: rawOrganicAnim,
-              lightFlow: rawLightFlow,
-              edgeBreathing: rawEdgeBreathing
-            } = eb;
-
-            // 兜底：确保所有子对象不为 undefined
-            const edgeEffect = rawEdgeEffect ?? {
-              width: 1.5, glowIntensity: 1.0, softEdgeFalloff: 0.8, color: '#ffd700',
-              gradientEnabled: true, gradientEndColor: '#ffffff',
-              dashPattern: { enabled: false, dashRatio: 0.6, dashDensity: 10, flowSpeed: 1.0 }
-            };
-            const vertexEffect = rawVertexEffect ?? {
-              enabled: true, size: 3.0, shape: 'circle', glowIntensity: 1.2, color: '#ffffff'
-            };
-            const shellEffect = rawShellEffect ?? {
-              opacity: 0.3, fresnelPower: 2.0, fresnelColor: '#ffff00', baseColor: '#ffaa00'
-            };
-            const organicAnimation = rawOrganicAnim ?? {
-              breathingEnabled: false, breathingIntensity: 0.15, breathingSpeed: 0.5,
-              noiseEnabled: false, noiseAmplitude: 0.1, noiseFrequency: 2.0, noiseSpeed: 0.5
-            };
-            const lightFlow = rawLightFlow ?? {
-              enabled: false, pathMode: 'euler', count: 3, speed: 1.0
-            };
-            const edgeBreathing = rawEdgeBreathing ?? {
-              enabled: false, speed: 0.5, glowAmplitude: 0.4, alphaAmplitude: 0.15,
-              noiseMix: 0.3, noiseScale: 2.0, noiseSpeed: 0.3
-            };
+            const { edgeEffect, vertexEffect, shellEffect, organicAnimation, lightFlow, edgeBreathing } = eb;
 
             // ========== �湔鰵�匧��嗆���頝臬�蝟餌�嚗?==========
             if (ebData.graph && ebData.lightPackets.length > 0 && lightFlow.enabled) {
