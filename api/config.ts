@@ -63,6 +63,10 @@ interface UserConfig {
         materialSettings?: Record<string, unknown>;
         userMaterialPresets?: Array<Record<string, unknown>>;
     };
+    // AI 生成的预设列表
+    headTexturePresets?: Array<{ id: string; name: string; url: string; createdAt: number }>;
+    backgroundPresets?: Array<{ id: string; name: string; url: string; createdAt: number }>;
+    magicCircleTexturePresets?: Array<{ id: string; name: string; url: string; createdAt: number }>;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -127,6 +131,10 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
                 solidCorePresets: [],
                 planetTemplates: [],
                 theme: null,
+                // AI 预设默认空数组
+                headTexturePresets: [],
+                backgroundPresets: [],
+                magicCircleTexturePresets: [],
             }
         });
     }
@@ -160,6 +168,10 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         solidCorePresets: config.solidCorePresets ?? existingConfig?.solidCorePresets ?? [],
         planetTemplates: config.planetTemplates ?? existingConfig?.planetTemplates ?? [],
         theme: config.theme ?? existingConfig?.theme,
+        // AI 预设字段
+        headTexturePresets: config.headTexturePresets ?? existingConfig?.headTexturePresets ?? [],
+        backgroundPresets: config.backgroundPresets ?? existingConfig?.backgroundPresets ?? [],
+        magicCircleTexturePresets: config.magicCircleTexturePresets ?? existingConfig?.magicCircleTexturePresets ?? [],
     };
 
     await redis!.set(`config:${userId}`, newConfig);

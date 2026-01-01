@@ -17,27 +17,52 @@ export const config = {
     },
 };
 
-// 润色系统提示词 (宽泛版本)
+// 润色系统提示词 (强化版本 - 严格禁止英文和前缀)
 const REFINE_PROMPTS: Record<string, string> = {
     // 粒子形状
-    inspiration_particleShape: `请润色以下用于生成粒子贴图的描述，使其更加详细和适合AI绘图。
-直接输出润色后的中文描述，不要添加任何解释或前缀。`,
+    inspiration_particleShape: `你是提示词润色器。严格遵守以下规则：
+1. 禁止输出任何英文
+2. 禁止添加开头语、解释、评论、前缀
+3. 禁止使用Markdown格式
+4. 直接以润色内容开头
+
+任务：润色以下用于生成粒子贴图的描述，补充形状、发光、对比度等细节。`,
 
     // 背景图
-    inspiration_background: `请润色以下用于生成星空背景的描述，使其更加详细和适合AI绘图。
-直接输出润色后的中文描述，不要添加任何解释或前缀。`,
+    inspiration_background: `你是提示词润色器。严格遵守以下规则：
+1. 禁止输出任何英文
+2. 禁止添加开头语、解释、评论、前缀
+3. 禁止使用Markdown格式
+4. 直接以润色内容开头
+
+任务：润色以下用于生成星空全景背景的描述，补充色调、星云、氛围等细节。`,
 
     // 法阵图 (宽泛，不限主题)
-    inspiration_magicCircle: `请润色以下用于生成图像的描述，使其更加详细和适合AI绘图。
-直接输出润色后的中文描述，不要添加任何解释或前缀。`,
+    inspiration_magicCircle: `你是提示词润色器。严格遵守以下规则：
+1. 禁止输出任何英文
+2. 禁止添加开头语、解释、评论、前缀
+3. 禁止使用Markdown格式
+4. 直接以润色内容开头
+
+任务：润色以下用于生成图像的描述，补充构图、风格、细节等。`,
 
     // 创造模式
-    creator: `请润色以下用于创建星球特效的描述，扩展为详细的视觉效果描述。
-直接输出润色后的中文描述，不要添加任何解释或前缀。`,
+    creator: `你是提示词润色器。严格遵守以下规则：
+1. 禁止输出任何英文
+2. 禁止添加开头语、解释、评论、前缀
+3. 禁止使用Markdown格式
+4. 直接以润色内容开头
+
+任务：润色以下用于创建星球特效的描述，扩展为详细的视觉效果描述。`,
 
     // 修改模式
-    modifier: `请润色以下用于修改星球配置的描述，明确指出需要调整的参数方向。
-直接输出润色后的中文描述，不要添加任何解释或前缀。`
+    modifier: `你是提示词润色器。严格遵守以下规则：
+1. 禁止输出任何英文
+2. 禁止添加开头语、解释、评论、前缀
+3. 禁止使用Markdown格式
+4. 直接以润色内容开头
+
+任务：润色以下用于修改星球配置的描述，明确指出需要调整的参数方向。`
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -136,13 +161,52 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const data = await proxyRes.json();
         let refined = data.choices?.[0]?.message?.content || prompt;
 
-        // 清理结果，只保留纯净的中文描述
+        // ============ 强化后处理清理 ============
         refined = refined.trim();
-        // 移除可能的引号
+
+        // 1. 移除 Markdown 代码块
+        refined = refined.replace(/```[\s\S]*?```/g, '');
+        refined = refined.replace(/`([^`]+)`/g, '$1');
+
+        // 2. 移除以英文字母开头的整段（常见如 "I appreciate...", "Here's..."）
+        // 保留以中文/数字/标点开头的内容
+        const lines = refined.split('\n');
+        const cleanedLines = lines.filter((line: string) => {
+            const trimmed = line.trim();
+            if (!trimmed) return false;
+            // 如果行首是英文字母，检测是否整行主要是英文
+            if (/^[A-Za-z]/.test(trimmed)) {
+                // 如果中文字符少于20%，认为是英文段落，移除
+                const chineseChars = (trimmed.match(/[\u4e00-\u9fa5]/g) || []).length;
+                if (chineseChars / trimmed.length < 0.2) {
+                    return false;
+                }
+            }
+            return true;
+        });
+        refined = cleanedLines.join('\n').trim();
+
+        // 3. 移除常见中文前缀
+        const prefixPatterns = [
+            /^(好的[，,。.]?\s*)/,
+            /^(以下是[^：:]*[：:]?\s*)/,
+            /^(润色后的[^：:]*[：:]?\s*)/,
+            /^(润色结果[：:]?\s*)/,
+            /^(这是[^：:]*[：:]?\s*)/,
+        ];
+        for (const pattern of prefixPatterns) {
+            refined = refined.replace(pattern, '');
+        }
+
+        // 4. 移除首尾引号
         if ((refined.startsWith('"') && refined.endsWith('"')) ||
-            (refined.startsWith('「') && refined.endsWith('」'))) {
+            (refined.startsWith('「') && refined.endsWith('」')) ||
+            (refined.startsWith('"') && refined.endsWith('"'))) {
             refined = refined.slice(1, -1);
         }
+
+        // 5. 最终 trim
+        refined = refined.trim();
 
         return res.status(200).json({ refined });
 

@@ -28,9 +28,9 @@ const SUB_MODE_PROMPTS = {
 
     background: {
         noImage: (prompt: string) =>
-            `Generate an HDR equirectangular panorama: ${prompt}. Requirements: 2:1 aspect ratio (2048x1024), deep space cosmic theme, no text or watermarks, suitable for 360 degree skybox.`,
+            `Generate an HDR panorama background: ${prompt}. Requirements: 21:9 cinematic widescreen aspect ratio, deep space cosmic theme, seamless horizontal edges, no text or watermarks, high resolution suitable for 360 degree skybox.`,
         withImage: (prompt: string) =>
-            `Transform the reference image into an HDR equirectangular panorama: ${prompt}. Requirements: 2:1 aspect ratio, extend scene for 360 degree coverage, maintain original color palette and mood.`
+            `Transform the reference image into an HDR panorama background: ${prompt}. Requirements: 21:9 cinematic widescreen aspect ratio, extend scene for seamless horizontal coverage, maintain original color palette and mood, no text or watermarks.`
     },
 
     magicCircle: {
@@ -92,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const hasImage = !!imageBase64;
         const finalPrompt = hasImage ? templates.withImage(prompt) : templates.noImage(prompt);
 
-        console.log(`[Image Gen] Model: ${targetModel}, SubMode: ${subMode}, HasImage: ${hasImage}, AspectRatio: ${subMode === 'background' ? '16:9' : '1:1'}`);
+        console.log(`[Image Gen] Model: ${targetModel}, SubMode: ${subMode}, HasImage: ${hasImage}, AspectRatio: ${subMode === 'background' ? '21:9' : '1:1'}`);
 
         // 构建消息内容
         let messageContent: any;
@@ -118,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // 根据子模式设置宽高比
         const aspectRatioConfig: Record<string, { aspectRatio: string; imageSize?: string }> = {
             particleShape: { aspectRatio: '1:1' },
-            background: { aspectRatio: '16:9', imageSize: '2K' }, // 全景图用宽屏，高分辨率
+            background: { aspectRatio: '21:9', imageSize: '2K' }, // 全景图用超宽屏 21:9
             magicCircle: { aspectRatio: '1:1' }
         };
         const imageConfig = aspectRatioConfig[subMode as string] || aspectRatioConfig.magicCircle;

@@ -1339,22 +1339,34 @@ const App: React.FC = () => {
           const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
           const headTexturePresets = config.headTexturePresets || [];
           headTexturePresets.push(preset);
-          await saveCloudConfig({ ...config, headTexturePresets });
-          console.log('Saved head texture preset:', preset.name);
+          const ok = await saveCloudConfig({ ...config, headTexturePresets });
+          if (ok) {
+            console.log('Saved head texture preset:', preset.name);
+          } else {
+            console.error('Failed to save head texture preset:', preset.name);
+          }
         }}
         onSaveBackground={async (preset) => {
           const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
           const backgroundPresets = config.backgroundPresets || [];
           backgroundPresets.push(preset);
-          await saveCloudConfig({ ...config, backgroundPresets });
-          console.log('Saved background preset:', preset.name);
+          const ok = await saveCloudConfig({ ...config, backgroundPresets });
+          if (ok) {
+            console.log('Saved background preset:', preset.name);
+          } else {
+            console.error('Failed to save background preset:', preset.name);
+          }
         }}
         onSaveMagicCircleTexture={async (preset) => {
           const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
           const magicCircleTexturePresets = config.magicCircleTexturePresets || [];
           magicCircleTexturePresets.push(preset);
-          await saveCloudConfig({ ...config, magicCircleTexturePresets });
-          console.log('Saved magic circle texture preset:', preset.name);
+          const ok = await saveCloudConfig({ ...config, magicCircleTexturePresets });
+          if (ok) {
+            console.log('Saved magic circle texture preset:', preset.name);
+          } else {
+            console.error('Failed to save magic circle texture preset:', preset.name);
+          }
         }}
       />
     </div >
