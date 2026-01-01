@@ -639,15 +639,23 @@ export const DEFAULT_ROTATION_AXIS_SETTINGS: RotationAxisSettings = {
 };
 
 // 获取自转轴（根据预设或自定义，自动归一化）
-export const getRotationAxis = (axis: RotationAxisSettings): { x: number; y: number; z: number } => {
+export const getRotationAxis = (axis: RotationAxisSettings | undefined | null): { x: number; y: number; z: number } => {
+  // 安全处理：如果 axis 为 undefined/null，返回默认 Y 轴
+  if (!axis) {
+    return { x: 0, y: 1, z: 0 };
+  }
+
   let x: number, y: number, z: number;
 
-  if (axis.preset === 'custom') {
-    x = axis.customX;
-    y = axis.customY;
-    z = axis.customZ;
+  // 安全处理：检查 preset 是否存在，默认为 'y'
+  const presetValue = axis.preset ?? 'y';
+
+  if (presetValue === 'custom') {
+    x = axis.customX ?? 0;
+    y = axis.customY ?? 1;
+    z = axis.customZ ?? 0;
   } else {
-    const preset = ROTATION_AXIS_PRESETS[axis.preset] || { x: 0, y: 1, z: 0 };
+    const preset = ROTATION_AXIS_PRESETS[presetValue] || { x: 0, y: 1, z: 0 };
     x = preset.x;
     y = preset.y;
     z = preset.z;
