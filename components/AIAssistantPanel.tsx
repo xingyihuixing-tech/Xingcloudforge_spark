@@ -1,5 +1,5 @@
 /**
- * XingForge AI - Main Assistant Panel (Inspiration Mode v2.0)
+ * XingForge AI - Main Assistant Panel (Inspiration Mode v2.1)
  * 
  * input: isOpen, onClose, callbacks for presets
  * output: AI 交互面板 UI
@@ -123,14 +123,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-    // === 聊天状态 ===
-    const [messages, setMessages] = useState<ChatMessage[]>([
-        {
-            id: '1',
-            role: 'assistant',
-            content: '🎨 灵感模式已就绪'
-        }
-    ]);
+    // === 聊天状态 (初始为空) ===
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
 
     // === 图片预览 ===
     const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -148,7 +142,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
     // 拖拽处理
     const handleDragStart = (e: React.MouseEvent) => {
-        // 允许通过顶部模式切换区域拖拽
+        // 允许通过顶部拖拽区域拖拽 (Header)
         if ((e.target as HTMLElement).closest('.drag-handle')) {
             setIsDragging(true);
             dragStartPos.current = { x: e.clientX - position.x, y: e.clientY - position.y };
@@ -417,9 +411,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
     if (!isOpen) return null;
 
-    // ============================================
-    // 渲染
-    // ============================================
+    // 当前选中的模型名称
+    const currentChatModelName = CHAT_MODELS.find(m => m.id === chatModel)?.name || 'Chat';
+    const currentImageModelName = IMAGE_MODELS.find(m => m.id === imageModel)?.name || 'Image';
 
     const saveButtonText: Record<InspirationSubMode, string> = {
         particleShape: '保存到头部',
@@ -437,40 +431,25 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 onMouseDown={handleDragStart}
             >
                 <div
-                    className="w-[500px] rounded-lg overflow-visible"
-                    style={{
-                        background: 'rgba(0, 0, 0, 0.03)', // 3% 不透明度
-                        backdropFilter: 'blur(2px)', // 很低的模糊度
-                        // 无边框
-                    }}
+                    className={`w-[500px] ai-panel-container ${isRefining ? 'refining' : ''}`}
+                // 样式由 CSS .ai-panel-container 控制 (无边框颜色)
                 >
-                    {/* 关闭按钮 (隐藏式) */}
-                    <button
-                        onClick={onClose}
-                        className="absolute -top-6 -right-6 w-6 h-6 flex items-center justify-center text-white/20 hover:text-white/80"
-                        title="关闭"
-                    >
-                        ✕
-                    </button>
-
-                    {/* 灵感子模式切换 (纯文本，无图标) */}
-                    <div className="drag-handle flex gap-4 px-4 py-2 cursor-move justify-center">
-                        {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => (
-                            <button
-                                key={subMode}
-                                onClick={() => setInspirationSubMode(subMode)}
-                                className={`text-sm tracking-widest transition-all duration-300 ${inspirationSubMode === subMode
-                                        ? 'text-white font-bold drop-shadow-[0_0_8px_rgba(255,255,255,0.5)]'
-                                        : 'text-white/40 hover:text-white/80'
-                                    }`}
-                            >
-                                {INSPIRATION_MODE_INFO[subMode].name}
-                            </button>
-                        ))}
+                    {/* 标题栏 (Drag Handle) */}
+                    <div className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5">
+                        <div className="flex items-center gap-2">
+                            {/* 极简标题，可根据需要移除或保留小图标 */}
+                            <span className="text-white/80 font-semibold tracking-wide text-sm">XINGFORGE AI</span>
+                        </div>
+                        <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">✕</button>
                     </div>
 
-                    {/* 消息列表 (如果需要，可设置为极低透明度，或仅显示最近的) */}
-                    <div className="max-h-[300px] overflow-y-auto px-4 py-2 space-y-3 custom-scrollbar">
+                    {/* 消息列表 */}
+                    <div className="h-[280px] overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                        {messages.length === 0 && (
+                            <div className="h-full flex items-center justify-center text-white/10 text-sm italic select-none">
+                                {/* 空状态 */}
+                            </div>
+                        )}
                         {messages.map(msg => (
                             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                                 <div className={`max-w-[90%] ${msg.role === 'user' ? 'text-right' : 'text-left'
@@ -480,32 +459,40 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                             <img
                                                 src={msg.imageUrl}
                                                 alt="Generated"
-                                                className="max-h-[150px] rounded border border-white/10 hover:border-white/30 transition-colors cursor-pointer"
+                                                className="max-h-[160px] rounded-lg shadow-lg cursor-pointer hover:opacity-95 transition-opacity"
                                                 onClick={() => setPreviewImage(msg.imageUrl!)}
                                             />
                                             {msg.subMode && (
-                                                <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <div className="mt-2 text-left">
                                                     <button
                                                         onClick={() => handleSavePreset(msg)}
                                                         disabled={savingId === msg.id || !userId}
-                                                        className="px-2 py-1 bg-black/60 text-white text-xs rounded hover:bg-black/80 backdrop-blur-md"
+                                                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/90 text-xs rounded transition-colors backdrop-blur-sm"
                                                     >
-                                                        {savingId === msg.id ? '...' : saveButtonText[msg.subMode]}
+                                                        {savingId === msg.id ? 'Saving...' : `💾 ${saveButtonText[msg.subMode]}`}
                                                     </button>
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
-                                        <p className={`text-sm whitespace-pre-wrap inline-block px-2 py-1 rounded ${msg.role === 'user'
-                                                ? 'text-white/90 bg-white/5'
-                                                : 'text-white/70 bg-black/20'
+                                        <div className={`inline-block px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${msg.role === 'user'
+                                                ? 'bg-blue-500/20 text-blue-100'
+                                                : 'bg-white/5 text-white/80'
                                             }`}>
                                             {msg.content}
-                                        </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
                         ))}
+                        {/* 加载状态 */}
+                        {isGenerating && (
+                            <div className="flex justify-start">
+                                <div className="px-3 py-2 rounded-xl bg-white/5 text-white/40 text-sm animate-pulse">
+                                    Thinking...
+                                </div>
+                            </div>
+                        )}
                         <div ref={messagesEndRef} />
                     </div>
 
@@ -513,7 +500,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     {uploadedImage && (
                         <div className="px-4 py-1 flex items-center gap-2">
                             <div className="relative group">
-                                <img src={uploadedImage} className="w-8 h-8 rounded object-cover border border-white/20" alt="ref" />
+                                <img src={uploadedImage} className="w-8 h-8 rounded object-cover border border-white/10" alt="ref" />
                                 <button
                                     onClick={clearUploadedImage}
                                     className="absolute -top-1 -right-1 bg-red-500/80 rounded-full w-3 h-3 flex items-center justify-center text-[8px] text-white opacity-0 group-hover:opacity-100"
@@ -525,87 +512,114 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         </div>
                     )}
 
-                    {/* 输入区域 */}
-                    <div
-                        className="p-1 mx-2 mb-2 flex items-end gap-1 bg-black/20 rounded-xl"
-                        onDrop={handleDrop}
-                        onDragOver={handleDragOver}
-                    >
-                        {/* 左：上传按钮 (+号) */}
-                        <div className="flex-shrink-0 mb-1">
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                onChange={handleImageUpload}
-                                className="hidden"
-                            />
-                            <button
-                                onClick={() => fileInputRef.current?.click()}
-                                className="w-8 h-8 flex items-center justify-center rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors text-xl font-light"
-                                title="上传参考图"
-                            >
-                                +
-                            </button>
+                    {/* 输入区域容器 */}
+                    <div className="p-3 bg-black/10 backdrop-blur-sm rounded-b-2xl">
+
+                        {/* 子模式选择 (放在输入框上方，左对齐，圆角长方形) */}
+                        <div className="flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar">
+                            {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => (
+                                <button
+                                    key={subMode}
+                                    onClick={() => setInspirationSubMode(subMode)}
+                                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 border ${inspirationSubMode === subMode
+                                            ? 'bg-white/10 border-white/20 text-white shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
+                                            : 'bg-transparent border-transparent text-white/40 hover:bg-white/5 hover:text-white/70'
+                                        }`}
+                                >
+                                    {INSPIRATION_MODE_INFO[subMode].name}
+                                </button>
+                            ))}
                         </div>
 
-                        {/* 中：输入框 */}
-                        <textarea
-                            ref={textareaRef}
-                            value={inputValue}
-                            onChange={e => setInputValue(e.target.value)}
-                            onKeyDown={e => {
-                                if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleSend();
-                                }
-                            }}
-                            onPaste={handlePaste}
-                            placeholder="描述..."
-                            className="flex-1 bg-transparent text-white/90 placeholder-white/20 text-sm py-2 px-1 focus:outline-none resize-none overflow-hidden min-h-[48px]"
-                            rows={2}
-                        />
+                        {/* 输入框行 */}
+                        <div
+                            className="flex items-end gap-2 bg-white/5 rounded-xl p-1 border border-white/5 focus-within:bg-white/10 transition-colors"
+                            onDrop={handleDrop}
+                            onDragOver={handleDragOver}
+                        >
+                            {/* 左：上传按钮 (+号) */}
+                            <div className="flex-shrink-0 mb-0.5">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageUpload}
+                                    className="hidden"
+                                />
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors text-lg"
+                                    title="上传"
+                                >
+                                    +
+                                </button>
+                            </div>
 
-                        {/* 右：功能按钮 (正方形) */}
-                        <div className="flex-shrink-0 flex gap-1 h-[48px] items-center">
-                            <button
-                                onClick={handleRefine}
-                                disabled={!inputValue.trim() || isRefining}
-                                className={`w-10 h-10 flex items-center justify-center rounded-lg text-white/60 hover:text-white hover:bg-white/10 transition-colors ${isRefining ? 'animate-pulse' : ''}`}
-                                title="润色"
-                            >
-                                ✨
-                            </button>
-                            <button
-                                onClick={handleSend}
-                                disabled={isGenerating || !inputValue.trim()}
-                                className="w-10 h-10 flex items-center justify-center rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
-                            >
-                                ➤
-                            </button>
+                            {/* 中：输入框 */}
+                            <textarea
+                                ref={textareaRef}
+                                value={inputValue}
+                                onChange={e => setInputValue(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        handleSend();
+                                    }
+                                }}
+                                onPaste={handlePaste}
+                                placeholder="输入描述..."
+                                className="flex-1 bg-transparent text-white/90 placeholder-white/20 text-sm py-2 px-1 focus:outline-none resize-none overflow-hidden min-h-[40px]"
+                                rows={2}
+                            />
+
+                            {/* 右：功能按钮 (正方形) */}
+                            <div className="flex-shrink-0 flex gap-1 items-center pb-0.5">
+                                <button
+                                    onClick={handleRefine}
+                                    disabled={!inputValue.trim() || isRefining}
+                                    className={`w-8 h-8 flex items-center justify-center rounded-lg ${isRefining ? 'text-white animate-pulse' : 'text-white/40 hover:text-white hover:bg-white/10'
+                                        } transition-colors`}
+                                    title="润色"
+                                >
+                                    ✨
+                                </button>
+                                <button
+                                    onClick={handleSend}
+                                    disabled={isGenerating || !inputValue.trim()}
+                                    style={{ height: textareaRef.current ? Math.min(Math.max(textareaRef.current.scrollHeight, 40), 120) : 40 }}
+                                    className="w-10 flex items-center justify-center rounded-lg bg-white/10 text-white/90 hover:bg-white/20 transition-all disabled:opacity-30 disabled:hover:bg-white/10"
+                                >
+                                    ➤
+                                </button>
+                            </div>
+
                         </div>
                     </div>
 
-                    {/* 底部：模型切换按钮 */}
-                    <div className="px-4 pb-2 relative">
+                    {/* 底部：双模型显示与切换 */}
+                    <div className="relative border-t border-white/5">
                         <button
                             onClick={() => setShowModelSelector(!showModelSelector)}
-                            className="text-[10px] text-white/30 hover:text-white/60 transition-colors flex items-center gap-1"
+                            className="w-full flex items-center justify-between px-4 py-2 text-[10px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-all"
                         >
-                            ^ {IMAGE_MODELS.find(m => m.id === imageModel)?.name || 'Model'}
+                            <div className="flex gap-4">
+                                <span>Chat: <span className="text-white/50">{currentChatModelName}</span></span>
+                                <span>Image: <span className="text-white/50">{currentImageModelName}</span></span>
+                            </div>
+                            <span className={`transform transition-transform duration-300 ${showModelSelector ? 'rotate-180' : ''}`}>^</span>
                         </button>
 
                         {/* 模型选择面板 (展开) */}
                         {showModelSelector && (
-                            <div className="absolute bottom-full left-0 mb-2 w-full px-2">
-                                <div className="bg-black/80 backdrop-blur-md rounded-lg p-3 grid grid-cols-2 gap-4 border border-white/10">
+                            <div className="absolute bottom-full left-0 w-full px-2 mb-1">
+                                <div className="bg-[#1a1a24] rounded-xl p-3 grid grid-cols-2 gap-4 border border-white/10 shadow-2xl">
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">对话模型</span>
+                                        <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">对话模型</span>
                                         {CHAT_MODELS.map(m => (
                                             <button
                                                 key={m.id}
                                                 onClick={() => setChatModel(m.id)}
-                                                className={`text-left text-xs py-1 px-2 rounded ${chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'
+                                                className={`text-left text-xs py-1.5 px-2 rounded-lg transition-colors ${chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'
                                                     }`}
                                             >
                                                 {m.name}
@@ -613,12 +627,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         ))}
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">生图模型</span>
+                                        <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">生图模型</span>
                                         {IMAGE_MODELS.map(m => (
                                             <button
                                                 key={m.id}
                                                 onClick={() => setImageModel(m.id)}
-                                                className={`text-left text-xs py-1 px-2 rounded ${imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'
+                                                className={`text-left text-xs py-1.5 px-2 rounded-lg transition-colors ${imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'
                                                     }`}
                                             >
                                                 {m.name}

@@ -1212,10 +1212,10 @@ const App: React.FC = () => {
           <span className="text-white text-base font-light">{showControls ? '›' : '‹'}</span>
         </button>
 
-        {/* AI Vortex Star Button - Follows Sidebar Toggle */}
+        {/* AI Star Button - Static Shape, Spinning Gradient */}
         <button
           onClick={() => setShowAIPanel(!showAIPanel)}
-          className={`absolute top-24 z-[199] w-10 h-10 ai-vortex-star transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
+          className={`absolute top-24 z-[199] w-10 h-10 ai-star-container transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
           title="打开 AI 助手"
         />
 
