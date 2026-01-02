@@ -76,7 +76,7 @@ export const CreatorPanel: React.FC<CreatorPanelProps> = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     prompt: description,
-                    modules: [selectedModule],
+                    selectedModules: [selectedModule],
                 }),
             });
 
