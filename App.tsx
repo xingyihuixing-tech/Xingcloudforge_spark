@@ -355,12 +355,12 @@ const App: React.FC = () => {
       loadCloudConfig().then(config => {
         if (config) {
           if (config.settings) {
-            const cloudSettings = config.settings;
+            const cloudSettings = config.settings as any;
             // Merge cloud settings with defaults, BUT preserve local imageDataUrl if cloud missing it
             setSettings(prev => {
               const newSettings = { ...prev, ...cloudSettings };
               // Smart merge strategies for nebulaInstances
-              if (cloudSettings.nebulaInstances && prev.nebulaInstances) {
+              if (Array.isArray(cloudSettings.nebulaInstances) && prev.nebulaInstances) {
                 newSettings.nebulaInstances = cloudSettings.nebulaInstances.map((cloudInst: any) => {
                   const localInst = prev.nebulaInstances!.find(p => p.id === cloudInst.id);
                   // If cloud doesn't have image data but local does, keep local
@@ -372,6 +372,7 @@ const App: React.FC = () => {
               }
               return newSettings;
             });
+
             // REMOVED explicit localStorage.setItem here because it was saving the stripped cloud data 
             // and overwriting valid local data. We rely on the debounced effect to save the merged state.
           }
@@ -1341,7 +1342,7 @@ const App: React.FC = () => {
         className="fixed bottom-6 left-6 z-[200] px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium shadow-lg hover:shadow-xl transition-all hover:scale-105"
         style={{ backdropFilter: 'blur(10px)' }}
       >
-        ✨ AI
+        AI
       </button>
 
       {/* AI 助手面板 */}
@@ -1349,30 +1350,11 @@ const App: React.FC = () => {
         isOpen={showAIPanel}
         onClose={() => setShowAIPanel(false)}
         userId={currentUser?.id}
-        planetSettings={planetSettings}
-        onAddPlanet={(planet) => {
-          setPlanetSettings(prev => ({
-            ...prev,
-            enabled: true,
-            planets: [...prev.planets, planet]
-          }));
-        }}
-        onUpdatePlanet={(id, updates) => {
-          setPlanetSettings(prev => ({
-            ...prev,
-            planets: prev.planets.map(p => p.id === id ? { ...p, ...updates } : p)
-          }));
-        }}
-        onApplyBackground={(url) => {
-          setPlanetSettings(prev => ({
-            ...prev,
-            background: { ...prev.background, panoramaUrl: url, enabled: true }
-          }));
-        }}
         onSaveHeadTexture={async (preset) => {
           // 保存到云配置
           const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
           const headTexturePresets = config.headTexturePresets || [];
+
           headTexturePresets.push(preset);
           const ok = await saveCloudConfig({ ...config, headTexturePresets });
           if (ok) {

@@ -13,16 +13,12 @@ import { createPortal } from 'react-dom';
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
-import { CreatorPanel } from './ai/CreatorPanel';
-
-// 类型
-import type { PlanetSettings, PlanetSceneSettings } from '../types';
 
 // ============================================
 // 类型定义
 // ============================================
 
-export type AIMode = 'inspiration' | 'creator';
+export type AIMode = 'inspiration';
 
 // AI 生成预设
 export interface AIGeneratedPreset {
@@ -41,11 +37,6 @@ interface AIAssistantPanelProps {
     onSaveHeadTexture?: (preset: AIGeneratedPreset) => void;
     onSaveBackground?: (preset: AIGeneratedPreset) => void;
     onSaveMagicCircleTexture?: (preset: AIGeneratedPreset) => void;
-    // 创造/修改模式
-    planetSettings?: PlanetSceneSettings;
-    onAddPlanet?: (planet: PlanetSettings) => void;
-    onUpdatePlanet?: (planetId: string, planet: Partial<PlanetSettings>) => void;
-    onApplyBackground?: (url: string) => void;
 }
 
 interface ChatMessage {
@@ -114,14 +105,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     userId,
     onSaveHeadTexture,
     onSaveBackground,
-    onSaveMagicCircleTexture,
-    planetSettings,
-    onAddPlanet,
-    onUpdatePlanet,
-    onApplyBackground
+    onSaveMagicCircleTexture
 }) => {
     // === 模式状态 ===
-    const [activeMode, setActiveMode] = useState<AIMode>('inspiration');
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
     // 原有的 scopeSelection 状态已移除（创造模式简化重构）
 
@@ -262,8 +248,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     prompt: inputValue.trim(),
-                    mode: activeMode,
-                    subMode: activeMode === 'inspiration' ? inspirationSubMode : undefined,
+                    mode: 'inspiration',
+                    subMode: inspirationSubMode,
                     imageBase64: uploadedImage || undefined,
                     model: chatModel
                 })
@@ -282,7 +268,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         } finally {
             setIsRefining(false);
         }
-    }, [inputValue, activeMode, inspirationSubMode, uploadedImage, isRefining, chatModel]);
+    }, [inputValue, inspirationSubMode, uploadedImage, isRefining, chatModel]);
 
     // === 发送 (生成图像) ===
     const handleSend = useCallback(async () => {
@@ -301,60 +287,51 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         setIsGenerating(true);
 
         try {
-            if (activeMode === 'inspiration') {
-                // 灵感模式：生成图片
-                const res = await fetch('/api/ai/image', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt: prompt,
-                        model: imageModel,
-                        subMode: inspirationSubMode,
-                        imageBase64: uploadedImage || undefined
-                    })
-                });
-                const data = await res.json();
+            // 灵感模式：生成图片
+            const res = await fetch('/api/ai/image', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    model: imageModel,
+                    subMode: inspirationSubMode,
+                    imageBase64: uploadedImage || undefined
+                })
+            });
+            const data = await res.json();
 
-                if (data.url) {
-                    // 获取 AI 命名
-                    let suggestedName = 'AI生成';
-                    try {
-                        const nameRes = await fetch('/api/ai/name', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                imageUrl: data.url,
-                                subMode: inspirationSubMode
-                            })
-                        });
-                        const nameData = await nameRes.json();
-                        suggestedName = nameData.name || suggestedName;
-                    } catch (e) {
-                        console.error('Name API error:', e);
-                    }
-
-                    setMessages(prev => [...prev, {
-                        id: generateId(),
-                        role: 'assistant',
-                        content: `✨ 生成完成`,
-                        type: 'image',
-                        imageUrl: data.url,
-                        subMode: inspirationSubMode,
-                        suggestedName
-                    }]);
-
-                    // 清理上传的图片
-                    clearUploadedImage();
-                } else {
-                    throw new Error(data.error || '图片生成失败');
+            if (data.url) {
+                // 获取 AI 命名
+                let suggestedName = 'AI生成';
+                try {
+                    const nameRes = await fetch('/api/ai/name', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            imageUrl: data.url,
+                            subMode: inspirationSubMode
+                        })
+                    });
+                    const nameData = await nameRes.json();
+                    suggestedName = nameData.name || suggestedName;
+                } catch (e) {
+                    console.error('Name API error:', e);
                 }
-            } else {
-                // TODO: 创造/修改模式
+
                 setMessages(prev => [...prev, {
                     id: generateId(),
-                    role: 'system',
-                    content: '创造/修改模式开发中...'
+                    role: 'assistant',
+                    content: `✨ 生成完成`,
+                    type: 'image',
+                    imageUrl: data.url,
+                    subMode: inspirationSubMode,
+                    suggestedName
                 }]);
+
+                // 清理上传的图片
+                clearUploadedImage();
+            } else {
+                throw new Error(data.error || '图片生成失败');
             }
         } catch (err: any) {
             setMessages(prev => [...prev, {
@@ -366,7 +343,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         } finally {
             setIsGenerating(false);
         }
-    }, [inputValue, activeMode, inspirationSubMode, imageModel, uploadedImage, isGenerating, clearUploadedImage]);
+    }, [inputValue, inspirationSubMode, imageModel, uploadedImage, isGenerating, clearUploadedImage]);
 
     // === 保存预设 ===
     const handleSavePreset = useCallback(async (msg: ChatMessage, customName?: string) => {
@@ -481,22 +458,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         </div>
                     </div>
 
-                    {/* 模式切换 */}
-                    <div className="flex border-b border-white/10">
-                        {(['inspiration', 'creator'] as AIMode[]).map(mode => (
-                            <button
-                                key={mode}
-                                onClick={() => setActiveMode(mode)}
-                                className={`flex-1 py-2 text-sm font-medium transition-colors ${activeMode === mode
-                                    ? 'text-blue-300 border-b-2 border-blue-400 bg-blue-500/10'
-                                    : 'text-white/50 hover:text-white/70'
-                                    }`}
-                            >
-                                {mode === 'inspiration' ? '🎨 灵感' : '🪐 创造'}
-                            </button>
-                        ))}
-                    </div>
-
                     {/* 设置面板 */}
                     {showSettings && (
                         <div className="p-3 border-b border-white/10 bg-black/30">
@@ -530,35 +491,23 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     )}
 
                     {/* 灵感子模式 */}
-                    {activeMode === 'inspiration' && (
-                        <div className="flex gap-2 p-3 border-b border-white/10">
-                            {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => {
-                                const info = INSPIRATION_MODE_INFO[subMode];
-                                return (
-                                    <button
-                                        key={subMode}
-                                        onClick={() => setInspirationSubMode(subMode)}
-                                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
-                                            ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
-                                            : 'bg-white/5 text-white/50 hover:bg-white/10'
-                                            }`}
-                                    >
-                                        {info.icon} {info.name}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    )}
-
-                    {/* 创造模式 */}
-                    {activeMode === 'creator' && onAddPlanet && (
-                        <div className="flex-1 overflow-hidden">
-                            <CreatorPanel
-                                planetSettings={planetSettings}
-                                onAddPlanet={onAddPlanet}
-                            />
-                        </div>
-                    )}
+                    <div className="flex gap-2 p-3 border-b border-white/10">
+                        {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => {
+                            const info = INSPIRATION_MODE_INFO[subMode];
+                            return (
+                                <button
+                                    key={subMode}
+                                    onClick={() => setInspirationSubMode(subMode)}
+                                    className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${inspirationSubMode === subMode
+                                        ? 'bg-purple-500/30 text-purple-200 border border-purple-400/30'
+                                        : 'bg-white/5 text-white/50 hover:bg-white/10'
+                                        }`}
+                                >
+                                    {info.icon} {info.name}
+                                </button>
+                            );
+                        })}
+                    </div>
 
                     {/* 消息列表 */}
                     <div className="h-[280px] overflow-y-auto p-3 space-y-3">
@@ -706,11 +655,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     }
                                 }}
                                 onPaste={handlePaste}
-                                placeholder={
-                                    activeMode === 'inspiration'
-                                        ? `描述你想要的${INSPIRATION_MODE_INFO[inspirationSubMode].name}... (可粘贴/拖拽图片)`
-                                        : '描述你的需求... (可粘贴/拖拽图片)'
-                                }
+                                placeholder={`描述你想要的${INSPIRATION_MODE_INFO[inspirationSubMode].name}... (可粘贴/拖拽图片)`}
                                 className="flex-1 bg-white/10 text-white/90 placeholder-white/30 rounded-xl px-4 py-2 text-sm border border-white/10 focus:border-blue-400/50 focus:outline-none resize-none"
                                 rows={2}
                             />
@@ -739,9 +684,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     {/* 状态栏 */}
                     <div className="px-3 py-1.5 border-t border-white/5 flex items-center justify-between text-xs text-white/30">
                         <span>
-                            {activeMode === 'inspiration'
-                                ? `生图: ${IMAGE_MODELS.find(m => m.id === imageModel)?.name}`
-                                : `对话: ${CHAT_MODELS.find(m => m.id === chatModel)?.name}`}
+                            {`对话: ${CHAT_MODELS.find(m => m.id === chatModel)?.name} | 生图: ${IMAGE_MODELS.find(m => m.id === imageModel)?.name}`}
                         </span>
                         <span>Enter 发送 | Shift+Enter 换行</span>
                     </div>
