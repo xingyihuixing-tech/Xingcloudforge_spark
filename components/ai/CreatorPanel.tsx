@@ -96,37 +96,62 @@ export const CreatorPanel: React.FC<CreatorPanelProps> = ({
             let newPlanet = createDefaultPlanet(newPlanetId, newPlanetName);
 
             // 应用 AI 生成的配置
-            if (data.patch && data.patch.effects) {
-                for (const effect of data.patch.effects) {
-                    if (effect.effectType === 'particleCore' && effect.instances) {
-                        // 处理粒子核心
-                        const cores: PlanetCoreSettings[] = [];
-                        for (const inst of effect.instances) {
-                            const coreId = `ai-core-${Date.now()}-${cores.length}`;
-                            const defaultCore = createDefaultCore(coreId, inst.fields?.name || 'AI核心');
+            // API 返回格式: { patch: { particleCore: { instances: [{ id, fields }] } } }
+            if (data.patch) {
+                // 处理粒子核心
+                if (data.patch.particleCore?.instances) {
+                    const cores: PlanetCoreSettings[] = [];
+                    for (const inst of data.patch.particleCore.instances) {
+                        const coreId = `ai-core-${Date.now()}-${cores.length}`;
+                        const defaultCore = createDefaultCore(coreId, inst.fields?.name || 'AI核心');
 
-                            // 合并 AI 生成的字段
-                            const mergedCore: PlanetCoreSettings = {
-                                ...defaultCore,
-                                enabled: true,
-                            };
+                        // 合并 AI 生成的字段（支持嵌套路径）
+                        const mergedCore: PlanetCoreSettings = {
+                            ...defaultCore,
+                            enabled: true,
+                        };
 
-                            // 应用 AI 返回的字段
-                            if (inst.fields) {
-                                for (const [key, value] of Object.entries(inst.fields)) {
-                                    if (key in mergedCore) {
-                                        (mergedCore as any)[key] = value;
-                                    }
+                        // 深度设置函数：支持 "a.b.c" 和 "a.b.0" 格式
+                        const setDeepValue = (obj: any, path: string, value: any) => {
+                            const parts = path.split('.');
+                            let current = obj;
+                            for (let i = 0; i < parts.length - 1; i++) {
+                                const part = parts[i];
+                                const nextPart = parts[i + 1];
+                                const isNextIndex = /^\d+$/.test(nextPart);
+                                if (current[part] === undefined) {
+                                    current[part] = isNextIndex ? [] : {};
+                                }
+                                current = current[part];
+                            }
+                            const lastPart = parts[parts.length - 1];
+                            // 数组索引处理
+                            if (/^\d+$/.test(lastPart)) {
+                                current[parseInt(lastPart)] = value;
+                            } else {
+                                current[lastPart] = value;
+                            }
+                        };
+
+                        // 应用 AI 返回的字段
+                        if (inst.fields) {
+                            for (const [key, value] of Object.entries(inst.fields)) {
+                                if (key.includes('.')) {
+                                    // 嵌套路径：如 "color.mode" -> mergedCore.color.mode
+                                    setDeepValue(mergedCore, key, value);
+                                } else if (key in mergedCore) {
+                                    // 顶层属性
+                                    (mergedCore as any)[key] = value;
                                 }
                             }
-
-                            cores.push(mergedCore);
                         }
 
-                        if (cores.length > 0) {
-                            newPlanet.coreSystem.cores = cores;
-                            newPlanet.coreSystem.coresEnabled = true;
-                        }
+                        cores.push(mergedCore);
+                    }
+
+                    if (cores.length > 0) {
+                        newPlanet.coreSystem.cores = cores;
+                        newPlanet.coreSystem.coresEnabled = true;
                     }
                 }
             }

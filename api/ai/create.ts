@@ -97,12 +97,20 @@ const EFFECT_SCHEMAS: Record<EffectType, EffectSchema> = {
     particleCore: {
         name: '粒子核心',
         fields: {
-            'fillMode': { type: 'enum', options: ['shell', 'gradient', 'solid'], default: 'gradient', desc: '填充模式' },
-            'fillPercent': { type: 'number', min: 0, max: 100, default: 50, desc: '填充百分比' },
-            'density': { type: 'number', min: 0.1, max: 10, default: 2, desc: '粒子密度' },
-            'baseRadius': { type: 'number', min: 50, max: 500, default: 100, desc: '基础半径' },
-            'baseHue': { type: 'number', min: 0, max: 360, default: 0, desc: '基础色相' },
-            'brightness': { type: 'number', min: 0.1, max: 3, default: 1, desc: '亮度' },
+            // 基础参数
+            'fillMode': { type: 'enum', options: ['shell', 'gradient', 'solid'], default: 'gradient', desc: '填充模式：shell=表面壳层, gradient=渐变填充, solid=实心' },
+            'fillPercent': { type: 'number', min: 0, max: 100, default: 50, desc: '填充百分比(gradient模式下中心填充比例)' },
+            'density': { type: 'number', min: 0.1, max: 10, default: 2, desc: '粒子密度倍数' },
+            'baseRadius': { type: 'number', min: 50, max: 500, default: 100, desc: '核心半径(像素)' },
+            'particleSize': { type: 'number', min: 1, max: 20, default: 3, desc: '单个粒子大小' },
+            'opacity': { type: 'number', min: 0, max: 1, default: 0.9, desc: '整体透明度' },
+            'brightness': { type: 'number', min: 0.1, max: 3, default: 1, desc: '亮度倍数' },
+            // 颜色设置 (嵌套路径)
+            'color.mode': { type: 'enum', options: ['none', 'twoColor', 'threeColor', 'procedural'], default: 'twoColor', desc: '颜色模式：none=单色, twoColor=双色渐变, threeColor=三色渐变, procedural=程序混色' },
+            'color.baseColor': { type: 'color', default: '#ff6600', desc: '基础颜色(mode=none时使用)' },
+            'color.colors.0': { type: 'color', default: '#ff4400', desc: '渐变起始色/暗部色' },
+            'color.colors.1': { type: 'color', default: '#ffcc00', desc: '渐变中间色/亮部色' },
+            'color.colors.2': { type: 'color', default: '#ffffff', desc: '渐变结束色(threeColor模式)' },
         }
     },
     solidCore: {
