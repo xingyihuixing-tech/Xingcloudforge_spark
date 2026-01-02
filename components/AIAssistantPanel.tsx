@@ -531,9 +531,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                             ))}
                         </div>
 
-                        {/* 输入框行 */}
+                        {/* 真正的输入框 Wrapper - 应用 .ai-input-container */}
                         <div
-                            className="flex items-end gap-2 bg-white/5 rounded-xl p-1 border border-white/5 focus-within:bg-white/10 transition-colors"
+                            className={`flex items-end gap-2 bg-white/5 rounded-xl p-1 transition-colors ai-input-container ${isRefining ? 'refining' : ''}`}
                             onDrop={handleDrop}
                             onDragOver={handleDragOver}
                         >
