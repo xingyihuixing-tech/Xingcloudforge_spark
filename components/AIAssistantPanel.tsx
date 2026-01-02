@@ -13,6 +13,7 @@ import { createPortal } from 'react-dom';
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
+import XingSparkSettings, { XingSparkConfig, DEFAULT_XING_CONFIG } from './XingSparkSettings';
 
 // ============================================
 // 类型定义
@@ -133,12 +134,52 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const [editingName, setEditingName] = useState<{ id: string; name: string } | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
 
+    // === XingSpark 设置 ===
+    const [xingConfig, setXingConfig] = useState<XingSparkConfig>(DEFAULT_XING_CONFIG);
+    const [showXingSettings, setShowXingSettings] = useState(false);
+    const [logoState, setLogoState] = useState<'idle' | 'blinking'>('idle');
+    const lastDoubleClickRef = useRef(0);
+    const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // === 窗口拖拽 ===
     // 默认位置更靠下
     const [position, setPosition] = useState({ x: window.innerWidth / 2 - 250, y: window.innerHeight - 400 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    // XingSpark 双击处理
+    const handleLogoDoubleClick = useCallback(() => {
+        const now = Date.now();
+        if (logoState === 'blinking' && now - lastDoubleClickRef.current < 3000) {
+            // 闪烁期间再次双击 -> 打开设置
+            if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
+            setLogoState('idle');
+            setShowXingSettings(true);
+        } else {
+            // 第一次双击 -> 开始闪烁
+            lastDoubleClickRef.current = now;
+            setLogoState('blinking');
+            if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
+            blinkTimeoutRef.current = setTimeout(() => {
+                setLogoState('idle');
+            }, 3000);
+        }
+    }, [logoState]);
+
+    // 加载云端配置
+    useEffect(() => {
+        if (userId) {
+            fetch(`/api/config?userId=${userId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.config?.xingSparkConfig) {
+                        setXingConfig(data.config.xingSparkConfig);
+                    }
+                })
+                .catch(err => console.error('加载 XingSpark 配置失败:', err));
+        }
+    }, [userId]);
 
     // 拖拽处理
     const handleDragStart = (e: React.MouseEvent) => {
@@ -424,6 +465,13 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     return createPortal(
         <>
             <ImageModal imageUrl={previewImage} onClose={() => setPreviewImage(null)} />
+            <XingSparkSettings
+                isOpen={showXingSettings}
+                onClose={() => setShowXingSettings(false)}
+                config={xingConfig}
+                setConfig={setXingConfig}
+                userId={userId}
+            />
 
             <div
                 className="fixed z-[9999]"
@@ -432,13 +480,28 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             >
                 <div
                     className={`w-[500px] ai-panel-container ${isRefining ? 'refining' : ''}`}
-                // 样式由 CSS .ai-panel-container 控制 (无边框颜色)
+                // 样式由 CSS .ai-panel-container 控制 (4-segment breathe borders)
                 >
+                    {/* 4-Segment Breathe Borders */}
+                    <div className="ai-panel-border-top"></div>
+                    <div className="ai-panel-border-bottom"></div>
+                    <div className="ai-panel-border-left"></div>
+                    <div className="ai-panel-border-right"></div>
+
                     {/* 标题栏 (Drag Handle) */}
                     <div className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5">
-                        <div className="flex items-center gap-2">
-                            {/* 极简标题，可根据需要移除或保留小图标 */}
-                            <span className="text-white/80 font-semibold tracking-wide text-sm">XINGFORGE AI</span>
+                        <div className="flex items-center gap-2 relative">
+                            {/* XingSpark Logo with Dynamic Gradient (Reference Style) */}
+                            <span
+                                className={`xingspark-logo ${logoState === 'blinking' ? 'blinking' : ''}`}
+                                onDoubleClick={handleLogoDoubleClick}
+                                title="双击打开设置"
+                            >
+                                <span style={{ fontSize: '1em' }}>X</span>
+                                <span style={{ fontSize: '0.9em' }}>ing</span>
+                                <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
+                                <span style={{ fontSize: '0.9em' }}>park</span>
+                            </span>
                         </div>
                         <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">✕</button>
                     </div>

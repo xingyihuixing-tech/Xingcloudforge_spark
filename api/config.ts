@@ -67,6 +67,8 @@ interface UserConfig {
     headTexturePresets?: Array<{ id: string; name: string; url: string; createdAt: number }>;
     backgroundPresets?: Array<{ id: string; name: string; url: string; createdAt: number }>;
     magicCircleTexturePresets?: Array<{ id: string; name: string; url: string; createdAt: number }>;
+    // XingSpark 配置
+    xingSparkConfig?: Record<string, unknown>;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -172,6 +174,8 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         headTexturePresets: config.headTexturePresets ?? existingConfig?.headTexturePresets ?? [],
         backgroundPresets: config.backgroundPresets ?? existingConfig?.backgroundPresets ?? [],
         magicCircleTexturePresets: config.magicCircleTexturePresets ?? existingConfig?.magicCircleTexturePresets ?? [],
+        // XingSpark 配置
+        xingSparkConfig: config.xingSparkConfig ?? existingConfig?.xingSparkConfig,
     };
 
     await redis!.set(`config:${userId}`, newConfig);

@@ -37,6 +37,8 @@ import {
   GlowMode,
   NebulaBlendMode
 } from '../types';
+import OldNebulaScene from '../OldNebulaScene';
+import { InkManager } from './InkManager';
 import { ProcessedData } from '../services/imageProcessing';
 import { createDefaultEnergyBody } from '../constants';
 import { nebulaCanvasVertexShader, nebulaCanvasFragmentShader } from '../shaders/nebulaCanvasShaders';

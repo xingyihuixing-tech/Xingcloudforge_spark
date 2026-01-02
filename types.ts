@@ -1436,6 +1436,7 @@ export interface PlanetSettings {
   radiation: RadiationSystemSettings;
   fireflies: FireflySystemSettings;
   magicCircles: MagicCircleSystemSettings;  // 法阵系统
+  drawSettings?: DrawSettings; // 绘制系统
   energyBodySystem: EnergyBodySystemSettings;  // 能量体系统
 }
 
@@ -1670,3 +1671,47 @@ export interface MaterialPreset {
   data: MaterialSettings;
   isBuiltIn?: boolean;
 }
+
+// ==================== 绘制系统 ====================
+
+// 绘制模式
+export enum DrawMode {
+  Off = 'off',
+  Kaleidoscope = 'kaleidoscope',  // 2D 万花筒
+  PlanetSpin = 'planetSpin'       // 3D 行星自转
+}
+
+// 笔刷设置
+export interface BrushSettings {
+  size: number;           // 笔刷大小 1-50
+  opacity: number;        // 透明度 0.1-1
+  color: string;          // 颜色
+  hardness: number;       // 硬度 0-1
+  usePressure: boolean;   // 是否启用压感
+  pressureInfluence: {    // 压感影响
+    size: boolean;
+    opacity: boolean;
+    flow: boolean;        // 流量/湍流
+  };
+}
+
+// 绘制设置
+export interface DrawSettings {
+  enabled: boolean;
+  mode: DrawMode;
+
+  // 对称参数
+  segments: number;       // 对称份数 2-32
+
+  // 3D 空间参数
+  altitude: number;       // 绘制高度 (Offset from surface)
+  bindPlanetId: string | null; // 绑定的星球ID
+
+  // 笔刷
+  brush: BrushSettings;
+
+  // 墨迹效果参数 (复用部分星云参数)
+  inkFlow: number;        // 墨迹流动感 (Turbulence)
+  inkBloom: number;       // 墨迹辉光
+}
+
