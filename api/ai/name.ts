@@ -45,7 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const systemPrompt = NAME_PROMPTS[subMode] || NAME_PROMPTS.magicCircle;
 
     const baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
-    const apiKey = process.env.CHAT_API_KEY;
+    const apiKey = process.env.JIMIAI_API_KEY_CLAUDE;
 
     if (!apiKey) {
         // 如果没有 API key，返回默认名称

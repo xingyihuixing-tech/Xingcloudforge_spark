@@ -48,6 +48,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     const [cloudBackgroundPresets, setCloudBackgroundPresets] = useState<{ id: string; name: string; url: string }[]>([]);
     const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; url: string } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [saveConfirm, setSaveConfirm] = useState<{ type: 'save' | 'saveAs'; schemeName: string; onConfirm: () => void } | null>(null);
 
     // Load cloud presets on mount
     useEffect(() => {
@@ -318,19 +319,36 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                     {scheme.isSystem && <span className="text-[9px] text-white/30">系统</span>}
                                                 </div>
                                                 <span className="text-white/80 group-hover:text-white">{scheme.name}</span>
-                                                {/* 删除按钮 */}
-                                                {!scheme.isSystem && themeConfig?.activeSchemeId !== id && (
+                                                {/* 删除按钮 - 所有方案都可删除 */}
+                                                {Object.keys(themeConfig?.schemes || {}).length > 1 && (
                                                     <button
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             if (setThemeConfig && themeConfig) {
+                                                                const schemeIds = Object.keys(themeConfig.schemes);
+                                                                const isCurrentlyActive = themeConfig.activeSchemeId === id;
+
+                                                                // 删除方案
                                                                 const newSchemes = { ...themeConfig.schemes };
                                                                 delete newSchemes[id];
-                                                                setThemeConfig({ ...themeConfig, schemes: newSchemes });
+
+                                                                // 如果删除的是当前选中的方案，切换到第一个可用方案
+                                                                let newActiveId = themeConfig.activeSchemeId;
+                                                                if (isCurrentlyActive) {
+                                                                    const remainingIds = schemeIds.filter(sid => sid !== id);
+                                                                    newActiveId = remainingIds[0] || 'default';
+                                                                }
+
+                                                                setThemeConfig({
+                                                                    ...themeConfig,
+                                                                    schemes: newSchemes,
+                                                                    activeSchemeId: newActiveId,
+                                                                    activeColors: newSchemes[newActiveId]?.colors || themeConfig.activeColors
+                                                                });
                                                             }
                                                         }}
                                                         className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500/0 hover:bg-red-500/80 text-white/30 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
-                                                        title="删除此方案"
+                                                        title={scheme.isSystem ? "删除系统方案" : "删除此方案"}
                                                     >
                                                         <i className="fas fa-times text-[10px]" />
                                                     </button>
@@ -382,14 +400,20 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                 if (setThemeConfig && themeConfig && themeConfig.activeSchemeId) {
                                                     const currentScheme = themeConfig.schemes[themeConfig.activeSchemeId];
                                                     if (currentScheme) {
-                                                        setThemeConfig({
-                                                            ...themeConfig,
-                                                            schemes: {
-                                                                ...themeConfig.schemes,
-                                                                [themeConfig.activeSchemeId]: {
-                                                                    ...currentScheme,
-                                                                    colors: { ...themeConfig.activeColors }
-                                                                }
+                                                        setSaveConfirm({
+                                                            type: 'save',
+                                                            schemeName: currentScheme.name,
+                                                            onConfirm: () => {
+                                                                setThemeConfig({
+                                                                    ...themeConfig,
+                                                                    schemes: {
+                                                                        ...themeConfig.schemes,
+                                                                        [themeConfig.activeSchemeId]: {
+                                                                            ...currentScheme,
+                                                                            colors: { ...themeConfig.activeColors }
+                                                                        }
+                                                                    }
+                                                                });
                                                             }
                                                         });
                                                     }
@@ -401,19 +425,25 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                         </button>
                                         <button
                                             onClick={() => {
-                                                const newId = `custom_${Date.now()}`;
                                                 if (setThemeConfig && themeConfig) {
-                                                    setThemeConfig({
-                                                        ...themeConfig,
-                                                        schemes: {
-                                                            ...themeConfig.schemes,
-                                                            [newId]: {
-                                                                name: '新方案',
-                                                                colors: { ...themeConfig.activeColors },
-                                                                isSystem: false
-                                                            }
-                                                        },
-                                                        activeSchemeId: newId
+                                                    setSaveConfirm({
+                                                        type: 'saveAs',
+                                                        schemeName: '新方案',
+                                                        onConfirm: () => {
+                                                            const newId = `custom_${Date.now()}`;
+                                                            setThemeConfig({
+                                                                ...themeConfig,
+                                                                schemes: {
+                                                                    ...themeConfig.schemes,
+                                                                    [newId]: {
+                                                                        name: '新方案',
+                                                                        colors: { ...themeConfig.activeColors },
+                                                                        isSystem: false
+                                                                    }
+                                                                },
+                                                                activeSchemeId: newId
+                                                            });
+                                                        }
                                                     });
                                                 }
                                             }}
@@ -652,6 +682,53 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                 className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors disabled:opacity-50"
                             >
                                 {isDeleting ? '删除中...' : '删除'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 保存确认弹窗 */}
+            {saveConfirm && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60" onClick={() => setSaveConfirm(null)}>
+                    <div
+                        className="w-80 rounded-xl overflow-hidden"
+                        style={{
+                            background: 'linear-gradient(180deg, rgba(25,25,40,0.98) 0%, rgba(15,15,25,0.98) 100%)',
+                            backdropFilter: 'blur(20px)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            boxShadow: '0 0 40px rgba(100,200,200,0.2)'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="p-4 border-b border-white/10">
+                            <h3 className="text-white font-medium">
+                                {saveConfirm.type === 'save' ? '确认保存' : '确认另存为'}
+                            </h3>
+                        </div>
+                        <div className="p-4">
+                            <p className="text-white/80 text-sm">
+                                {saveConfirm.type === 'save'
+                                    ? `确定要将当前颜色保存到 "${saveConfirm.schemeName}" 方案吗？`
+                                    : `确定要创建新方案 "${saveConfirm.schemeName}" 吗？`
+                                }
+                            </p>
+                        </div>
+                        <div className="p-3 flex gap-2 justify-end border-t border-white/10">
+                            <button
+                                onClick={() => setSaveConfirm(null)}
+                                className="px-3 py-1.5 text-sm text-white/60 hover:text-white/90 rounded-lg hover:bg-white/10 transition-colors"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={() => {
+                                    saveConfirm.onConfirm();
+                                    setSaveConfirm(null);
+                                }}
+                                className="px-3 py-1.5 text-sm text-white bg-cyan-600 hover:bg-cyan-500 rounded-lg transition-colors"
+                            >
+                                确认
                             </button>
                         </div>
                     </div>

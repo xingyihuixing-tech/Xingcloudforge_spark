@@ -4750,7 +4750,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
                     className={`flex-1 py-2.5 px-2 text-xs rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 font-medium relative overflow-hidden ${isActive ? 'transform scale-[1.02]' : 'hover:scale-[1.01]'}`}
-                    style={materialStyle.style}
+                    style={materialStyle}
                   >
                     {/* 顶部高光条 */}
                     {isActive && (materialSettings?.mainTabs?.type === 'glass' || materialSettings?.mainTabs?.type === 'neumorphism') && (
