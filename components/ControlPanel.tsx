@@ -113,7 +113,7 @@ import {
 } from '../constants';
 
 import { createThumbnail } from '../services/imageProcessing';
-
+import { useLocalStorage } from '../utils/storage';
 
 import { ButtonMaterialConfig } from '../types';
 
@@ -472,8 +472,11 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   const [editingName, setEditingName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // 持久化当前选中的预设ID
+  const [activeSchemeId, setActiveSchemeId] = useLocalStorage<string | null>(`${storageKey}_active_scheme_id`, null);
+
   // 模态框状态
-  const [applyModal, setApplyModal] = useState<{ isOpen: boolean; presetName: string; data: any }>({ isOpen: false, presetName: '', data: null });
+  const [applyModal, setApplyModal] = useState<{ isOpen: boolean; presetId: string; presetName: string; data: any }>({ isOpen: false, presetId: '', presetName: '', data: null });
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; presetId: string; presetName: string }>({ isOpen: false, presetId: '', presetName: '' });
   const [saveModal, setSaveModal] = useState<{ isOpen: boolean; presetId: string; presetName: string }>({ isOpen: false, presetId: '', presetName: '' });
   const [importConfirmModal, setImportConfirmModal] = useState<{ isOpen: boolean; moduleName: string; onConfirm: () => void }>({ isOpen: false, moduleName: '', onConfirm: () => { } });
@@ -541,10 +544,11 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
 
     if (hasInstance) {
       // 有实例，弹出确认框
-      setApplyModal({ isOpen: true, presetName: displayName, data: dataToApply });
+      setApplyModal({ isOpen: true, presetId: preset.id, presetName: displayName, data: dataToApply });
     } else {
       // 无实例，直接创建
       onCreateInstance(dataToApply, displayName);
+      setActiveSchemeId(preset.id);
     }
   };
 
@@ -685,7 +689,10 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
               return (
                 <div
                   key={preset.id}
-                  className="flex items-center justify-between px-2 py-1 hover:bg-gray-700/50 cursor-pointer group"
+                  className={`flex items-center justify-between px-2 py-1 cursor-pointer group transition-colors ${activeSchemeId === preset.id
+                    ? 'bg-blue-500/20 border-l-2 border-blue-500'
+                    : 'hover:bg-gray-700/50 border-l-2 border-transparent'
+                    }`}
                   onClick={() => handlePresetClick(preset)}
                   onDoubleClick={() => handleDoubleClick(preset)}
                 >
@@ -767,7 +774,10 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
       <TransparentModal
         isOpen={applyModal.isOpen}
         onClose={() => setApplyModal({ ...applyModal, isOpen: false })}
-        onConfirm={() => onApplyToInstance(applyModal.data)}
+        onConfirm={() => {
+          onApplyToInstance(applyModal.data);
+          setActiveSchemeId(applyModal.presetId);
+        }}
         title="应用预设"
         message={`是否将预设"${applyModal.presetName}"的参数应用到当前${instanceName || '实例'}？`}
         confirmText="应用"
@@ -828,6 +838,11 @@ const SavePresetButton: React.FC<SavePresetButtonProps> = ({ storageKey, current
       data: { ...currentData, id: undefined, name: undefined, enabled: undefined }
     };
     localStorage.setItem(storageKey, JSON.stringify([...userPresets, newPreset]));
+
+    // Set as active
+    localStorage.setItem(`${storageKey}_active_scheme_id`, JSON.stringify(newPreset.id));
+    window.dispatchEvent(new Event('local-storage'));
+
     onSaved?.();
     // 触发重新加载（通过 storage 事件）
     window.dispatchEvent(new Event('storage'));
@@ -3724,8 +3739,9 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
     root.style.setProperty('--custom-edit-bar', customColors.editBar);
 
     // 持久化当前颜色设置
-    localStorage.setItem('active_scheme_id', activeSchemeId);
-    localStorage.setItem('active_colors', JSON.stringify(customColors));
+    // 持久化当前颜色设置（使用用户隔离的键）
+    localStorage.setItem(getUserScopedKey('active_scheme_id'), activeSchemeId);
+    localStorage.setItem(getUserScopedKey('active_colors'), JSON.stringify(customColors));
 
   }, [customColors, activeSchemeId]);
   const [selectedPlanetId, setSelectedPlanetId] = useState<string | null>(null);
@@ -6699,7 +6715,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                             {/* 预设列表 */}
                             <PresetListBox
-                              storageKey={PRESET_STORAGE_KEYS.particleCore}
+                              storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.particleCore)}
                               builtInPresets={Object.entries(PARTICLE_CORE_PRESETS).map(([id, data]) => ({
                                 id,
                                 name: {
@@ -6741,7 +6757,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentCore.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.particleCore}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.particleCore)}
                                   currentData={currentCore}
                                   defaultName={currentCore.name}
                                   accentColor="teal"
@@ -6988,7 +7004,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                             {/* 预设列表 */}
                             <PresetListBox
-                              storageKey={PRESET_STORAGE_KEYS.solidCore}
+                              storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.solidCore)}
                               builtInPresets={[
                                 { id: 'magma', name: '岩浆星球', data: SOLID_CORE_PRESETS.magma },
                                 { id: 'gaia', name: '盖亚生机', data: SOLID_CORE_PRESETS.gaia },
@@ -7039,7 +7055,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 }}>
                                   <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentSolidCore.name}</span>
                                   <SavePresetButton
-                                    storageKey={PRESET_STORAGE_KEYS.solidCore}
+                                    storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.solidCore)}
                                     currentData={currentSolidCore}
                                     defaultName={currentSolidCore.name}
                                     accentColor="teal"
@@ -7516,7 +7532,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {/* 预设列表 */}
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.particleRing}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.particleRing)}
                             builtInPresets={Object.entries(PARTICLE_RING_PRESETS).map(([id, data]) => ({
                               id,
                               name: {
@@ -7559,7 +7575,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentParticleRing.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.particleRing}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.particleRing)}
                                   currentData={currentParticleRing}
                                   defaultName={currentParticleRing.name}
                                   accentColor="blue"
@@ -7867,7 +7883,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {/* 预设列表 */}
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.continuousRing}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.continuousRing)}
                             builtInPresets={Object.entries(CONTINUOUS_RING_PRESETS).map(([id, data]) => ({
                               id,
                               name: {
@@ -7910,7 +7926,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentContinuousRing.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.continuousRing}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.continuousRing)}
                                   currentData={currentContinuousRing}
                                   defaultName={currentContinuousRing.name}
                                   accentColor="purple"
@@ -8335,7 +8351,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                             <FloatingListSelector items={spiralFlames.map(s => ({ id: s.id, name: s.name, enabled: s.enabled }))} selectedId={effectiveSpiralId} onSelect={(id) => setSelectedSpiralFlameId(id)} onToggleEnabled={(id, e) => updateSpiral(id, { enabled: e })} onRename={(id, n) => updateSpiral(id, { name: n })} onDelete={(id) => { updatePlanet({ flameSystem: { ...flameSystem, spiralFlames: spiralFlames.filter(s => s.id !== id) } }); if (effectiveSpiralId === id) setSelectedSpiralFlameId(null); }} onCopy={(id) => { const source = spiralFlames.find(s => s.id === id); if (source) { const newId = `spiral_${Date.now()}`; const copy = { ...source, id: newId, name: `${source.name} 副本` }; updatePlanet({ flameSystem: { ...flameSystem, spiralFlames: [...spiralFlames, copy] } }); setSelectedSpiralFlameId(newId); } }} onAdd={() => addSpiral('custom')} globalEnabled={spiralEnabled} onGlobalToggle={(e) => updatePlanet({ flameSystem: { ...flameSystem, spiralFlamesEnabled: e } })} soloId={soloSpiralFlameId} onSoloToggle={setSoloSpiralFlameId} title="螺旋环" titleStyle={{ color: 'var(--ui-secondary)' }} addButtonColor="bg-blue-600 hover:bg-blue-500" emptyText="暂无螺旋环" />
 
                             <PresetListBox
-                              storageKey={PRESET_STORAGE_KEYS.spiralFlame}
+                              storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.spiralFlame)}
                               builtInPresets={Object.entries(SPIRAL_FLAME_PRESETS).filter(([id]) => id !== 'custom').map(([id, data]) => ({
                                 id,
                                 name: {
@@ -8373,7 +8389,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentSpiral.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.spiralFlame}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.spiralFlame)}
                                   currentData={currentSpiral}
                                   defaultName={currentSpiral.name}
                                   accentColor="blue"
@@ -8612,7 +8628,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                         {/* 预设列表 */}
                         {afterimageSubTab === 'texture' && (
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.afterimageTexture}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.afterimageTexture)}
                             builtInPresets={[
                               { id: 'flow', name: '流体纹理', data: AFTERIMAGE_TEXTURE_PRESETS.flow },
                               { id: 'energy', name: '能量场', data: AFTERIMAGE_TEXTURE_PRESETS.energy },
@@ -8633,7 +8649,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                         )}
                         {afterimageSubTab === 'particles' && (
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.afterimageParticle}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.afterimageParticle)}
                             builtInPresets={[
                               { id: 'spark', name: '火星四溅', data: AFTERIMAGE_PARTICLE_PRESETS.spark },
                               { id: 'dust', name: '星尘飘散', data: AFTERIMAGE_PARTICLE_PRESETS.dust },
@@ -8663,7 +8679,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                             <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentZone.name}</span>
                             {afterimageSubTab === 'texture' && (
                               <SavePresetButton
-                                storageKey={PRESET_STORAGE_KEYS.afterimageTexture}
+                                storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.afterimageTexture)}
                                 currentData={texture}
                                 defaultName="我的纹理"
                                 accentColor="purple"
@@ -8671,7 +8687,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                             )}
                             {afterimageSubTab === 'particles' && (
                               <SavePresetButton
-                                storageKey={PRESET_STORAGE_KEYS.afterimageParticle}
+                                storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.afterimageParticle)}
                                 currentData={particles}
                                 defaultName="我的粒子"
                                 accentColor="purple"
@@ -8987,7 +9003,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {/* 预设列表 */}
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.energyBody}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.energyBody)}
                             builtInPresets={[
                               { id: 'metatron', name: '梅塔特隆', data: ENERGY_BODY_PRESETS.metatron },
                               { id: 'essenceCore', name: '源质核心', data: ENERGY_BODY_PRESETS.essenceCore },
@@ -9030,7 +9046,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentEnergyBody.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.energyBody}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.energyBody)}
                                   currentData={currentEnergyBody}
                                   defaultName={currentEnergyBody.name}
                                   accentColor="teal"
@@ -9348,7 +9364,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                           <FloatingListSelector items={surfaceFlames.map(f => ({ id: f.id, name: f.name, enabled: f.enabled }))} selectedId={effectiveFlameId} onSelect={(id) => setSelectedSurfaceFlameId(id)} onToggleEnabled={(id, e) => updateFlame(id, { enabled: e })} onRename={(id, n) => updateFlame(id, { name: n })} onDelete={(id) => { updatePlanet({ flameSystem: { ...flameSystem, surfaceFlames: surfaceFlames.filter(f => f.id !== id) } }); if (effectiveFlameId === id) setSelectedSurfaceFlameId(null); }} onCopy={(id) => { const source = surfaceFlames.find(f => f.id === id); if (source) { const newId = `flame_${Date.now()}`; const copy = { ...source, id: newId, name: `${source.name} 副本` }; updatePlanet({ flameSystem: { ...flameSystem, surfaceFlames: [...surfaceFlames, copy] } }); setSelectedSurfaceFlameId(newId); } }} onAdd={() => addFlame('custom')} globalEnabled={shieldEnabled} onGlobalToggle={(e) => updatePlanet({ flameSystem: { ...flameSystem, surfaceFlamesEnabled: e } })} title="能量罩" titleStyle={{ color: 'var(--ui-secondary)' }} addButtonColor="bg-blue-600 hover:bg-blue-500" emptyText="暂无能量罩" />
 
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.surfaceFlame}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.surfaceFlame)}
                             builtInPresets={[
                               { id: 'atField', name: 'AT力场', data: SURFACE_FLAME_PRESETS.atField },
                               { id: 'polarisShield', name: '极光护盾', data: SURFACE_FLAME_PRESETS.polarisShield },
@@ -9385,7 +9401,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentFlame.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.surfaceFlame}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.surfaceFlame)}
                                   currentData={currentFlame}
                                   defaultName={currentFlame.name}
                                   accentColor="teal"
@@ -9582,7 +9598,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {/* 预设列表 */}
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.orbitingParticles}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.orbitingParticles)}
                             builtInPresets={Object.entries(ORBITING_PARTICLES_PRESETS).map(([id, data]) => ({
                               id,
                               name: {
@@ -9627,7 +9643,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentOrbiting.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.orbitingParticles}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.orbitingParticles)}
                                   currentData={currentOrbiting}
                                   defaultName={currentOrbiting.name}
                                   accentColor="cyan"
@@ -9723,7 +9739,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {/* 预设列表 */}
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.emitter}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.emitter)}
                             builtInPresets={Object.entries(EMITTER_PRESETS).map(([id, data]) => ({
                               id,
                               name: {
@@ -9768,7 +9784,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentEmitter.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.emitter}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.emitter)}
                                   currentData={currentEmitter}
                                   defaultName={currentEmitter.name}
                                   accentColor="teal"
@@ -9920,7 +9936,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {/* 预设列表 */}
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.orbitingFirefly}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.orbitingFirefly)}
                             builtInPresets={Object.entries(ORBITING_FIREFLY_PRESETS).map(([id, data]) => ({
                               id,
                               name: {
@@ -9964,7 +9980,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentOrbitingFirefly.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.orbitingFirefly}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.orbitingFirefly)}
                                   currentData={currentOrbitingFirefly}
                                   defaultName={currentOrbitingFirefly.name}
                                   accentColor="teal"
@@ -10168,7 +10184,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {/* 预设列表 */}
                           <PresetListBox
-                            storageKey={PRESET_STORAGE_KEYS.wanderingFirefly}
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.wanderingFirefly)}
                             builtInPresets={Object.entries(WANDERING_FIREFLY_PRESETS).map(([id, data]) => ({
                               id,
                               name: {
@@ -10212,7 +10228,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               }}>
                                 <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentWanderingGroup.name}</span>
                                 <SavePresetButton
-                                  storageKey={PRESET_STORAGE_KEYS.wanderingFirefly}
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.wanderingFirefly)}
                                   currentData={currentWanderingGroup}
                                   defaultName={currentWanderingGroup.name}
                                   accentColor="green"

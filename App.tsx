@@ -39,13 +39,21 @@ const SETTINGS_STORAGE_KEY = 'nebula-viz-settings';
 const DATA_VERSION = 70;
 const DATA_VERSION_KEY = 'nebula-viz-data-version';
 
+// 用户隔离的 localStorage 键生成函数
+const getUserScopedStorageKey = (baseKey: string, userId?: string | null): string => {
+  if (userId) {
+    return `${baseKey}_${userId}`;
+  }
+  return baseKey;
+};
+
 // 检查并清除旧版本数据
 const checkAndClearOldData = () => {
   try {
     const savedVersion = localStorage.getItem(DATA_VERSION_KEY);
     if (savedVersion !== String(DATA_VERSION)) {
       console.log('检测到旧版本数据，正在清除...');
-      // 清除所有相关数据
+      // 清除所有相关数据（注意：只清除全局键，用户隔离的键保留）
       localStorage.removeItem(SETTINGS_STORAGE_KEY);
       localStorage.removeItem(PLANET_SCENE_STORAGE_KEY);
       localStorage.removeItem('solidCorePresets');
@@ -62,10 +70,11 @@ const checkAndClearOldData = () => {
 // 应用启动时检查数据版本
 checkAndClearOldData();
 
-// 加载星球场景设置
-const loadPlanetSceneSettings = (): PlanetSceneSettings => {
+// 加载星球场景设置（支持用户隔离）
+const loadPlanetSceneSettings = (userId?: string | null): PlanetSceneSettings => {
   try {
-    const saved = localStorage.getItem(PLANET_SCENE_STORAGE_KEY);
+    const key = getUserScopedStorageKey(PLANET_SCENE_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       return { ...DEFAULT_PLANET_SCENE_SETTINGS, ...parsed };
@@ -76,19 +85,21 @@ const loadPlanetSceneSettings = (): PlanetSceneSettings => {
   return DEFAULT_PLANET_SCENE_SETTINGS;
 };
 
-// 保存星球场景设置
-const savePlanetSceneSettings = (settings: PlanetSceneSettings) => {
+// 保存星球场景设置（支持用户隔离）
+const savePlanetSceneSettings = (settings: PlanetSceneSettings, userId?: string | null) => {
   try {
-    localStorage.setItem(PLANET_SCENE_STORAGE_KEY, JSON.stringify(settings));
+    const key = getUserScopedStorageKey(PLANET_SCENE_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify(settings));
   } catch (e) {
     console.warn('Failed to save planet scene settings:', e);
   }
 };
 
-// Load settings from localStorage
-const loadSavedSettings = (): AppSettings => {
+// Load settings from localStorage（支持用户隔离）
+const loadSavedSettings = (userId?: string | null): AppSettings => {
   try {
-    const saved = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    const key = getUserScopedStorageKey(SETTINGS_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       // Merge with defaults to handle new settings added in updates
@@ -126,8 +137,8 @@ const ensureBackgroundSettings = (settings: AppSettings): AppSettings => {
   return settings;
 };
 
-// Save settings to localStorage
-const saveSettings = (settings: AppSettings) => {
+// Save settings to localStorage（支持用户隔离）
+const saveSettings = (settings: AppSettings, userId?: string | null) => {
   try {
     // 智能过滤: 只有当存在有效的云端URL(http开头)时才剔除本地Base64
     // 这样既防止了 Quota 溢出(正常情况)，又保证了上传窗口期/离线时数据不丢(兜底)
@@ -140,7 +151,8 @@ const saveSettings = (settings: AppSettings) => {
           : inst.imageDataUrl
       }))
     };
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(safeSettings));
+    const key = getUserScopedStorageKey(SETTINGS_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify(safeSettings));
   } catch (e) {
     console.warn('Failed to save settings:', e);
   }
@@ -152,10 +164,11 @@ const THEME_CONFIG_STORAGE_KEY = 'nebula_theme_config_v1';
 const MATERIAL_SETTINGS_STORAGE_KEY = 'nebula_material_settings_v1';
 const MATERIAL_PRESETS_STORAGE_KEY = 'nebula_material_presets_v1';
 
-// 加载主题配置
-const loadThemeConfig = (): ThemeConfig => {
+// 加载主题配置（支持用户隔离）
+const loadThemeConfig = (userId?: string | null): ThemeConfig => {
   try {
-    const saved = localStorage.getItem(THEME_CONFIG_STORAGE_KEY);
+    const key = getUserScopedStorageKey(THEME_CONFIG_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       // 合并默认系统预设（处理新增预设）
@@ -183,8 +196,8 @@ const loadThemeConfig = (): ThemeConfig => {
   return { ...DEFAULT_THEME_CONFIG };
 };
 
-// 保存主题配置
-const saveThemeConfig = (config: ThemeConfig) => {
+// 保存主题配置（支持用户隔离）
+const saveThemeConfig = (config: ThemeConfig, userId?: string | null) => {
   try {
     // 只保存用户方案和状态，不保存系统预设
     const userSchemes: Record<string, any> = {};
@@ -193,7 +206,8 @@ const saveThemeConfig = (config: ThemeConfig) => {
         userSchemes[id] = scheme;
       }
     });
-    localStorage.setItem(THEME_CONFIG_STORAGE_KEY, JSON.stringify({
+    const key = getUserScopedStorageKey(THEME_CONFIG_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify({
       schemes: userSchemes,
       activeSchemeId: config.activeSchemeId,
       activeColors: config.activeColors,
@@ -205,10 +219,11 @@ const saveThemeConfig = (config: ThemeConfig) => {
   }
 };
 
-// 加载材质设置
-const loadMaterialSettings = (): MaterialSettings => {
+// 加载材质设置（支持用户隔离）
+const loadMaterialSettings = (userId?: string | null): MaterialSettings => {
   try {
-    const saved = localStorage.getItem(MATERIAL_SETTINGS_STORAGE_KEY);
+    const key = getUserScopedStorageKey(MATERIAL_SETTINGS_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
     if (saved) {
       const parsed = JSON.parse(saved);
       // 兼容旧数据：确保 subModuleTabs 为 Record
@@ -225,19 +240,21 @@ const loadMaterialSettings = (): MaterialSettings => {
   return { ...DEFAULT_MATERIAL_SETTINGS };
 };
 
-// 保存材质设置
-const saveMaterialSettings = (settings: MaterialSettings) => {
+// 保存材质设置（支持用户隔离）
+const saveMaterialSettings = (settings: MaterialSettings, userId?: string | null) => {
   try {
-    localStorage.setItem(MATERIAL_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    const key = getUserScopedStorageKey(MATERIAL_SETTINGS_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify(settings));
   } catch (e) {
     console.warn('Failed to save material settings:', e);
   }
 };
 
-// 加载用户材质预设
-const loadUserMaterialPresets = (): MaterialPreset[] => {
+// 加载用户材质预设（支持用户隔离）
+const loadUserMaterialPresets = (userId?: string | null): MaterialPreset[] => {
   try {
-    const saved = localStorage.getItem(MATERIAL_PRESETS_STORAGE_KEY);
+    const key = getUserScopedStorageKey(MATERIAL_PRESETS_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
     if (saved) {
       return JSON.parse(saved);
     }
@@ -247,20 +264,22 @@ const loadUserMaterialPresets = (): MaterialPreset[] => {
   return [];
 };
 
-// 保存用户材质预设
-const saveUserMaterialPresets = (presets: MaterialPreset[]) => {
+// 保存用户材质预设（支持用户隔离）
+const saveUserMaterialPresets = (presets: MaterialPreset[], userId?: string | null) => {
   try {
-    localStorage.setItem(MATERIAL_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+    const key = getUserScopedStorageKey(MATERIAL_PRESETS_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify(presets));
   } catch (e) {
     console.warn('Failed to save material presets:', e);
   }
 };
 
-// 加载星云预设
+// 加载星云预设（支持用户隔离）
 const NEBULA_PRESETS_STORAGE_KEY = 'nebula_presets';
-const loadNebulaPresets = (): NebulaPreset[] => {
+const loadNebulaPresets = (userId?: string | null): NebulaPreset[] => {
   try {
-    const saved = localStorage.getItem(NEBULA_PRESETS_STORAGE_KEY);
+    const key = getUserScopedStorageKey(NEBULA_PRESETS_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
     if (saved) {
       return JSON.parse(saved);
     }
@@ -270,8 +289,8 @@ const loadNebulaPresets = (): NebulaPreset[] => {
   return [];
 };
 
-// 保存星云预设
-const saveNebulaPresets = (presets: NebulaPreset[]) => {
+// 保存星云预设（支持用户隔离）
+const saveNebulaPresets = (presets: NebulaPreset[], userId?: string | null) => {
   try {
     // 智能过滤: 只有云端URL有效时才剔除Base64
     const safePresets = presets.map(p => ({
@@ -280,7 +299,8 @@ const saveNebulaPresets = (presets: NebulaPreset[]) => {
         ? undefined
         : p.imageDataUrl
     }));
-    localStorage.setItem(NEBULA_PRESETS_STORAGE_KEY, JSON.stringify(safePresets));
+    const key = getUserScopedStorageKey(NEBULA_PRESETS_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify(safePresets));
   } catch (e) {
     console.warn('Failed to save nebula presets:', e);
   }
@@ -290,18 +310,19 @@ const App: React.FC = () => {
   // 用户登录状态
   const { currentUser, isLoading: isUserLoading, saveCloudConfig, loadCloudConfig } = useUser();
 
-  const [settings, setSettings] = useState<AppSettings>(loadSavedSettings);
-  const [planetSettings, setPlanetSettings] = useState<PlanetSceneSettings>(loadPlanetSceneSettings);
+  // Initialize with default/global settings first
+  const [settings, setSettings] = useState<AppSettings>(() => loadSavedSettings(null));
+  const [planetSettings, setPlanetSettings] = useState<PlanetSceneSettings>(() => loadPlanetSceneSettings(null));
   const [appMode, setAppMode] = useState<AppMode>('nebula');
   const [overlayMode, setOverlayMode] = useState(false); // 叠加模式：同时显示星云和星球
 
   const [data, setData] = useState<ProcessedData | null>(null);
 
   // 主题与材质配置状态（App 作为 SSOT）
-  const [themeConfig, setThemeConfig] = useState<ThemeConfig>(loadThemeConfig);
-  const [materialSettings, setMaterialSettings] = useState<MaterialSettings>(loadMaterialSettings);
-  const [userMaterialPresets, setUserMaterialPresets] = useState<MaterialPreset[]>(loadUserMaterialPresets);
-  const [nebulaPresets, setNebulaPresets] = useState<NebulaPreset[]>(loadNebulaPresets);
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig>(() => loadThemeConfig(null));
+  const [materialSettings, setMaterialSettings] = useState<MaterialSettings>(() => loadMaterialSettings(null));
+  const [userMaterialPresets, setUserMaterialPresets] = useState<MaterialPreset[]>(() => loadUserMaterialPresets(null));
+  const [nebulaPresets, setNebulaPresets] = useState<NebulaPreset[]>(() => loadNebulaPresets(null));
   const [hasHydratedFromCloud, setHasHydratedFromCloud] = useState(false);
 
   // 星云预览模式
@@ -312,6 +333,19 @@ const App: React.FC = () => {
 
   // 追踪已加载云配置的用户ID，防止重复hydration
   const hasLoadedUserIdRef = useRef<string | null>(null);
+
+  // 监听用户切换，从本地存储重新加载该用户的数据
+  useEffect(() => {
+    const userId = currentUser?.id || null;
+    console.log('User changed, reloading local data for:', userId || 'guest');
+
+    setSettings(loadSavedSettings(userId));
+    setPlanetSettings(loadPlanetSceneSettings(userId));
+    setThemeConfig(loadThemeConfig(userId));
+    setMaterialSettings(loadMaterialSettings(userId));
+    setUserMaterialPresets(loadUserMaterialPresets(userId));
+    setNebulaPresets(loadNebulaPresets(userId));
+  }, [currentUser?.id]);
 
   // Cloud Sync: Load data on user login
   useEffect(() => {
@@ -389,13 +423,14 @@ const App: React.FC = () => {
   // Cloud Sync: Auto-save when settings change (Debounced)
   useEffect(() => {
     const handler = setTimeout(() => {
-      // Always save to local storage
-      saveSettings(settings);
-      savePlanetSceneSettings(planetSettings);
-      saveThemeConfig(themeConfig);
-      saveMaterialSettings(materialSettings);
-      saveUserMaterialPresets(userMaterialPresets);
-      saveNebulaPresets(nebulaPresets);
+      // Always save to local storage (User Scoped)
+      const userId = currentUser?.id || null;
+      saveSettings(settings, userId);
+      savePlanetSceneSettings(planetSettings, userId);
+      saveThemeConfig(themeConfig, userId);
+      saveMaterialSettings(materialSettings, userId);
+      saveUserMaterialPresets(userMaterialPresets, userId);
+      saveNebulaPresets(nebulaPresets, userId);
 
       // If logged in and hydrated, save to cloud
       if (currentUser && hasHydratedFromCloud) {
