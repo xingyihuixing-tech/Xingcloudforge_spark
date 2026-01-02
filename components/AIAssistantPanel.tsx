@@ -443,8 +443,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">✕</button>
                     </div>
 
-                    {/* 消息列表 */}
-                    <div className="h-[280px] overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                    {/* 消息列表 - 自适应高度填满剩余空间 */}
+                    <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                         {messages.length === 0 && (
                             <div className="h-full flex items-center justify-center text-white/10 text-sm italic select-none">
                                 {/* 空状态 */}
@@ -476,8 +476,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         </div>
                                     ) : (
                                         <div className={`inline-block px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${msg.role === 'user'
-                                                ? 'bg-blue-500/20 text-blue-100'
-                                                : 'bg-white/5 text-white/80'
+                                            ? 'bg-blue-500/20 text-blue-100'
+                                            : 'bg-white/5 text-white/80'
                                             }`}>
                                             {msg.content}
                                         </div>
@@ -522,8 +522,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     key={subMode}
                                     onClick={() => setInspirationSubMode(subMode)}
                                     className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 border ${inspirationSubMode === subMode
-                                            ? 'bg-white/10 border-white/20 text-white shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
-                                            : 'bg-transparent border-transparent text-white/40 hover:bg-white/5 hover:text-white/70'
+                                        ? 'bg-white/10 border-white/20 text-white shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
+                                        : 'bg-transparent border-transparent text-white/40 hover:bg-white/5 hover:text-white/70'
                                         }`}
                                 >
                                     {INSPIRATION_MODE_INFO[subMode].name}
