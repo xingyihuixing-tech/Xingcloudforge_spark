@@ -414,30 +414,102 @@ canvas {
 }
 
 /* AI Panel - Glassmorphism (Neutral, No Color) */
+/* AI Panel - Fixed Height, Neutral Glass, Colorful Flashing Border */
+@keyframes border-flash-pulse {
+
+  0%,
+  100% {
+    opacity: 0.5;
+    filter: blur(2px) brightness(1);
+  }
+
+  50% {
+    opacity: 1;
+    filter: blur(4px) brightness(1.3);
+  }
+}
+
 .ai-panel-container {
   position: relative;
-  border-radius: 16px;
+  height: 600px;
+  /* Fixed Height */
+  display: flex;
+  flex-direction: column;
   background: rgba(0, 0, 0, 0.06);
-  /* 6% Opacity */
+  /* Neutral Glass */
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  /* No default border */
+  isolation: isolate;
 }
 
-.ai-vortex-star-legacy {
-  /* Renaming old class to avoid conflict if needed, or just removed/replaced */
-  display: none;
-}
-
-.ai-vortex-star::before {
-  content: '';
+.ai-panel-container::before {
+  content: "";
   position: absolute;
-  inset: 2px;
-  background: conic-gradient(from 180deg, #3b82f6, #d946ef, #3b82f6);
-  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-  animation: vortex-spin 4s linear infinite reverse;
+  inset: -2px;
+  /* Border width */
+  z-index: -1;
+  border-radius: 18px;
+  /* Colorful Gradient: Blue -> Pink -> Cyan -> Blue */
+  background: conic-gradient(from var(--star-angle), #06b6d4, #f472b6, #22d3ee, #06b6d4);
+  /* Continuous flashing animation */
+  animation: border-flash-pulse 3s ease-in-out infinite;
 }
 
-.ai-vortex-star:hover {
-  filter: brightness(1.2) drop-shadow(0 0 10px rgba(99, 102, 241, 0.5));
-  transform: scale(1.1);
+/* AI Input Box - Uneven Thickness, Flowing Gradient */
+@property --flow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes flow-rotate {
+  to {
+    --flow-angle: 360deg;
+  }
+}
+
+.ai-input-container {
+  position: relative;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  isolation: isolate;
+}
+
+/* Base Gradient Border */
+.ai-input-container::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  z-index: -1;
+  border-radius: 13.5px;
+  background: conic-gradient(from var(--flow-angle), #06b6d4, #f472b6, #22d3ee, #06b6d4);
+  opacity: 0.6;
+  filter: blur(1px);
+  transition: all 0.5s ease;
+}
+
+/* Uneven Thickness Simulation (Brighter/Thicker at ends) */
+.ai-input-container::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  /* Slightly wider than ::before */
+  z-index: -1;
+  border-radius: 14px;
+  /* Linear gradient highlighting left and right edges */
+  background: linear-gradient(90deg,
+      rgba(6, 182, 212, 0.6) 0%,
+      transparent 15%,
+      transparent 85%,
+      rgba(244, 114, 182, 0.6) 100%);
+  filter: blur(4px);
+  opacity: 0.8;
+}
+
+/* Refining State: Clockwise Flow */
+.ai-input-container.refining::before {
+  opacity: 1;
+  filter: blur(2px);
+  animation: flow-rotate 1.5s linear infinite;
 }
