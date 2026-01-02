@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom';
 import { useUser } from '../contexts/UserContext';
 
 import { AppSettings, PlanetSceneSettings, ThemeConfig, MaterialSettings, MaterialPreset, ButtonMaterialConfig, MaterialType } from '../types';
-import { BACKGROUND_IMAGES, DEFAULT_COLOR_SCHEMES, createDefaultMaterialConfig } from '../constants';
+import { BACKGROUND_IMAGES, DEFAULT_COLOR_SCHEMES, createDefaultMaterialConfig, BUILT_IN_MATERIAL_PRESETS } from '../constants';
 
 interface ThemeSettingsModalProps {
     isOpen: boolean;
@@ -185,37 +185,59 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                         </div>
 
                                         {bgSubTab === 'builtin' ? (
-                                            <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid grid-cols-3 gap-2">
                                                 {BACKGROUND_IMAGES.map((img: any) => (
                                                     <button
                                                         key={img.value}
                                                         onClick={() => updateBackground({ panoramaUrl: img.value })}
-                                                        className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2
+                                                        className={`relative aspect-[4/3] rounded-lg border overflow-hidden transition-all
                                                             ${currentBg?.panoramaUrl === img.value
-                                                                ? 'bg-cyan-500/20 border-cyan-500/50 text-white'
-                                                                : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
+                                                                ? 'border-cyan-500 ring-2 ring-cyan-500/50'
+                                                                : 'border-white/10 hover:border-white/30'
                                                             }`}
                                                     >
-                                                        <div className="w-2 h-2 rounded-full bg-cyan-400" style={{ opacity: currentBg?.panoramaUrl === img.value ? 1 : 0 }} />
-                                                        {img.label}
+                                                        <img
+                                                            src={img.value}
+                                                            alt={img.label}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1">
+                                                            <span className="text-[9px] text-white/80 truncate block">{img.label}</span>
+                                                        </div>
+                                                        {currentBg?.panoramaUrl === img.value && (
+                                                            <div className="absolute top-1 right-1 w-4 h-4 bg-cyan-500 rounded-full flex items-center justify-center">
+                                                                <i className="fas fa-check text-[8px] text-white" />
+                                                            </div>
+                                                        )}
                                                     </button>
                                                 ))}
                                             </div>
                                         ) : (
-                                            <div className="grid grid-cols-2 gap-2">
+                                            <div className="grid grid-cols-3 gap-2">
                                                 {cloudBackgroundPresets.length > 0 ? (
                                                     cloudBackgroundPresets.map((preset) => (
                                                         <div key={preset.id} className="relative group">
                                                             <button
                                                                 onClick={() => updateBackground({ panoramaUrl: preset.url })}
-                                                                className={`w-full p-2 rounded-lg border text-left text-xs transition-all flex items-center gap-2
+                                                                className={`relative w-full aspect-[4/3] rounded-lg border overflow-hidden transition-all
                                                                     ${currentBg?.panoramaUrl === preset.url
-                                                                        ? 'bg-purple-500/20 border-purple-500/50 text-white'
-                                                                        : 'bg-white/5 border-white/5 text-white/60 hover:bg-white/10'
+                                                                        ? 'border-purple-500 ring-2 ring-purple-500/50'
+                                                                        : 'border-white/10 hover:border-white/30'
                                                                     }`}
                                                             >
-                                                                <div className="w-2 h-2 rounded-full bg-purple-400" style={{ opacity: currentBg?.panoramaUrl === preset.url ? 1 : 0 }} />
-                                                                {preset.name}
+                                                                <img
+                                                                    src={preset.url}
+                                                                    alt={preset.name}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1">
+                                                                    <span className="text-[9px] text-white/80 truncate block">{preset.name}</span>
+                                                                </div>
+                                                                {currentBg?.panoramaUrl === preset.url && (
+                                                                    <div className="absolute top-1 left-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
+                                                                        <i className="fas fa-check text-[8px] text-white" />
+                                                                    </div>
+                                                                )}
                                                             </button>
                                                             {/* 删除按钮 */}
                                                             <button
@@ -228,7 +250,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                         </div>
                                                     ))
                                                 ) : (
-                                                    <div className="col-span-2 text-center py-4 text-white/30 text-xs">
+                                                    <div className="col-span-3 text-center py-4 text-white/30 text-xs">
                                                         暂无 AI 生成的背景图<br />
                                                         <span className="text-white/20">使用 AI 助手 → 灵感模式 → 背景图 生成</span>
                                                     </div>
@@ -307,7 +329,8 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                                 setThemeConfig({ ...themeConfig, schemes: newSchemes });
                                                             }
                                                         }}
-                                                        className="absolute top-1 right-1 text-white/20 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500/0 hover:bg-red-500/80 text-white/30 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
+                                                        title="删除此方案"
                                                     >
                                                         <i className="fas fa-times text-[10px]" />
                                                     </button>
@@ -442,7 +465,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                 onClick={() => {
                                                     // 应用内置预设
                                                     if (setMaterialSettings) {
-                                                        const builtIn = require('../constants').BUILT_IN_MATERIAL_PRESETS.find((p: any) => p.id === preset.id);
+                                                        const builtIn = BUILT_IN_MATERIAL_PRESETS.find((p) => p.id === preset.id);
                                                         if (builtIn) {
                                                             setMaterialSettings(builtIn.data);
                                                         }

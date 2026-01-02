@@ -4742,22 +4742,26 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
             <div className="flex gap-2 mb-4 p-1.5 rounded-xl" style={{ background: 'linear-gradient(145deg, rgba(30,30,40,0.8), rgba(15,15,20,0.9))' }}>
               {tabs.map(tab => {
                 const isActive = activeTab === tab.key;
-                const matStyle = generateMaterialStyle(materialSettings?.mainTabs || createDefaultMaterialConfig('glass'), isActive);
+                const tabColor = tab.color;
+                const materialStyle = generateMaterialStyle(materialSettings?.mainTabs || createDefaultMaterialConfig('glass'), isActive, tabColor);
 
                 return (
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
-                    className={`flex-1 py-2.5 px-2 text-xs rounded-lg flex items-center justify-center gap-1.5 font-medium relative overflow-hidden ${matStyle.className}`}
-                    style={matStyle.style}
+                    className={`flex-1 py-2.5 px-2 text-xs rounded-lg transition-all duration-200 flex items-center justify-center gap-1.5 font-medium relative overflow-hidden ${isActive ? 'transform scale-[1.02]' : 'hover:scale-[1.01]'}`}
+                    style={materialStyle.style}
                   >
-                    {isActive && materialSettings?.mainTabs?.type === 'glass' && (
+                    {/* 顶部高光条 */}
+                    {isActive && (materialSettings?.mainTabs?.type === 'glass' || materialSettings?.mainTabs?.type === 'neumorphism') && (
                       <div
                         className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-[1px]"
-                        style={{ background: `linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.5) 50%, transparent 100%)` }}
+                        style={{ background: `linear-gradient(90deg, transparent 0%, ${tabColor}60 50%, transparent 100%)` }}
                       />
                     )}
-                    <span className="text-sm">{tab.icon}</span>
+                    <span className="text-sm" style={isActive && (materialSettings?.mainTabs?.type === 'neon' || materialSettings?.mainTabs?.type === 'neumorphism') ? {
+                      filter: `drop-shadow(0 0 4px ${tabColor}80)`
+                    } : undefined}>{tab.icon}</span>
                     <span className="whitespace-pre-line text-center leading-tight">{tab.label}</span>
                   </button>
                 );
