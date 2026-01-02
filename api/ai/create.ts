@@ -97,20 +97,26 @@ const EFFECT_SCHEMAS: Record<EffectType, EffectSchema> = {
     particleCore: {
         name: '粒子核心',
         fields: {
-            // 基础参数
-            'fillMode': { type: 'enum', options: ['shell', 'gradient', 'solid'], default: 'gradient', desc: '填充模式：shell=表面壳层, gradient=渐变填充, solid=实心' },
-            'fillPercent': { type: 'number', min: 0, max: 100, default: 50, desc: '填充百分比(gradient模式下中心填充比例)' },
-            'density': { type: 'number', min: 0.1, max: 10, default: 2, desc: '粒子密度倍数' },
+            // 基础几何参数
+            'fillMode': { type: 'enum', options: ['shell', 'gradient', 'solid'], default: 'shell', desc: '填充模式：shell=外壳, gradient=渐变填充, solid=实心' },
+            'fillPercent': { type: 'number', min: 0, max: 100, default: 0, desc: '填充百分比(0=纯外壳, 100=实心)' },
+            'density': { type: 'number', min: 0.1, max: 10, default: 1.5, desc: '粒子密度倍数' },
             'baseRadius': { type: 'number', min: 50, max: 500, default: 100, desc: '核心半径(像素)' },
-            'particleSize': { type: 'number', min: 1, max: 20, default: 3, desc: '单个粒子大小' },
-            'opacity': { type: 'number', min: 0, max: 1, default: 0.9, desc: '整体透明度' },
+            'particleSize': { type: 'number', min: 0.5, max: 5, default: 1, desc: '粒子大小' },
             'brightness': { type: 'number', min: 0.1, max: 3, default: 1, desc: '亮度倍数' },
-            // 颜色设置 (嵌套路径)
-            'color.mode': { type: 'enum', options: ['none', 'twoColor', 'threeColor', 'procedural'], default: 'twoColor', desc: '颜色模式：none=单色, twoColor=双色渐变, threeColor=三色渐变, procedural=程序混色' },
-            'color.baseColor': { type: 'color', default: '#ff6600', desc: '基础颜色(mode=none时使用)' },
-            'color.colors.0': { type: 'color', default: '#ff4400', desc: '渐变起始色/暗部色' },
-            'color.colors.1': { type: 'color', default: '#ffcc00', desc: '渐变中间色/亮部色' },
-            'color.colors.2': { type: 'color', default: '#ffffff', desc: '渐变结束色(threeColor模式)' },
+            // 基础颜色（单色模式）
+            'baseHue': { type: 'number', min: 0, max: 360, default: 200, desc: '基础色相(0=红,60=黄,120=绿,180=青,240=蓝,300=品红)' },
+            'baseSaturation': { type: 'number', min: 0, max: 1, default: 1, desc: '饱和度(0=灰色,1=纯色)' },
+            // 渐变色设置
+            'gradientColor.enabled': { type: 'boolean', default: false, desc: '是否启用渐变' },
+            'gradientColor.mode': { type: 'enum', options: ['none', 'twoColor', 'threeColor', 'procedural'], default: 'twoColor', desc: '渐变模式' },
+            'gradientColor.colors.0': { type: 'color', default: '#ff4400', desc: '渐变色1(暗部/起始)' },
+            'gradientColor.colors.1': { type: 'color', default: '#ffcc00', desc: '渐变色2(亮部/结束)' },
+            'gradientColor.colors.2': { type: 'color', default: '#ffffff', desc: '渐变色3(threeColor模式)' },
+            'gradientColor.direction': { type: 'enum', options: ['radial', 'linearX', 'linearY', 'linearZ', 'spiral'], default: 'radial', desc: '渐变方向' },
+            // 动态效果
+            'rotationSpeed': { type: 'number', min: -2, max: 2, default: 0.3, desc: '自转速度(负值=反向)' },
+            'trailLength': { type: 'number', min: 0, max: 2, default: 0, desc: '拖尾长度(0=关闭)' },
         }
     },
     solidCore: {

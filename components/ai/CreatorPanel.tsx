@@ -152,6 +152,9 @@ export const CreatorPanel: React.FC<CreatorPanelProps> = ({
                     if (cores.length > 0) {
                         newPlanet.coreSystem.cores = cores;
                         newPlanet.coreSystem.coresEnabled = true;
+                        // 只开启用户选择的模块，关闭实体核心
+                        newPlanet.coreSystem.solidCoresEnabled = false;
+                        newPlanet.coreSystem.solidCores = []; // 清空默认实体核心
                     }
                 }
             }
