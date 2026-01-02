@@ -2435,6 +2435,14 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   // 获取当前用户信息用于上传图片
   const { currentUser } = useUser();
 
+  // 生成用户隔离的 localStorage 键（确保不同账户数据隔离）
+  const getUserScopedKey = useCallback((baseKey: string) => {
+    if (currentUser?.id) {
+      return `${baseKey}_${currentUser.id}`;
+    }
+    return baseKey; // 未登录时使用全局键
+  }, [currentUser?.id]);
+
   // 上传预设图片到云端，返回公网 URL
   const uploadPresetImage = useCallback(async (base64Data: string, presetId: string): Promise<string | null> => {
     if (!currentUser) {
@@ -2677,20 +2685,25 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
     }
   ];
 
-  // 用户保存的材质预设
-  const [userMaterialPresets, setUserMaterialPresets] = useState<{ id: string; name: string; data: MaterialPreset }[]>(() => {
-    try {
-      const saved = localStorage.getItem('user_material_presets');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  // 用户保存的材质预设（初始化为空，在 useEffect 中根据用户加载）
+  const [userMaterialPresets, setUserMaterialPresets] = useState<{ id: string; name: string; data: MaterialPreset }[]>([]);
 
-  // 保存用户材质预设
+  // 加载用户材质预设（用户切换时重新加载）
   useEffect(() => {
-    localStorage.setItem('user_material_presets', JSON.stringify(userMaterialPresets));
-  }, [userMaterialPresets]);
+    try {
+      const key = getUserScopedKey('user_material_presets');
+      const saved = localStorage.getItem(key);
+      setUserMaterialPresets(saved ? JSON.parse(saved) : []);
+    } catch (e) {
+      setUserMaterialPresets([]);
+    }
+  }, [getUserScopedKey]);
+
+  // 保存用户材质预设（使用用户隔离的键）
+  useEffect(() => {
+    const key = getUserScopedKey('user_material_presets');
+    localStorage.setItem(key, JSON.stringify(userMaterialPresets));
+  }, [userMaterialPresets, getUserScopedKey]);
 
   // 材质预设面板展开状态
   const [materialPresetExpanded, setMaterialPresetExpanded] = useState(false);
@@ -2735,32 +2748,37 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
     }
   }, [settings.selectedNebulaId, settings.nebulaInstances]);
 
-  const [presetOrder, setPresetOrder] = useState<string[]>(() => {
-    const saved = localStorage.getItem('nebula_preset_order');
-    if (saved) {
-      try { return JSON.parse(saved); } catch { return []; }
-    }
-    return [];
-  });
+  // 星云预设顺序（初始化为空，在 useEffect 中根据用户加载）
+  const [presetOrder, setPresetOrder] = useState<string[]>([]);
   // 已删除的系统预设ID列表
-  const [deletedBuiltInPresets, setDeletedBuiltInPresets] = useState<string[]>(() => {
-    const saved = localStorage.getItem('deleted_builtin_presets');
-    if (saved) {
-      try { return JSON.parse(saved); } catch { return []; }
-    }
-    return [];
-  });
+  const [deletedBuiltInPresets, setDeletedBuiltInPresets] = useState<string[]>([]);
   // 系统预设重命名映射
-  const [builtInPresetNames, setBuiltInPresetNames] = useState<Record<string, string>>(() => {
-    const saved = localStorage.getItem('builtin_preset_names');
-    if (saved) {
-      try { return JSON.parse(saved); } catch { return {}; }
-    }
-    return {};
-  });
+  const [builtInPresetNames, setBuiltInPresetNames] = useState<Record<string, string>>({});
+
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const presetScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const autoScrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // 加载星云预设相关数据（用户切换时重新加载）
+  useEffect(() => {
+    try {
+      const orderKey = getUserScopedKey('nebula_preset_order');
+      const deletedKey = getUserScopedKey('deleted_builtin_presets');
+      const namesKey = getUserScopedKey('builtin_preset_names');
+
+      const orderSaved = localStorage.getItem(orderKey);
+      const deletedSaved = localStorage.getItem(deletedKey);
+      const namesSaved = localStorage.getItem(namesKey);
+
+      setPresetOrder(orderSaved ? JSON.parse(orderSaved) : []);
+      setDeletedBuiltInPresets(deletedSaved ? JSON.parse(deletedSaved) : []);
+      setBuiltInPresetNames(namesSaved ? JSON.parse(namesSaved) : {});
+    } catch (e) {
+      setPresetOrder([]);
+      setDeletedBuiltInPresets([]);
+      setBuiltInPresetNames({});
+    }
+  }, [getUserScopedKey]);
 
   // 保存星云预设到localStorage
   // 保存星云预设到localStorage (Handled in App.tsx)
@@ -2768,20 +2786,23 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   //   localStorage.setItem('nebula_presets', JSON.stringify(nebulaPresets));
   // }, [nebulaPresets]);
 
-  // 保存预设顺序到localStorage
+  // 保存预设顺序到localStorage（使用用户隔离的键）
   useEffect(() => {
-    localStorage.setItem('nebula_preset_order', JSON.stringify(presetOrder));
-  }, [presetOrder]);
+    const key = getUserScopedKey('nebula_preset_order');
+    localStorage.setItem(key, JSON.stringify(presetOrder));
+  }, [presetOrder, getUserScopedKey]);
 
-  // 保存已删除的系统预设到localStorage
+  // 保存已删除的系统预设到localStorage（使用用户隔离的键）
   useEffect(() => {
-    localStorage.setItem('deleted_builtin_presets', JSON.stringify(deletedBuiltInPresets));
-  }, [deletedBuiltInPresets]);
+    const key = getUserScopedKey('deleted_builtin_presets');
+    localStorage.setItem(key, JSON.stringify(deletedBuiltInPresets));
+  }, [deletedBuiltInPresets, getUserScopedKey]);
 
-  // 保存系统预设重命名到localStorage
+  // 保存系统预设重命名到localStorage（使用用户隔离的键）
   useEffect(() => {
-    localStorage.setItem('builtin_preset_names', JSON.stringify(builtInPresetNames));
-  }, [builtInPresetNames]);
+    const key = getUserScopedKey('builtin_preset_names');
+    localStorage.setItem(key, JSON.stringify(builtInPresetNames));
+  }, [builtInPresetNames, getUserScopedKey]);
 
   // 内置星云预设（过滤已删除的，应用重命名）
   const BUILT_IN_NEBULA_PRESETS: NebulaPreset[] = SAMPLE_IMAGES
@@ -3523,13 +3544,19 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
     editBar: DEFAULT_SCHEMES.midnight.editBar
   });
 
-  // 加载用户自定义方案和上次选中的方案
+  // 加载用户自定义方案和上次选中的方案（用户切换时重新加载）
   useEffect(() => {
     try {
+      // 使用用户隔离的 localStorage 键
+      const schemesKey = getUserScopedKey('user_color_schemes');
+      const deletedKey = getUserScopedKey('deleted_system_schemes');
+      const activeIdKey = getUserScopedKey('active_scheme_id');
+      const activeColorsKey = getUserScopedKey('active_colors');
+
       // 加载用户方案
-      const saved = localStorage.getItem('user_color_schemes');
+      const saved = localStorage.getItem(schemesKey);
       // 加载已删除的系统预设ID
-      const deletedSystemSchemes: string[] = JSON.parse(localStorage.getItem('deleted_system_schemes') || '[]');
+      const deletedSystemSchemes: string[] = JSON.parse(localStorage.getItem(deletedKey) || '[]');
 
       // 从系统预设开始，排除已删除的
       let updatedSchemes: Record<string, ColorScheme> = {};
@@ -3548,8 +3575,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
       setColorSchemes(updatedSchemes);
 
       // 加载上次选中的方案ID和颜色
-      const lastSchemeId = localStorage.getItem('active_scheme_id');
-      const lastColors = localStorage.getItem('active_colors');
+      const lastSchemeId = localStorage.getItem(activeIdKey);
+      const lastColors = localStorage.getItem(activeColorsKey);
 
       if (lastSchemeId && updatedSchemes[lastSchemeId]) {
         setActiveSchemeId(lastSchemeId);
@@ -3565,7 +3592,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
     } catch (e) {
       console.error('Failed to load color schemes', e);
     }
-  }, []);
+  }, [getUserScopedKey]);
 
   // 切换配色方案
   const applyScheme = (schemeId: string) => {
@@ -3613,7 +3640,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
         const userSchemes = Object.fromEntries(
           Object.entries(updatedSchemes).filter(([_, s]) => !s.isSystem)
         );
-        localStorage.setItem('user_color_schemes', JSON.stringify(userSchemes));
+        localStorage.setItem(getUserScopedKey('user_color_schemes'), JSON.stringify(userSchemes));
       });
     } else {
       // 更新当前方案
@@ -3636,7 +3663,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
         const userSchemes = Object.fromEntries(
           Object.entries(updatedSchemes).filter(([_, s]) => !s.isSystem)
         );
-        localStorage.setItem('user_color_schemes', JSON.stringify(userSchemes));
+        localStorage.setItem(getUserScopedKey('user_color_schemes'), JSON.stringify(userSchemes));
       }, '保存');
     }
   };
@@ -3666,14 +3693,14 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
       const userSchemes = Object.fromEntries(
         Object.entries(rest).filter(([_, s]) => !s.isSystem)
       );
-      localStorage.setItem('user_color_schemes', JSON.stringify(userSchemes));
+      localStorage.setItem(getUserScopedKey('user_color_schemes'), JSON.stringify(userSchemes));
 
       // 如果是系统预设，记录已删除的ID
       if (scheme.isSystem) {
-        const deletedSystemSchemes = JSON.parse(localStorage.getItem('deleted_system_schemes') || '[]');
+        const deletedSystemSchemes = JSON.parse(localStorage.getItem(getUserScopedKey('deleted_system_schemes')) || '[]');
         if (!deletedSystemSchemes.includes(schemeId)) {
           deletedSystemSchemes.push(schemeId);
-          localStorage.setItem('deleted_system_schemes', JSON.stringify(deletedSystemSchemes));
+          localStorage.setItem(getUserScopedKey('deleted_system_schemes'), JSON.stringify(deletedSystemSchemes));
         }
       }
     }, '删除');
