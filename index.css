@@ -373,14 +373,59 @@ canvas {
   }
 }
 
-.ai-vortex-star {
+/* AI Star Entrance - Static Shape, Rotating Gradient */
+@property --star-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes star-spin {
+  0% {
+    --star-angle: 0deg;
+  }
+
+  100% {
+    --star-angle: 360deg;
+  }
+}
+
+.ai-star-container {
   clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
-  background: conic-gradient(from 0deg, #6366f1, #ec4899, #6366f1);
-  animation: vortex-spin 3s linear infinite;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease;
+  overflow: hidden;
+}
+
+.ai-star-container::before {
+  content: '';
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(from var(--star-angle), #06b6d4, #f472b6, #22d3ee, #06b6d4);
+  animation: star-spin 3s linear infinite;
+}
+
+.ai-star-container:hover {
+  transform: scale(1.1);
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.6));
+}
+
+/* AI Panel - Glassmorphism (Neutral, No Color) */
+.ai-panel-container {
+  position: relative;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.06);
+  /* 6% Opacity */
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ai-vortex-star-legacy {
+  /* Renaming old class to avoid conflict if needed, or just removed/replaced */
+  display: none;
 }
 
 .ai-vortex-star::before {
