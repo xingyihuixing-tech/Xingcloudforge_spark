@@ -13,9 +13,7 @@ import { createPortal } from 'react-dom';
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
-import { ScopeSelector } from './ai/ScopeSelector';
-import { CreatorModePanel } from './ai/CreatorModePanel';
-import { ScopeSelection, createDefaultScopeSelection } from '../utils/ai/schemaBuilder';
+import { CreatorPanel } from './ai/CreatorPanel';
 
 // 类型
 import type { PlanetSettings, PlanetSceneSettings } from '../types';
@@ -24,7 +22,7 @@ import type { PlanetSettings, PlanetSceneSettings } from '../types';
 // 类型定义
 // ============================================
 
-export type AIMode = 'inspiration' | 'creator' | 'modifier';
+export type AIMode = 'inspiration' | 'creator';
 
 // AI 生成预设
 export interface AIGeneratedPreset {
@@ -125,8 +123,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === 模式状态 ===
     const [activeMode, setActiveMode] = useState<AIMode>('inspiration');
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
-    const [scopeSelection, setScopeSelection] = useState<ScopeSelection>({});
-    const [scopeCollapsed, setScopeCollapsed] = useState(true);
+    // 原有的 scopeSelection 状态已移除（创造模式简化重构）
 
     // === 模型选择 ===
     const [chatModel, setChatModel] = useState(DEFAULT_CHAT_MODEL);
@@ -486,7 +483,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
                     {/* 模式切换 */}
                     <div className="flex border-b border-white/10">
-                        {(['inspiration', 'creator', 'modifier'] as AIMode[]).map(mode => (
+                        {(['inspiration', 'creator'] as AIMode[]).map(mode => (
                             <button
                                 key={mode}
                                 onClick={() => setActiveMode(mode)}
@@ -495,7 +492,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     : 'text-white/50 hover:text-white/70'
                                     }`}
                             >
-                                {mode === 'inspiration' ? '🎨 灵感' : mode === 'creator' ? '🪐 创造' : '🔧 修改'}
+                                {mode === 'inspiration' ? '🎨 灵感' : '🪐 创造'}
                             </button>
                         ))}
                     </div>
@@ -553,12 +550,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         </div>
                     )}
 
-                    {/* 创造模式 - 使用新的 CreatorModePanel */}
+                    {/* 创造模式 */}
                     {activeMode === 'creator' && onAddPlanet && (
-                        <div className="p-3 border-b border-white/10">
-                            <CreatorModePanel
+                        <div className="flex-1 overflow-hidden">
+                            <CreatorPanel
+                                planetSettings={planetSettings}
                                 onAddPlanet={onAddPlanet}
-                                chatModel={chatModel}
                             />
                         </div>
                     )}
