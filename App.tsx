@@ -1078,14 +1078,6 @@ const App: React.FC = () => {
             userMaterialPresets={userMaterialPresets}
             setUserMaterialPresets={setUserMaterialPresets}
           />
-          {/* AI 按钮 */}
-          <button
-            onClick={() => setShowAIPanel(true)}
-            className="ml-2 px-3 py-2 rounded-xl bg-indigo-600/80 hover:bg-indigo-500 text-white text-xs font-bold transition-all duration-300 shadow-lg hover:shadow-indigo-500/30 flex items-center gap-1"
-            title="打开 AI 助手"
-          >
-            ✨ AI
-          </button>
         </div>
 
         {/* 顶部模式切换栏 - 水晶宝石风格 */}
@@ -1220,6 +1212,13 @@ const App: React.FC = () => {
           <span className="text-white text-base font-light">{showControls ? '›' : '‹'}</span>
         </button>
 
+        {/* AI Vortex Star Button - Follows Sidebar Toggle */}
+        <button
+          onClick={() => setShowAIPanel(!showAIPanel)}
+          className={`absolute top-24 z-[199] w-10 h-10 ai-vortex-star transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
+          title="打开 AI 助手"
+        />
+
         {/* 视角信息面板 - 仅星球模式显示 - 玻璃样式 */}
         {appMode === 'planet' && cameraInfo && (
           <div
@@ -1337,13 +1336,7 @@ const App: React.FC = () => {
       </div>
 
       {/* AI 助手按钮 */}
-      <button
-        onClick={() => setShowAIPanel(true)}
-        className="fixed bottom-6 left-6 z-[200] px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white font-medium shadow-lg hover:shadow-xl transition-all hover:scale-105"
-        style={{ backdropFilter: 'blur(10px)' }}
-      >
-        AI
-      </button>
+
 
       {/* AI 助手面板 */}
       <AIAssistantPanel
