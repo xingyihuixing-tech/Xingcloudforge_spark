@@ -1116,6 +1116,8 @@ const HeadTextureSelect: React.FC<{
   const [cloudPresets, setCloudPresets] = useState<{ id: string; name: string; url: string }[]>([]);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; url: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+  const [editingPresetName, setEditingPresetName] = useState('');
 
   useEffect(() => {
     loadCloudConfig().then(config => {
@@ -1124,6 +1126,26 @@ const HeadTextureSelect: React.FC<{
       }
     });
   }, [loadCloudConfig]);
+
+  // 重命名预设
+  const handleRename = async (presetId: string, newName: string) => {
+    if (!newName.trim()) { setEditingPresetId(null); return; }
+    try {
+      const config = await loadCloudConfig();
+      if (config) {
+        const updated = (config.headTexturePresets || []).map((p: any) =>
+          p.id === presetId ? { ...p, name: newName.trim() } : p
+        );
+        await saveCloudConfig({ ...config, headTexturePresets: updated });
+        setCloudPresets(updated);
+      }
+    } catch (err) {
+      console.error('Rename preset failed:', err);
+    } finally {
+      setEditingPresetId(null);
+      setEditingPresetName('');
+    }
+  };
 
   // 删除预设
   const handleDelete = async () => {
@@ -1183,15 +1205,40 @@ const HeadTextureSelect: React.FC<{
             </optgroup>
           )}
         </select>
-        {/* 删除按钮（仅当选中云端预设时显示） */}
+        {/* 重命名/删除按钮（仅当选中云端预设时显示） */}
         {selectedCloudPreset && (
-          <button
-            onClick={() => setDeleteConfirm(selectedCloudPreset)}
-            className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
-            title="删除此预设"
-          >
-            🗑️
-          </button>
+          <div className="flex items-center gap-1">
+            {editingPresetId === selectedCloudPreset.id ? (
+              <input
+                type="text"
+                value={editingPresetName}
+                onChange={(e) => setEditingPresetName(e.target.value)}
+                onBlur={() => handleRename(selectedCloudPreset.id, editingPresetName)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRename(selectedCloudPreset.id, editingPresetName);
+                  if (e.key === 'Escape') { setEditingPresetId(null); setEditingPresetName(''); }
+                }}
+                autoFocus
+                className="w-20 px-1 py-0.5 text-xs bg-gray-600 text-white border border-gray-500 rounded outline-none"
+                placeholder="输入新名称"
+              />
+            ) : (
+              <button
+                onClick={() => { setEditingPresetId(selectedCloudPreset.id); setEditingPresetName(selectedCloudPreset.name); }}
+                className="p-1 text-blue-400 hover:text-blue-300 hover:bg-blue-500/20 rounded transition-colors"
+                title="重命名"
+              >
+                ✏️
+              </button>
+            )}
+            <button
+              onClick={() => setDeleteConfirm(selectedCloudPreset)}
+              className="p-1 text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded transition-colors"
+              title="删除此预设"
+            >
+              🗑️
+            </button>
+          </div>
         )}
       </div>
 

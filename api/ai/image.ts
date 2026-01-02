@@ -35,9 +35,9 @@ const SUB_MODE_PROMPTS = {
 
     magicCircle: {
         noImage: (prompt: string) =>
-            `Generate an image: ${prompt}. Requirements: Pure black background (#000000), 1:1 square aspect ratio (512x512 pixels), centered composition.`,
+            `Generate a magic circle or mystical symbol: ${prompt}. Requirements: Pure black background (#000000), overall circular/radial composition centered in frame, soft fading edges that blend naturally into the black background (avoid hard circular cuts), intricate patterns, 1:1 square aspect ratio (512x512 pixels), glowing mystical effect.`,
         withImage: (prompt: string) =>
-            `Create an image with the reference as visual center: ${prompt}. Requirements: Pure black background (#000000), 1:1 square aspect ratio (512x512 pixels), centered design incorporating the reference.`
+            `Create a magic circle with the reference as visual inspiration: ${prompt}. Requirements: Pure black background (#000000), circular/radial overall composition, soft fading edges blending into black (no hard circular cuts), centered design, 1:1 square aspect ratio (512x512 pixels), mystical glowing effect.`
     }
 };
 
@@ -118,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // 根据子模式设置宽高比
         const aspectRatioConfig: Record<string, { aspectRatio: string; imageSize?: string }> = {
             particleShape: { aspectRatio: '1:1' },
-            background: { aspectRatio: '21:9', imageSize: '2K' }, // 全景图用超宽屏 21:9
+            background: { aspectRatio: '21:9', imageSize: '4K' }, // 全景图用超宽屏 21:9
             magicCircle: { aspectRatio: '1:1' }
         };
         const imageConfig = aspectRatioConfig[subMode as string] || aspectRatioConfig.magicCircle;

@@ -49,6 +49,8 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; url: string } | null>(null);
     const [isDeleting, setIsDeleting] = useState(false);
     const [saveConfirm, setSaveConfirm] = useState<{ type: 'save' | 'saveAs'; schemeName: string; onConfirm: () => void } | null>(null);
+    const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
+    const [editingPresetName, setEditingPresetName] = useState('');
 
     // Load cloud presets on mount
     useEffect(() => {
@@ -79,6 +81,26 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
         } finally {
             setIsDeleting(false);
             setDeleteConfirm(null);
+        }
+    };
+
+    // 重命名背景预设
+    const handleRenamePreset = async (presetId: string, newName: string) => {
+        if (!newName.trim()) return;
+        try {
+            const config = await loadCloudConfig();
+            if (config) {
+                const updated = (config.backgroundPresets || []).map((p: any) =>
+                    p.id === presetId ? { ...p, name: newName.trim() } : p
+                );
+                await saveCloudConfig({ ...config, backgroundPresets: updated });
+                setCloudBackgroundPresets(updated);
+            }
+        } catch (err) {
+            console.error('Rename preset failed:', err);
+        } finally {
+            setEditingPresetId(null);
+            setEditingPresetName('');
         }
     };
 
@@ -232,7 +254,33 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                                     className="w-full h-full object-cover"
                                                                 />
                                                                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-1">
-                                                                    <span className="text-[9px] text-white/80 truncate block">{preset.name}</span>
+                                                                    {editingPresetId === preset.id ? (
+                                                                        <input
+                                                                            type="text"
+                                                                            value={editingPresetName}
+                                                                            onChange={(e) => setEditingPresetName(e.target.value)}
+                                                                            onBlur={() => handleRenamePreset(preset.id, editingPresetName)}
+                                                                            onKeyDown={(e) => {
+                                                                                if (e.key === 'Enter') handleRenamePreset(preset.id, editingPresetName);
+                                                                                if (e.key === 'Escape') { setEditingPresetId(null); setEditingPresetName(''); }
+                                                                            }}
+                                                                            autoFocus
+                                                                            className="w-full text-[9px] bg-white/20 text-white border border-white/30 rounded px-1 py-0.5 outline-none"
+                                                                            onClick={(e) => e.stopPropagation()}
+                                                                        />
+                                                                    ) : (
+                                                                        <span
+                                                                            className="text-[9px] text-white/80 truncate block cursor-text hover:text-white"
+                                                                            onDoubleClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                setEditingPresetId(preset.id);
+                                                                                setEditingPresetName(preset.name);
+                                                                            }}
+                                                                            title="双击重命名"
+                                                                        >
+                                                                            {preset.name}
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                                 {currentBg?.panoramaUrl === preset.url && (
                                                                     <div className="absolute top-1 left-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
