@@ -232,9 +232,7 @@ function buildKnowledgeSnippet(selectedModules: EffectType[]): string {
         { "id": "instance_1", "fields": { "<字段名>": <值> } }
       ]
     }
-  },
-  "assumptions": ["你做的假设"],
-  "warnings": ["潜在问题提示"]
+  }
 }
 \`\`\`
 `);
@@ -256,6 +254,68 @@ function buildKnowledgeSnippet(selectedModules: EffectType[]): string {
                     : '-';
             sections.push(`| ${name} | ${field.type} | ${rangeOrOptions} | ${field.default ?? '-'} | ${field.desc} |`);
         }
+    }
+
+    // 添加粒子核心特有的依赖规则
+    if (selectedModules.includes('particleCore')) {
+        sections.push(`
+---
+## ⚠️ 粒子核心颜色配置规则（重要）
+
+### 单色模式
+仅设置 \`baseHue\`(0-360) 和 \`baseSaturation\`(0-1)，不设置 gradientColor 相关字段。
+
+### 渐变模式（双色/三色）
+**必须同时设置以下3个字段，缺一不可：**
+1. \`gradientColor.enabled\`: true
+2. \`gradientColor.mode\`: "twoColor" 或 "threeColor"
+3. \`gradientColor.colors\`: ["#色1", "#色2"] 或 ["#色1", "#色2", "#色3"]
+
+可选: \`gradientColor.direction\`: "radial"(径向) / "linearY"(垂直) / "spiral"(螺旋)
+
+---
+## 💡 风格示例
+
+### 🔥 熔岩核心（红橙双色渐变）
+\`\`\`json
+{
+  "baseRadius": 120,
+  "fillMode": "gradient",
+  "fillPercent": 40,
+  "gradientColor.enabled": true,
+  "gradientColor.mode": "twoColor",
+  "gradientColor.colors": ["#ff2200", "#ffaa00"],
+  "gradientColor.direction": "radial",
+  "brightness": 1.5,
+  "rotationSpeed": 0.2
+}
+\`\`\`
+
+### ❄️ 冰晶核心（青蓝白三色渐变）
+\`\`\`json
+{
+  "baseRadius": 100,
+  "fillMode": "shell",
+  "gradientColor.enabled": true,
+  "gradientColor.mode": "threeColor",
+  "gradientColor.colors": ["#0066ff", "#00ccff", "#ffffff"],
+  "gradientColor.direction": "radial",
+  "brightness": 1.2
+}
+\`\`\`
+
+### 🌌 紫色星云（单色模式）
+\`\`\`json
+{
+  "baseRadius": 150,
+  "baseHue": 280,
+  "baseSaturation": 0.8,
+  "fillMode": "gradient",
+  "fillPercent": 30,
+  "density": 2.5
+}
+\`\`\`
+`);
     }
 
     sections.push(`
