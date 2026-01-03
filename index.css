@@ -529,10 +529,10 @@ canvas {
   /* Fixed Height */
   display: flex;
   flex-direction: column;
-  /* Glassmorphism - 3% 不透明度，模糊调低 */
+  /* Glassmorphism - 3% 不透明度，模糊 6px */
   background: rgba(15, 23, 42, 0.03);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   border-radius: 16px;
   overflow: hidden;
 }

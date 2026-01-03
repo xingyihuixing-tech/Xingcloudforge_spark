@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
-import { XingSparkSettingsContent, XingSparkConfig, DEFAULT_XING_CONFIG, CHAT_FONT_OPTIONS } from './XingSparkSettings';
+import { XingSparkSettingsPanel, XingSparkConfig, DEFAULT_XING_CONFIG, CHAT_FONT_OPTIONS } from './XingSparkSettings';
 
 // ============================================
 // 类型定义
@@ -459,6 +459,48 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [userId, savingId, onSaveHeadTexture, onSaveBackground, onSaveMagicCircleTexture]);
 
+    // === 配置持久化 ===
+    const saveTimeoutRef = useRef<any>(null);
+
+    const saveToCloud = useCallback((newConfig: XingSparkConfig) => {
+        if (!userId) return;
+
+        // 使用 debounce 避免频繁请求
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+
+        saveTimeoutRef.current = setTimeout(async () => {
+            try {
+                // 先获取现有配置以保留其他字段
+                const currentRes = await fetch(`/api/config?userId=${userId}`);
+                const currentData = await currentRes.json();
+
+                const payload = {
+                    userId,
+                    config: {
+                        ...(currentData.config || {}),
+                        xingSparkConfig: newConfig
+                    }
+                };
+
+                await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                console.log('XingSpark 配置已保存到云端');
+            } catch (err) {
+                console.error('保存配置失败:', err);
+            }
+        }, 1000);
+    }, [userId]);
+
+    // 监听配置变化自动保存
+    useEffect(() => {
+        if (userId) {
+            saveToCloud(xingConfig);
+        }
+    }, [xingConfig, userId, saveToCloud]);
+
     if (!isOpen) return null;
 
     // 当前选中的模型名称
@@ -546,10 +588,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     {/* XingSpark 设置 - 显示在标题栏下方，无额外外框 */}
                     {showXingSettings && (
                         <div className="flex-1 min-h-0">
-                            <XingSparkSettingsContent
+                            <XingSparkSettingsPanel
                                 config={xingConfig}
                                 setConfig={setXingConfig}
                                 onBack={() => setShowXingSettings(false)}
+                                userId={userId}
+                                onSave={saveToCloud}
                             />
                         </div>
                     )}
@@ -714,7 +758,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     {/* 分隔线 */}
                                     <div className="border-t border-white/10 mx-2" />
 
-                                    {/* 底部工具栏: [+ 小] [模型选择] */}
+                                    {/* 底部工具栏: [+] */}
                                     <div className="flex items-center gap-2 px-2 py-1.5">
                                         <input
                                             ref={fileInputRef}
@@ -730,15 +774,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         >
                                             +
                                         </button>
-                                        <select
-                                            value={chatModel}
-                                            onChange={e => setChatModel(e.target.value)}
-                                            className="text-[10px] text-white/40 bg-transparent border-none cursor-pointer hover:text-white/70 focus:outline-none"
-                                        >
-                                            {CHAT_MODELS.map(m => (
-                                                <option key={m.id} value={m.id} className="bg-slate-800">{m.name}</option>
-                                            ))}
-                                        </select>
                                     </div>
                                 </div>
                             </div>

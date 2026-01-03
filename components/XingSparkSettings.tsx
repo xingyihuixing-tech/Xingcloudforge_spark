@@ -52,12 +52,21 @@ export interface UserMsgConfig {
     borderColor: string;    // 边框颜色 hex
 }
 
+// 渐变预设接口
+export interface GradientPreset {
+    id: string;
+    name: string;
+    colors: string[];
+}
+
 export interface XingSparkConfig {
     font: string;
     gradient: LogoGradientConfig;
     inputGlow: InputGlowConfig;
     theme: ThemeConfig;
     userMsg: UserMsgConfig;
+    gradientPresets?: GradientPreset[];  // 用户自定义渐变预设
+    hiddenSystemPresets?: string[];       // 被隐藏的系统预设ID列表
 }
 
 // 默认配置
@@ -143,12 +152,16 @@ interface XingSparkSettingsPanelProps {
     config: XingSparkConfig;
     setConfig: React.Dispatch<React.SetStateAction<XingSparkConfig>>;
     onBack: () => void;
+    userId?: string;
+    onSave?: (config: XingSparkConfig) => void;
 }
 
 export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     config,
     setConfig,
-    onBack
+    onBack,
+    userId,
+    onSave
 }) => {
     const [activeTab, setActiveTab] = useState<'style' | 'color' | 'chat'>('style');
     // 渐变预设折叠状态
@@ -156,6 +169,8 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     // 预设保存弹窗状态
     const [showPresetDialog, setShowPresetDialog] = useState<'save' | 'update' | null>(null);
     const [presetEditName, setPresetEditName] = useState('');
+    // 删除确认状态
+    const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
     // 安全获取配置 (防止云端旧配置缺少新字段)
     const theme = config.theme ?? DEFAULT_XING_CONFIG.theme;
@@ -163,10 +178,18 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     const gradient = config.gradient ?? DEFAULT_XING_CONFIG.gradient;
     const userMsg = config.userMsg ?? DEFAULT_XING_CONFIG.userMsg;
 
+    // 用户自定义预设 (从 config 中获取)
+    const userPresets = config.gradientPresets ?? [];
+
+    // 合并系统预设和用户预设 (排除被隐藏的系统预设)
+    const hiddenIds = config.hiddenSystemPresets || [];
+    const visibleSystemPresets = GRADIENT_PRESETS.filter(p => !hiddenIds.includes(p.id));
+    const allPresets = [...visibleSystemPresets, ...userPresets];
+
     // 匹配当前颜色的预设
-    const currentPreset = GRADIENT_PRESETS.find(p =>
+    const currentPreset = allPresets.find(p =>
         p.colors.length === gradient.colors.length &&
-        p.colors.every((c, i) => c.toLowerCase() === gradient.colors[i].toLowerCase())
+        p.colors.every((c: string, i: number) => c.toLowerCase() === gradient.colors[i].toLowerCase())
     );
 
     // 颜色数组归一化 (确保至少 4 个颜色点)
@@ -244,28 +267,6 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                 {/* ========== Logo 风格 Tab ========== */}
                 {activeTab === 'style' && (
                     <div className="space-y-4">
-                        {/* 实时预览 */}
-                        <div className="flex justify-center py-4">
-                            <span
-                                style={{
-                                    fontFamily: `'${config.font}', cursive`,
-                                    fontSize: '2rem',
-                                    background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
-                                    WebkitBackgroundClip: 'text',
-                                    backgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent',
-                                    color: 'transparent',
-                                    filter: `saturate(${gradient.saturation}%) brightness(${gradient.brightness}%)`,
-                                    textShadow: gradient.glow.enabled ? `0 0 ${gradient.glow.intensity}px ${gradient.colors[0]}` : 'none',
-                                }}
-                            >
-                                <span style={{ fontSize: '1em' }}>X</span>
-                                <span style={{ fontSize: '0.9em' }}>ing</span>
-                                <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
-                                <span style={{ fontSize: '0.9em' }}>park</span>
-                            </span>
-                        </div>
-
                         {/* 10种字体 - 2列2列网格 (参考项目样式) */}
                         <div className="grid grid-cols-2 gap-3">
                             {FONT_OPTIONS.map(font => {
@@ -308,24 +309,6 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                 {/* ========== Logo 颜色 Tab ========== */}
                 {activeTab === 'color' && (
                     <div className="space-y-4">
-                        {/* 实时预览 */}
-                        <div className="flex justify-center py-3 rounded-xl bg-white/5">
-                            <span
-                                style={{
-                                    fontFamily: `'${config.font}', cursive`,
-                                    fontSize: '2rem',
-                                    background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
-                                    WebkitBackgroundClip: 'text',
-                                    backgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent',
-                                    color: 'transparent',
-                                    filter: `saturate(${gradient.saturation}%) brightness(${gradient.brightness}%)`,
-                                }}
-                            >
-                                XingSpark
-                            </span>
-                        </div>
-
                         {/* 渐变预设 - 可折叠列表 */}
                         <div className="rounded-xl border border-slate-700 bg-slate-800/30">
                             <button
@@ -342,18 +325,54 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                             {gradientPresetsExpanded && (
                                 <div className="px-3 pb-3 space-y-3">
                                     <div className="grid grid-cols-4 gap-2">
-                                        {GRADIENT_PRESETS.map(preset => {
+                                        {allPresets.map(preset => {
                                             const isActive = currentPreset?.id === preset.id;
+                                            const isUserPreset = userPresets.some(p => p.id === preset.id);
                                             return (
-                                                <button
-                                                    key={preset.id}
-                                                    onClick={() => updateGradient({ colors: [...preset.colors] })}
-                                                    className={`w-full p-2 rounded-lg text-center transition-all hover:scale-105 hover:bg-slate-700 ${isActive ? 'ring-2 ring-blue-400' : ''}`}
-                                                    title={preset.name}
-                                                >
-                                                    <div className="w-full h-6 rounded-md mb-1" style={{ background: `linear-gradient(90deg, ${preset.colors.join(', ')})` }} />
-                                                    <span className="text-[10px] text-slate-400">{preset.name}</span>
-                                                </button>
+                                                <div key={preset.id} className="relative group">
+                                                    <button
+                                                        onClick={() => updateGradient({ colors: [...preset.colors] })}
+                                                        className={`w-full p-2 rounded-lg text-center transition-all hover:scale-105 hover:bg-slate-700 ${isActive ? 'ring-2 ring-blue-400' : ''}`}
+                                                        title={preset.name}
+                                                    >
+                                                        <div className="w-full h-6 rounded-md mb-1" style={{ background: `linear-gradient(90deg, ${preset.colors.join(', ')})` }} />
+                                                        <span className="text-[10px] text-slate-400">{preset.name}</span>
+                                                    </button>
+                                                    {/* 删除按钮 - 悬停显示 */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            if (deleteConfirmId === preset.id) {
+                                                                // 确认删除
+                                                                const newPresets = isUserPreset
+                                                                    ? userPresets.filter(p => p.id !== preset.id)
+                                                                    : userPresets; // 系统预设也可以"删除"（从显示列表中移除）
+                                                                const newConfig = {
+                                                                    ...config,
+                                                                    gradientPresets: newPresets,
+                                                                    // 如果删除系统预设，记录到被隐藏列表
+                                                                    hiddenSystemPresets: !isUserPreset
+                                                                        ? [...(config.hiddenSystemPresets || []), preset.id]
+                                                                        : config.hiddenSystemPresets
+                                                                };
+                                                                setConfig(newConfig);
+                                                                onSave?.(newConfig);
+                                                                setDeleteConfirmId(null);
+                                                            } else {
+                                                                setDeleteConfirmId(preset.id);
+                                                                // 3秒后自动取消确认
+                                                                setTimeout(() => setDeleteConfirmId(null), 3000);
+                                                            }
+                                                        }}
+                                                        className={`absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded text-xs transition-all ${deleteConfirmId === preset.id
+                                                            ? 'bg-red-500 text-white opacity-100'
+                                                            : 'bg-black/50 text-white/60 opacity-0 group-hover:opacity-100'
+                                                            }`}
+                                                        title={deleteConfirmId === preset.id ? '再次点击确认删除' : '删除预设'}
+                                                    >
+                                                        {deleteConfirmId === preset.id ? '✓' : '×'}
+                                                    </button>
+                                                </div>
                                             );
                                         })}
                                     </div>
@@ -425,9 +444,47 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                                         </button>
                                         <button
                                             onClick={() => {
-                                                // TODO: 保存到云端
-                                                console.log('保存预设:', showPresetDialog === 'save' ? presetEditName : currentPreset?.name, gradient.colors);
+                                                if (showPresetDialog === 'save') {
+                                                    // 新建预设
+                                                    const newPreset: GradientPreset = {
+                                                        id: `custom_${Date.now()}`,
+                                                        name: presetEditName.trim(),
+                                                        colors: [...gradient.colors]
+                                                    };
+                                                    const newConfig = {
+                                                        ...config,
+                                                        gradientPresets: [...userPresets, newPreset]
+                                                    };
+                                                    setConfig(newConfig);
+                                                    onSave?.(newConfig);
+                                                } else if (showPresetDialog === 'update' && currentPreset) {
+                                                    // 更新现有预设
+                                                    const updatedPresets = userPresets.map(p =>
+                                                        p.id === currentPreset.id ? { ...p, colors: [...gradient.colors] } : p
+                                                    );
+                                                    // 如果是系统预设被修改，转为用户预设
+                                                    const isSystemPreset = GRADIENT_PRESETS.some(p => p.id === currentPreset.id);
+                                                    if (isSystemPreset) {
+                                                        const overridePreset: GradientPreset = {
+                                                            id: `override_${currentPreset.id}_${Date.now()}`,
+                                                            name: currentPreset.name,
+                                                            colors: [...gradient.colors]
+                                                        };
+                                                        updatedPresets.push(overridePreset);
+                                                    }
+                                                    const newConfig = {
+                                                        ...config,
+                                                        gradientPresets: isSystemPreset ? [...userPresets, {
+                                                            id: `override_${currentPreset.id}_${Date.now()}`,
+                                                            name: currentPreset.name,
+                                                            colors: [...gradient.colors]
+                                                        }] : updatedPresets
+                                                    };
+                                                    setConfig(newConfig);
+                                                    onSave?.(newConfig);
+                                                }
                                                 setShowPresetDialog(null);
+                                                setPresetEditName('');
                                             }}
                                             disabled={showPresetDialog === 'save' && !presetEditName.trim()}
                                             className="flex-1 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
