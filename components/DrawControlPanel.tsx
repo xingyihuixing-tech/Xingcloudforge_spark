@@ -5,7 +5,7 @@
  * update: 一旦我被更新，请更新 components 目录的 _README.md
  */
 import React, { useEffect, useMemo } from 'react';
-import { DrawSettings, BrushSettings, DrawingLayer, Drawing, BrushType, SymmetryMode, ProjectionMode, SymmetrySettings, PlanetSceneSettings } from '../types';
+import { DrawSettings, BrushSettings, DrawingLayer, Drawing, BrushType, Symmetry2DMode, ProjectionMode, SymmetrySettings, PlanetSceneSettings } from '../types';
 
 interface DrawControlPanelProps {
     settings: DrawSettings;
@@ -24,7 +24,12 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                 name: '我的绘图',
                 visible: true,
                 layers: [],
-                activeLayerId: null
+                activeLayerId: null,
+                transform: {
+                    scale: 1,
+                    tilt: { x: 0, y: 0, z: 0 },
+                    rotationSpeed: 0
+                }
             };
             setSettings(prev => ({
                 ...prev,
@@ -50,7 +55,12 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
             name: `绘图 ${(settings.drawings?.length || 0) + 1}`,
             visible: true,
             layers: [],
-            activeLayerId: null
+            activeLayerId: null,
+            transform: {
+                scale: 1,
+                tilt: { x: 0, y: 0, z: 0 },
+                rotationSpeed: 0
+            }
         };
         setSettings(prev => ({
             ...prev,
@@ -67,18 +77,19 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
             id: 'layer-' + Date.now(),
             name: `图层 ${activeDrawing.layers.length + 1}`,
             visible: true,
-            tilt: { x: 0, y: 0, z: 0 },
-            scale: 1,
-            altitude: 10,
-            rotationSpeed: 0,
+            locked: false,
+            transform: {
+                scale: 1,
+                tilt: { x: 0, y: 0, z: 0 },
+                altitude: 10,
+                rotationSpeed: 0
+            },
             projection: settings.projection,
             brushType: settings.brush.type,
             color: settings.brush.color,
-            opacity: 1,
             blending: 'additive',
             params: {},
-            points: new Float32Array(),
-            count: 0
+            strokes: []
         };
 
         setSettings(prev => ({
@@ -200,8 +211,8 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                                     key={drawing.id}
                                     onClick={() => setSettings(prev => ({ ...prev, activeDrawingId: drawing.id }))}
                                     className={`px-3 py-1.5 rounded text-xs border transition-all ${isSelected
-                                            ? 'bg-gradient-to-r from-pink-500/30 to-purple-500/30 border-pink-500/50 text-white'
-                                            : 'bg-black/30 border-white/10 text-gray-400 hover:bg-white/5'
+                                        ? 'bg-gradient-to-r from-pink-500/30 to-purple-500/30 border-pink-500/50 text-white'
+                                        : 'bg-black/30 border-white/10 text-gray-400 hover:bg-white/5'
                                         }`}
                                 >
                                     <i className={`fas fa-image mr-1 ${isSelected ? 'text-pink-400' : ''}`}></i>
@@ -276,19 +287,21 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                     </div>
 
                     {/* Brush Type */}
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="grid grid-cols-3 gap-2">
                         {[
                             { id: BrushType.Stardust, label: '星尘', icon: 'fa-star' },
                             { id: BrushType.GasCloud, label: '气云', icon: 'fa-cloud' },
                             { id: BrushType.EnergyBeam, label: '能量', icon: 'fa-bolt' },
-                            { id: BrushType.Crystal, label: '晶体', icon: 'fa-gem' },
+                            { id: BrushType.SpiralRing, label: '螺旋', icon: 'fa-circle-notch' },
+                            { id: BrushType.Firefly, label: '流萤', icon: 'fa-sun' },
+                            { id: BrushType.Fracture, label: '裂痕', icon: 'fa-random' },
                         ].map(b => (
                             <button
                                 key={b.id}
                                 onClick={() => updateBrush({ type: b.id })}
                                 className={`flex flex-col items-center py-2 rounded text-[10px] transition-all border ${settings.brush?.type === b.id
-                                        ? 'bg-gradient-to-b from-pink-500/30 to-purple-500/30 text-pink-200 border-pink-500/50'
-                                        : 'bg-black/20 text-gray-400 border-transparent hover:bg-white/5'
+                                    ? 'bg-gradient-to-b from-pink-500/30 to-purple-500/30 text-pink-200 border-pink-500/50'
+                                    : 'bg-black/20 text-gray-400 border-transparent hover:bg-white/5'
                                     }`}
                             >
                                 <i className={`fas ${b.icon} mb-1`}></i>
@@ -342,16 +355,18 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
 
                     <div className="grid grid-cols-4 gap-2">
                         {[
-                            { id: SymmetryMode.None, label: '无' },
-                            { id: SymmetryMode.Mirror, label: '镜像' },
-                            { id: SymmetryMode.Radial, label: '径向' },
-                            { id: SymmetryMode.Spiral, label: '螺旋' },
+                            { id: Symmetry2DMode.None, label: '无' },
+                            { id: Symmetry2DMode.MirrorX, label: 'X镜像' },
+                            { id: Symmetry2DMode.MirrorY, label: 'Y镜像' },
+                            { id: Symmetry2DMode.MirrorQuad, label: '四象限' },
+                            { id: Symmetry2DMode.Radial, label: '径向' },
+                            { id: Symmetry2DMode.Kaleidoscope, label: '万花筒' },
                         ].map(m => (
                             <button
                                 key={m.id}
-                                onClick={() => updateSymmetry({ mode: m.id })}
+                                onClick={() => updateSymmetry({ mode2D: m.id })}
                                 className={`py-1 rounded text-[10px] transition-all border
-                                     ${settings.symmetry?.mode === m.id
+                                     ${settings.symmetry?.mode2D === m.id
                                         ? 'bg-purple-600/30 text-purple-200 border-purple-500/50'
                                         : 'bg-black/20 text-gray-400 border-transparent hover:bg-white/5'}`}
                             >
@@ -360,31 +375,17 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                         ))}
                     </div>
 
-                    {/* Symmetry Params */}
-                    {settings.symmetry?.mode === SymmetryMode.Mirror && (
-                        <div className="flex gap-2">
-                            {['x', 'y', 'quad'].map(axis => (
-                                <button
-                                    key={axis}
-                                    onClick={() => updateSymmetry({ mirrorAxis: axis as any })}
-                                    className={`px-2 py-1 text-[10px] rounded border ${settings.symmetry?.mirrorAxis === axis ? 'bg-purple-500/30 border-purple-500' : 'border-white/10'}`}
-                                >
-                                    {axis.toUpperCase()}轴
-                                </button>
-                            ))}
-                        </div>
-                    )}
-
-                    {(settings.symmetry?.mode === SymmetryMode.Radial || settings.symmetry?.mode === SymmetryMode.Spiral) && (
+                    {/* Radial Segments */}
+                    {(settings.symmetry?.mode2D === Symmetry2DMode.Radial || settings.symmetry?.mode2D === Symmetry2DMode.Kaleidoscope) && (
                         <div className="space-y-1">
                             <div className="flex justify-between text-[10px] text-gray-500">
-                                <span>份数</span>
-                                <span>{settings.symmetry?.segments || 8}</span>
+                                <span>分割数</span>
+                                <span>{settings.symmetry?.radialSegments || 8}</span>
                             </div>
                             <input
                                 type="range" min="2" max="32" step="1"
-                                value={settings.symmetry?.segments || 8}
-                                onChange={(e) => updateSymmetry({ segments: parseInt(e.target.value) })}
+                                value={settings.symmetry?.radialSegments || 8}
+                                onChange={(e) => updateSymmetry({ radialSegments: parseInt(e.target.value) })}
                                 className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
                             />
                         </div>
@@ -395,14 +396,23 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                 <div className="space-y-2 p-3 rounded-lg bg-black/20 border border-white/5">
                     <div className="flex justify-between text-[10px] text-gray-500">
                         <span>画布透明度</span>
-                        <span>{((settings.canvasOpacity || 0.7) * 100).toFixed(0)}%</span>
+                        <span>{((settings.padOpacity || 0.8) * 100).toFixed(0)}%</span>
                     </div>
                     <input
                         type="range" min="0.1" max="1" step="0.1"
-                        value={settings.canvasOpacity || 0.7}
-                        onChange={(e) => setSettings(prev => ({ ...prev, canvasOpacity: parseFloat(e.target.value) }))}
+                        value={settings.padOpacity || 0.8}
+                        onChange={(e) => setSettings(prev => ({ ...prev, padOpacity: parseFloat(e.target.value) }))}
                         className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
                     />
+                    <div className="flex items-center justify-between mt-2">
+                        <span className="text-[10px] text-gray-500">显示对称辅助线</span>
+                        <button
+                            onClick={() => setSettings(prev => ({ ...prev, showSymmetryGuides: !prev.showSymmetryGuides }))}
+                            className={`w-8 h-4 rounded-full transition-colors ${settings.showSymmetryGuides ? 'bg-purple-500' : 'bg-gray-600'}`}
+                        >
+                            <div className={`w-3 h-3 bg-white rounded-full transition-transform ${settings.showSymmetryGuides ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                        </button>
+                    </div>
                 </div>
 
             </div>

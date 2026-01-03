@@ -10,6 +10,7 @@ import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
 import DrawControlPanel from './components/DrawControlPanel';
+import HoloPad from './components/draw/HoloPad';
 import GestureHandler from './components/GestureHandler';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { UserMenu } from './components/UserMenu';
@@ -28,7 +29,8 @@ import {
   DEFAULT_COLOR_SCHEMES,
   DEFAULT_MATERIAL_SETTINGS,
   BUILT_IN_MATERIAL_PRESETS,
-  createDefaultMaterialConfig
+  createDefaultMaterialConfig,
+  DEFAULT_DRAW_SETTINGS
 } from './constants';
 import { generateMaterialStyle } from './utils/materialStyle';
 import { processImage, ProcessedData, extractDominantColors } from './services/imageProcessing';
@@ -318,31 +320,7 @@ const App: React.FC = () => {
   const [overlayMode, setOverlayMode] = useState(false); // 叠加模式：同时显示星云和星球
 
   // 绘图模式设置
-  const [drawSettings, setDrawSettings] = useState<DrawSettings>({
-    enabled: false,
-    brush: {
-      type: 'stardust' as any, // BrushType.Stardust
-      size: 10,
-      opacity: 0.8,
-      color: '#ffffff',
-      usePressure: true,
-      pressureInfluence: { size: true, opacity: true, flow: false }
-    },
-    symmetry: {
-      mode: 'none' as any, // SymmetryMode.None
-      mirrorAxis: 'x',
-      segments: 8,
-      radialReflection: false,
-      twist: 10,
-      decay: 0.1
-    },
-    projection: 'sphere' as any, // ProjectionMode.Sphere
-    drawings: [],             // Independent from planets
-    activeDrawingId: null,
-    planetBindings: [],       // Many-to-many bindings
-    canvasOpacity: 0.7,       // Higher default for visibility
-    hideCanvasWhilePainting: false
-  });
+  const [drawSettings, setDrawSettings] = useState<DrawSettings>(() => ({ ...DEFAULT_DRAW_SETTINGS }));
 
   const [data, setData] = useState<ProcessedData | null>(null);
 
@@ -1407,6 +1385,17 @@ const App: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* 2D 绘图画布 (HoloPad) - 绘图模式下显示 */}
+      {appMode === 'planet' && (
+        <HoloPad
+          settings={drawSettings}
+          setSettings={setDrawSettings}
+          onStrokeComplete={(strokeData) => {
+            console.log('Stroke completed:', strokeData.length / 4, 'points');
+          }}
+        />
+      )}
 
       {/* AI 助手按钮 */}
 

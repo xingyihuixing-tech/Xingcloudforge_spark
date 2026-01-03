@@ -61,7 +61,17 @@ import {
   AfterimageZoneSettings,
   AfterimageParticleSettings,
   AfterimageTextureSettings,
-  AfterimageSystemSettings
+  AfterimageSystemSettings,
+  // 绘图系统 V2
+  BrushType,
+  BrushSettings,
+  Symmetry2DMode,
+  Symmetry3DMode,
+  SymmetrySettings,
+  ProjectionMode,
+  DrawingLayer,
+  Drawing,
+  DrawSettings
 } from './types';
 
 // 颜色过滤预设配置
@@ -3753,4 +3763,143 @@ export const DEFAULT_THEME_CONFIG = {
   activeColors: { ...DEFAULT_THEME_COLORS },
   consoleBg: '#000000',
   deletedSystemSchemeIds: [] as string[]
+};
+
+// ==================== 绘图系统 (Dimension Crafter) V2 默认配置 ====================
+
+// 默认笔刷设置
+export const DEFAULT_BRUSH_SETTINGS: BrushSettings = {
+  type: BrushType.Stardust,
+  size: 20,
+  opacity: 0.8,
+  color: '#ffffff',
+  color2: '#88ccff',
+  usePressure: true,
+  pressureInfluence: {
+    size: true,
+    opacity: true,
+    flow: false
+  },
+  // 星尘笔默认参数
+  stardust: {
+    density: 50,
+    scatter: 15,
+    twinkle: true,
+    twinkleSpeed: 2,
+    glowIntensity: 1.5
+  },
+  // 气云笔默认参数
+  gasCloud: {
+    noiseScale: 2,
+    flowSpeed: 0.5,
+    softness: 0.6,
+    turbulence: 0.3
+  },
+  // 能量束笔默认参数
+  energyBeam: {
+    coreWidth: 0.3,
+    glowRadius: 20,
+    glowIntensity: 1.5,
+    stabilization: 0.5,
+    electricArc: false,
+    arcFrequency: 3,
+    taperEnabled: true
+  },
+  // 螺旋环笔默认参数
+  spiralRing: {
+    spiralDensity: 3,
+    pitch: 0.5,
+    thickness: 10,
+    rotationSpeed: 0.5,
+    riseSpeed: 0.3,
+    direction: 'cw',
+    emissive: 1.5
+  },
+  // 流萤笔默认参数
+  firefly: {
+    headStyle: 'flare',
+    headSize: 8,
+    headBrightness: 2,
+    trailEnabled: true,
+    trailLength: 50,
+    trailTaper: 1.5,
+    trailOpacity: 0.6,
+    flareLeaves: 4,
+    pulseSpeed: 1
+  },
+  // 裂痕笔默认参数
+  fracture: {
+    crackScale: 2,
+    crackThreshold: 0.5,
+    crackFeather: 0.15,
+    crackWarp: 0.3,
+    flowSpeed: 0.2,
+    emission: 1
+  }
+};
+
+// 默认对称设置
+export const DEFAULT_SYMMETRY_SETTINGS: SymmetrySettings = {
+  // 2D 设置
+  mode2D: Symmetry2DMode.None,
+  mirrorAxisAngle: 90,
+  radialSegments: 8,
+  radialReflection: false,
+  centerOffset: { x: 0, y: 0 },
+  // 3D 设置
+  mode3D: Symmetry3DMode.None,
+  spinSegments: 12,
+  polyhedronMirror: false,
+  vortexTwist: 30,
+  vortexHeightOffset: 20,
+  vortexScaleDecay: 0.1
+};
+
+// 创建默认图层
+export const createDefaultDrawingLayer = (id: string, name: string = '新图层'): DrawingLayer => ({
+  id,
+  name,
+  visible: true,
+  locked: false,
+  transform: {
+    scale: 1,
+    tilt: { x: 0, y: 0, z: 0 },
+    altitude: 0,
+    rotationSpeed: 0
+  },
+  brushType: BrushType.Stardust,
+  color: '#ffffff',
+  blending: 'additive',
+  params: {},
+  projection: ProjectionMode.Sphere,
+  strokes: []
+});
+
+// 创建默认绘图实例
+export const createDefaultDrawing = (id: string, name: string = '新绘图'): Drawing => ({
+  id,
+  name,
+  visible: true,
+  layers: [],
+  activeLayerId: null,
+  transform: {
+    scale: 1,
+    tilt: { x: 0, y: 0, z: 0 },
+    rotationSpeed: 0
+  }
+});
+
+// 默认绘图设置
+export const DEFAULT_DRAW_SETTINGS: DrawSettings = {
+  enabled: false,
+  brush: { ...DEFAULT_BRUSH_SETTINGS },
+  symmetry: { ...DEFAULT_SYMMETRY_SETTINGS },
+  projection: ProjectionMode.Sphere,
+  drawings: [],
+  activeDrawingId: null,
+  planetBindings: [],
+  padOpacity: 0.8,
+  showSymmetryGuides: true,
+  ghostCursorEnabled: true,
+  hideCanvasWhilePainting: false
 };
