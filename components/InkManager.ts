@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DrawSettings, DrawMode } from '../types';
+import { DrawSettings, DrawMode, DrawingLayer } from '../types';
 
 // ==================== SHADERS ====================
 
@@ -115,19 +115,16 @@ export class InkManager {
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
 
-    private pointsMesh: THREE.Points | null = null;
-    private geometry: THREE.BufferGeometry | null = null;
-    private material: THREE.ShaderMaterial | null = null;
+    // Rendering Data using Layers
+    private layerMeshes: Map<string, THREE.Points> = new Map();
+    private activeLayerId: string | null = null;
 
-    private positions: Float32Array;
-    private sizes: Float32Array;
-    private alphas: Float32Array;
-    private pointCount: number = 0;
-    private maxPoints: number = 50000;
+    // Interaction Canvas
+    private canvasMesh: THREE.Mesh | null = null;
+    private planetGroup: THREE.Object3D | null = null; // The parent group we draw on
 
     private isDrawing: boolean = false;
     private settings: DrawSettings | null = null;
-    private planetObj: THREE.Object3D | null = null;
 
     // Event listeners
     private _onDown: (e: PointerEvent) => void;
@@ -137,11 +134,6 @@ export class InkManager {
     private ghostMesh: THREE.Points | null = null;
     private ghostPositions: Float32Array;
 
-    /**
-     * @param scene The THREE.Scene (or group) to add the ink mesh to.
-     * @param camera The camera used for raycasting.
-     * @param domElement The canvas DOM element for event listeners.
-     */
     constructor(scene: THREE.Scene, camera: THREE.Camera, domElement: HTMLElement) {
         this.scene = scene;
         this.camera = camera;
@@ -150,15 +142,10 @@ export class InkManager {
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
-        // Initialize buffers
-        this.positions = new Float32Array(this.maxPoints * 3);
-        this.sizes = new Float32Array(this.maxPoints);
-        this.alphas = new Float32Array(this.maxPoints);
-
         // Ghost cursor buffer (max 64 points)
         this.ghostPositions = new Float32Array(64 * 3);
 
-        this.initMesh();
+        this.initCanvasMesh();
         this.initGhostMesh();
 
         // Bind events
@@ -169,40 +156,24 @@ export class InkManager {
         this.addListeners();
     }
 
-    private initMesh() {
-        // Create Geometry
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
-        geometry.setAttribute('aSize', new THREE.BufferAttribute(this.sizes, 1).setUsage(THREE.DynamicDrawUsage));
-        geometry.setAttribute('aAlpha', new THREE.BufferAttribute(this.alphas, 1).setUsage(THREE.DynamicDrawUsage));
-
-        this.geometry = geometry;
-
-        // Create Material
-        const material = new THREE.ShaderMaterial({
-            vertexShader: inkVertexShader,
-            fragmentShader: inkFragmentShader,
-            uniforms: {
-                uTime: { value: 0 },
-                uColor: { value: new THREE.Color(1, 1, 1) },
-                uOpacity: { value: 1.0 },
-                uFlow: { value: 0.0 },
-                uBloom: { value: 1.0 },
-                size: { value: 1.0 }
-            },
+    private initCanvasMesh() {
+        // Create an invisible interaction sphere
+        // Radius 100 matches the standard planet radius
+        const geometry = new THREE.SphereGeometry(100, 64, 64);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
             transparent: true,
+            opacity: 0.05, // Slight visibility for feedback
+            wireframe: true, // Grid effect
+            side: THREE.DoubleSide,
             depthWrite: false,
-            blending: THREE.AdditiveBlending
+            visible: false
         });
 
-        this.material = material;
-
-        // Create Mesh
-        this.pointsMesh = new THREE.Points(geometry, material);
-        this.pointsMesh.frustumCulled = false; // Always render
-        this.pointsMesh.renderOrder = 999; // Draw on top
-
-        this.scene.add(this.pointsMesh);
+        this.canvasMesh = new THREE.Mesh(geometry, material);
+        this.canvasMesh.name = 'InteractionCanvas';
+        this.canvasMesh.renderOrder = 998;
+        this.scene.add(this.canvasMesh);
     }
 
     private initGhostMesh() {
@@ -227,12 +198,24 @@ export class InkManager {
 
     public setSettings(settings: DrawSettings) {
         this.settings = settings;
-        if (this.material) {
-            this.material.uniforms.uColor.value.set(settings.brush.color);
-            this.material.uniforms.uOpacity.value = settings.brush.opacity;
-            this.material.uniforms.uFlow.value = settings.inkFlow;
-            this.material.uniforms.uBloom.value = settings.inkBloom;
+        this.activeLayerId = settings.activeLayerId;
+
+        // Update interaction canvas
+        if (this.canvasMesh) {
+            this.canvasMesh.visible = settings.enabled && settings.mode !== DrawMode.Off;
+
+            // Base radius 100. Scale = 1 + (altitude / 100)
+            const alt = settings.currentAltitude !== undefined ? settings.currentAltitude : settings.altitude;
+            const scale = 1.0 + (alt / 100.0);
+            this.canvasMesh.scale.setScalar(scale);
+
+            if (this.canvasMesh.material instanceof THREE.MeshBasicMaterial) {
+                this.canvasMesh.material.opacity = settings.enabled ? 0.05 : 0;
+            }
         }
+
+        // Sync Layers
+        this.syncLayers(settings.layers);
 
         // Toggle ghost cursor visibility
         if (this.ghostMesh) {
@@ -243,38 +226,171 @@ export class InkManager {
         }
     }
 
-    public setPlanet(planet: THREE.Object3D | null) {
-        if (this.planetObj === planet) return;
-
-        if (this.pointsMesh) {
-            if (this.pointsMesh.parent) {
-                this.pointsMesh.parent.remove(this.pointsMesh);
-            }
-            if (planet) {
-                planet.add(this.pointsMesh);
-                // Also add ghost mesh to planet to follow rotaton
-                if (this.ghostMesh) planet.add(this.ghostMesh);
-            } else {
-                this.scene.add(this.pointsMesh);
-                if (this.ghostMesh) this.scene.add(this.ghostMesh);
+    private syncLayers(layers: DrawingLayer[]) {
+        // 1. Remove meshes for deleted layers
+        const layerIds = new Set(layers.map(l => l.id));
+        for (const [id, mesh] of this.layerMeshes) {
+            if (!layerIds.has(id)) {
+                if (mesh.parent) mesh.parent.remove(mesh);
+                mesh.geometry.dispose();
+                (mesh.material as THREE.Material).dispose();
+                this.layerMeshes.delete(id);
             }
         }
-        this.planetObj = planet;
+
+        // 2. Create/Update meshes
+        layers.forEach(layer => {
+            let mesh = this.layerMeshes.get(layer.id);
+
+            // Create if new
+            if (!mesh) {
+                // Initialize buffer with enough space
+                const maxPoints = 50000;
+                // Reuse layer points if they are large enough, otherwise create new
+                // For now, assume layer.points is the source. 
+                // To allow dynamic drawing, we need a fixed large buffer and partial update.
+                // We'll create a fresh buffer and copy layer points into it.
+                // Or better: Use layer.points directly if it's already a Float32Array of correct size.
+                // Given the type definition, layer.points is likely just the data. 
+                // We'll allocate a standard large buffer for editing.
+
+                const positions = new Float32Array(maxPoints * 3);
+                const sizes = new Float32Array(maxPoints);
+                const alphas = new Float32Array(maxPoints);
+
+                // Copy existing data
+                positions.set(layer.points);
+                // Fill defaults for sizes/alphas (since we don't persist them yet in DrawingLayer)
+                sizes.fill(10.0);
+                alphas.fill(1.0);
+
+                const geometry = new THREE.BufferGeometry();
+                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+                geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1).setUsage(THREE.DynamicDrawUsage));
+                geometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1).setUsage(THREE.DynamicDrawUsage));
+                geometry.setDrawRange(0, layer.count);
+
+                const material = new THREE.ShaderMaterial({
+                    vertexShader: inkVertexShader,
+                    fragmentShader: inkFragmentShader,
+                    uniforms: {
+                        uTime: { value: 0 },
+                        uColor: { value: new THREE.Color(layer.color) },
+                        uOpacity: { value: layer.opacity },
+                        uFlow: { value: 0.0 },
+                        uBloom: { value: 0.0 }, // Can add visual style to Layer later
+                        size: { value: 1.0 }
+                    },
+                    transparent: true,
+                    depthWrite: false,
+                    blending: layer.blending === 'additive' ? THREE.AdditiveBlending : THREE.NormalBlending
+                });
+
+                mesh = new THREE.Points(geometry, material);
+                mesh.frustumCulled = false;
+                mesh.renderOrder = 999;
+                mesh.userData = { layerId: layer.id };
+
+                this.layerMeshes.set(layer.id, mesh);
+                this.scene.add(mesh); // Initial add
+            }
+
+            if (mesh) {
+                mesh.visible = layer.visible;
+                const mat = mesh.material as THREE.ShaderMaterial;
+                mat.uniforms.uColor.value.set(layer.color);
+                mat.uniforms.uOpacity.value = layer.opacity;
+
+                this.updateLayerTransform(mesh, layer);
+                this.reparentMesh(mesh, layer.bindPlanetId);
+            }
+        });
+    }
+
+    private updateLayerTransform(mesh: THREE.Points, layer: DrawingLayer) {
+        mesh.rotation.set(
+            THREE.MathUtils.degToRad(layer.tilt.x),
+            THREE.MathUtils.degToRad(layer.tilt.y),
+            THREE.MathUtils.degToRad(layer.tilt.z)
+        );
+
+        const alt = layer.altitude || 0;
+        const altitudeScale = 1.0 + (alt / 100.0);
+        const finalScale = layer.scale * altitudeScale;
+        mesh.scale.setScalar(finalScale);
+
+        if (layer.rotationSpeed !== 0) {
+            mesh.userData.rotationSpeed = layer.rotationSpeed;
+        } else {
+            mesh.userData.rotationSpeed = 0;
+        }
+    }
+
+    private reparentMesh(mesh: THREE.Points, planetId: string | null) {
+        // If current active planet matches target, attach to it.
+        if (this.planetGroup && this.planetGroup.userData.planetId === planetId) {
+            if (mesh.parent !== this.planetGroup) {
+                this.planetGroup.add(mesh);
+            }
+        } else {
+            // Fallback to scene
+            if (mesh.parent !== this.scene) {
+                this.scene.add(mesh);
+            }
+        }
+    }
+
+    public setPlanet(planetGroup: THREE.Object3D | null) {
+        if (this.planetGroup === planetGroup) return;
+
+        if (this.planetGroup && this.canvasMesh) {
+            this.planetGroup.remove(this.canvasMesh);
+        }
+
+        this.planetGroup = planetGroup;
+
+        if (planetGroup && this.canvasMesh) {
+            planetGroup.add(this.canvasMesh);
+            this.canvasMesh.visible = this.settings?.enabled ?? false;
+        } else if (this.canvasMesh) {
+            this.scene.add(this.canvasMesh);
+            this.canvasMesh.visible = false;
+        }
+
+        // Re-parent layers
+        if (this.settings) {
+            this.syncLayers(this.settings.layers);
+        }
     }
 
     public update(time: number) {
-        if (this.material) {
-            this.material.uniforms.uTime.value = time;
-        }
+        this.layerMeshes.forEach(mesh => {
+            const mat = mesh.material as THREE.ShaderMaterial;
+            if (mat.uniforms) {
+                mat.uniforms.uTime.value = time;
+
+                if (mesh.userData.rotationSpeed) {
+                    mesh.rotation.y += mesh.userData.rotationSpeed * 0.001;
+                }
+            }
+        });
     }
 
     public dispose() {
         this.removeListeners();
-        if (this.pointsMesh) {
-            if (this.pointsMesh.parent) this.pointsMesh.parent.remove(this.pointsMesh);
-            this.pointsMesh.geometry.dispose();
-            (this.pointsMesh.material as THREE.Material).dispose();
+        this.layerMeshes.forEach(mesh => {
+            if (mesh.parent) mesh.parent.remove(mesh);
+            mesh.geometry.dispose();
+            (mesh.material as THREE.Material).dispose();
+        });
+        this.layerMeshes.clear();
+
+        if (this.canvasMesh) {
+            if (this.canvasMesh.parent) this.canvasMesh.parent.remove(this.canvasMesh);
+            this.canvasMesh.geometry.dispose();
+            (this.canvasMesh.material as THREE.Material).dispose();
         }
+
         if (this.ghostMesh) {
             if (this.ghostMesh.parent) this.ghostMesh.parent.remove(this.ghostMesh);
             this.ghostMesh.geometry.dispose();
@@ -297,7 +413,6 @@ export class InkManager {
     private onPointerDown(e: PointerEvent) {
         if (!this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
         if (e.button !== 0) return;
-
         this.isDrawing = true;
     }
 
@@ -307,9 +422,8 @@ export class InkManager {
 
     private onPointerMove(e: PointerEvent) {
         if (!this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
-        if (!this.planetObj) return;
+        if (!this.canvasMesh) return;
 
-        // Calculate Mouse Position normalized [-1, 1]
         const rect = this.domElement.getBoundingClientRect();
         const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
         const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -317,20 +431,11 @@ export class InkManager {
         this.mouse.set(x, y);
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        const intersects = this.raycaster.intersectObject(this.planetObj, true);
+        // Raycast against Interaction Canvas
+        const intersects = this.raycaster.intersectObject(this.canvasMesh, false);
 
-        // Filter intersects
-        let hit: THREE.Intersection | null = null;
-        for (const intersect of intersects) {
-            if (intersect.object === this.pointsMesh || intersect.object === this.ghostMesh) {
-                continue;
-            }
-            if (!intersect.object.visible) continue;
-            hit = intersect;
-            break;
-        }
-
-        if (hit) {
+        if (intersects.length > 0) {
+            const hit = intersects[0];
             const point = hit.point;
             const pressure = (e.pressure !== undefined && e.pressure > 0) ? e.pressure : 0.5;
             const effectivePressure = e.pointerType === 'pen' ? pressure : 1.0;
@@ -339,17 +444,12 @@ export class InkManager {
                 this.handleAddPoint(point, effectivePressure);
             }
 
-            // Update Ghost Cursor
             if (this.settings.ghostCursorEnabled) {
                 this.updateGhostCursor(point);
             }
         } else {
-            // Hide ghost cursor if not hitting planet
             if (this.ghostMesh) {
-                this.ghostMesh.position.set(0, 0, 0); // Hack: move away or clear buffer
-                // Instead of setting visible=false which might flicker, we clear the buffer
                 const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
-                posAttr.setXYZ(0, 0, 0, 0); // Just set first one to 0
                 posAttr.count = 0;
                 posAttr.needsUpdate = true;
             }
@@ -357,14 +457,13 @@ export class InkManager {
     }
 
     private updateGhostCursor(worldPoint: THREE.Vector3) {
-        if (!this.ghostMesh || !this.planetObj || !this.settings) return;
+        if (!this.ghostMesh || !this.planetGroup || !this.settings) return;
 
+        // Convert world to local (Canvas Space = Planet Space)
         const localPoint = worldPoint.clone();
-        this.planetObj.worldToLocal(localPoint);
+        this.planetGroup.worldToLocal(localPoint);
 
-        // Apply altitude
-        const len = localPoint.length();
-        localPoint.normalize().multiplyScalar(len + this.settings.altitude);
+        // Canvas is already at 'Altitude', so localPoint is correct.
 
         const points = this.generateSymmetryPoints(localPoint);
         const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
@@ -375,45 +474,68 @@ export class InkManager {
             }
         });
 
-        // Hide unused points
         posAttr.setDrawRange(0, points.length);
         posAttr.needsUpdate = true;
     }
 
     private handleAddPoint(worldPoint: THREE.Vector3, pressure: number) {
-        if (!this.settings || !this.planetObj) return;
-        if (this.pointCount >= this.maxPoints) return;
+        if (!this.settings || !this.activeLayerId || !this.planetGroup) return;
+
+        const layer = this.settings.layers.find(l => l.id === this.activeLayerId);
+        if (!layer) return;
+
+        const mesh = this.layerMeshes.get(layer.id);
+        if (!mesh) return;
+
+        // Transform Logic:
+        // Point is on Canvas (Planet Local).
+        // Layer has additional transform (Tilt, Scale).
+        // We want the point to appear at 'worldPoint' visually.
+        // But the Mesh is transformed. So we must Inverse-Transform the point into Mesh Space.
 
         const localPoint = worldPoint.clone();
-        this.planetObj.worldToLocal(localPoint);
+        this.planetGroup.worldToLocal(localPoint);
 
-        const len = localPoint.length();
-        localPoint.normalize().multiplyScalar(len + this.settings.altitude);
+        // Inverse Transform
+        mesh.updateMatrix();
+        const invMatrix = mesh.matrix.clone().invert();
+        localPoint.applyMatrix4(invMatrix);
 
         const pointsToAdd = this.generateSymmetryPoints(localPoint);
 
-        pointsToAdd.forEach(p => {
-            if (this.pointCount >= this.maxPoints) return;
+        const geometry = mesh.geometry;
+        const positions = geometry.attributes.position.array as Float32Array;
+        const sizes = geometry.attributes.aSize.array as Float32Array;
+        const alphas = geometry.attributes.aAlpha.array as Float32Array;
 
-            const i = this.pointCount;
-            this.positions[i * 3] = p.x;
-            this.positions[i * 3 + 1] = p.y;
-            this.positions[i * 3 + 2] = p.z;
+        pointsToAdd.forEach(p => {
+            if (layer.count >= positions.length / 3) return;
+
+            const i = layer.count;
+            positions[i * 3] = p.x;
+            positions[i * 3 + 1] = p.y;
+            positions[i * 3 + 2] = p.z;
 
             const baseSize = this.settings!.brush.size || 10;
-            const size = baseSize * 0.5 * (this.settings!.brush.usePressure ? pressure : 1.0);
-            this.sizes[i] = size;
-            this.alphas[i] = this.settings!.brush.usePressure ? pressure : 1.0;
+            sizes[i] = baseSize * (this.settings!.brush.usePressure ? pressure : 1.0);
+            alphas[i] = this.settings!.brush.usePressure ? pressure : 1.0;
 
-            this.pointCount++;
+            layer.count++;
+
+            // Sync back to layer.points so it persists?
+            // Currently layer.count increases, but layer.points is not automatically updated 
+            // if we are writing to `positions` which is a copy.
+            // Wait, we initialized positions from layer.points. 
+            // But layer.points might be a smaller array initially.
+            // For true persistence, `layer.points` should reference this buffer or we copy back.
+            // For now, let's assume `positions` is the authoritative buffer while session is active.
+            // If we save, we'd need to serialize `positions` up to `layer.count`.
         });
 
-        if (this.geometry) {
-            this.geometry.attributes.position.needsUpdate = true;
-            this.geometry.attributes.aSize.needsUpdate = true;
-            this.geometry.attributes.aAlpha.needsUpdate = true;
-            this.geometry.setDrawRange(0, this.pointCount);
-        }
+        geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.aSize.needsUpdate = true;
+        geometry.attributes.aAlpha.needsUpdate = true;
+        geometry.setDrawRange(0, layer.count);
     }
 
     private generateSymmetryPoints(localPoint: THREE.Vector3): THREE.Vector3[] {
@@ -421,7 +543,6 @@ export class InkManager {
         const { mode, segments } = this.settings;
         const points: THREE.Vector3[] = [];
 
-        // Helper to add unique points (simple dist check could be added if needed)
         const add = (p: THREE.Vector3) => points.push(p);
 
         if (mode === DrawMode.Normal) {
@@ -438,58 +559,21 @@ export class InkManager {
             add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
             add(new THREE.Vector3(-localPoint.x, -localPoint.y, localPoint.z));
         } else if (mode === DrawMode.Diagonal) {
-            // Mirror across x=y plane (z unchanged), and x=-y
-            // Simple approach: swap x and y
             add(localPoint);
-            add(new THREE.Vector3(localPoint.y, localPoint.x, localPoint.z)); // x=y mirroring?
-            // For full 4-way diagonal:
+            add(new THREE.Vector3(localPoint.y, localPoint.x, localPoint.z));
             add(new THREE.Vector3(-localPoint.y, -localPoint.x, localPoint.z));
         } else if (mode === DrawMode.Radial || mode === DrawMode.Kaleidoscope || mode === DrawMode.PlanetSpin) {
-            // Radial Symmetry around Y axis (North Pole)
             const angleStep = (Math.PI * 2) / segments;
             const spherical = new THREE.Spherical().setFromVector3(localPoint);
-
             for (let i = 0; i < segments; i++) {
                 const theta = spherical.theta + angleStep * i;
                 const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
                 add(p);
-
-                if (mode === DrawMode.Kaleidoscope) {
-                    // Internal mirror within the sector
-                    // Mirror theta? 
-                    // Simple kaleidoscope: mirror across the sector bisector
-                    // Or mirror across X then rotate?
-                    // Approach: Mirror theta relative to current sector start
-                    // Actually, kaleidoscope usually means mirror neighbor.
-                    // Let's mirror the generated point across the plane defined by its angle
-                    // Simplified: just mirror across X plane first, then rotate all?
-                    // Proper implementation:
-                    // 1. Convert to spherical
-                    // 2. Modulo angle to get into first sector
-                    // 3. Mirror if in second half of sector
-                    // 4. Rotate back to all sectors
-                }
             }
         } else if (mode === DrawMode.Antipodal) {
             add(localPoint);
             add(localPoint.clone().negate());
-        } else if (mode === DrawMode.Tetrahedral) {
-            // 4 vertices of tetrahedron. Hard to map arbitrary point. 
-            // Usually this means applying the symmetry group of the tetrahedron.
-            // Tetrahedron group T has 12 rotational symmetries.
-            // For a drawing tool, we usually want to replicate the stroke on all faces.
-            // Simplified: Reference the vertices of a tetrahedron inscribed in sphere
-            // V1(1,1,1), V2(1,-1,-1), V3(-1,1,-1), V4(-1,-1,1)
-            // Implementing full point group symmetry requires matrix operations.
-            // Placeholder: just normal for now to avoid complexity spike without math library.
-            add(localPoint);
         } else if (mode === DrawMode.Cubic) {
-            // Cube has octahedral symmetry (Oh). 48 symmetries.
-            // Simplified: 6 faces.
-            // Project point to nearest face, then replicate to other 6 faces?
-            // Or just rotate 90 deg on X, Y, Z?
-            // Let's implement basic 8 corners or 6 faces.
-            // "Play it safe": Simple 8-way octane symmetry
             add(localPoint);
             add(new THREE.Vector3(-localPoint.x, localPoint.y, localPoint.z));
             add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
@@ -502,27 +586,16 @@ export class InkManager {
             const { vortexHeight = 10, vortexScale = 0.95 } = this.settings;
             const angleStep = (Math.PI * 2) / segments;
             const spherical = new THREE.Spherical().setFromVector3(localPoint);
-
             for (let i = 0; i < segments; i++) {
                 const theta = spherical.theta + angleStep * i;
-                // Add height offset (spiral up)
-                // Note: spherical.phi is 0 at top (Y+). 
-                // We can modify radius or just translate Y.
-                // Vortex usually moves UP.
                 const yOffset = i * (vortexHeight / segments);
-
-                // Calc position
                 const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
                 p.y += yOffset;
-
-                // Scale down
                 const scale = Math.pow(vortexScale, i);
                 p.multiplyScalar(scale);
-
                 add(p);
             }
-        }
-        else {
+        } else {
             add(localPoint);
         }
 

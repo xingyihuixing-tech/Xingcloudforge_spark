@@ -1675,6 +1675,31 @@ export interface MaterialPreset {
 // ==================== 绘制系统 ====================
 
 // 绘制模式
+
+export interface DrawingLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+
+  // Component Properties
+  bindPlanetId: string | null; // Which planet this is attached to
+
+  // Transform
+  tilt: { x: number; y: number; z: number };
+  scale: number;
+  altitude: number;
+  rotationSpeed: number; // Self-rotation speed
+
+  // Visuals
+  color: string;
+  opacity: number;
+  blending: 'normal' | 'additive';
+
+  // Data
+  points: Float32Array; // The actual stroke data (positions)
+  count: number; // Number of active points
+}
+
 export enum DrawMode {
   Off = 'off',
   // 2D Plane Symmetry
@@ -1716,25 +1741,28 @@ export interface DrawSettings {
   enabled: boolean;
   mode: DrawMode;
 
-  // 对称参数
-  segments: number;       // 对称份数 2-64 (用于 Radial/Kaleidoscope/PlanetSpin/Vortex)
+  // Active Layer State
+  activeLayerId: string | null;
+  layers: DrawingLayer[];
 
-  // 涡旋参数 (Vortex Mode)
+  // Symmetry parameters (Applied when drawing new points)
+  segments: number;       // 对称份数 2-64
+
+  // Vortex parameters (Vortex Mode)
   vortexHeight?: number;  // 涡旋高度偏移 per segment
-  vortexScale?: number;   // 涡旋缩放 per segment (e.g. 0.95 = shrinking)
+  vortexScale?: number;   // 涡旋缩放 per segment
 
-  // 3D 空间参数
-  altitude: number;       // 绘制高度 (Offset from surface)
-  bindPlanetId: string | null; // 绑定的星球ID
-
-  // 笔刷
+  // Brush Settings (Applied to new points in active layer)
   brush: BrushSettings;
 
-  // 墨迹效果参数
-  inkFlow: number;        // 墨迹流动感 (Turbulence)
+  // Global Ink Effects (can be per-layer later)
+  inkFlow: number;        // 墨迹流动感
   inkBloom: number;       // 墨迹辉光
 
-  // 交互
+  // Interaction
   ghostCursorEnabled: boolean; // 是否启用幽灵光标预览
+
+  // Transient State (Not saved in layer)
+  currentAltitude: number; // Current drawing altitude
 }
 
