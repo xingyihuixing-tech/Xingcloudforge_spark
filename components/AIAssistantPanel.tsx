@@ -350,50 +350,106 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         setIsGenerating(true);
 
         try {
-            // 灵感模式：生成图片
-            const res = await fetch('/api/ai/image', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    prompt: prompt,
-                    model: imageModel,
-                    subMode: inspirationSubMode,
-                    imageBase64: uploadedImage || undefined
-                })
-            });
-            const data = await res.json();
-
-            if (data.url) {
-                // 获取 AI 命名
-                let suggestedName = 'AI生成';
-                try {
-                    const nameRes = await fetch('/api/ai/name', {
+            // 自由对话模式：根据模型类型决定 API
+            if (inspirationSubMode === 'freeChat') {
+                if (freeChatModelType === 'chat') {
+                    // 使用 Chat API，无系统提示词，带历史消息
+                    const historyMessages = messages.map(m => ({
+                        role: m.role,
+                        content: m.content
+                    }));
+                    const res = await fetch('/api/ai/chat', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            imageUrl: data.url,
-                            subMode: inspirationSubMode
+                            messages: [...historyMessages, { role: 'user', content: prompt }],
+                            model: chatModel,
+                            // freeChat 模式不使用系统提示词
+                            noSystemPrompt: true
                         })
                     });
-                    const nameData = await nameRes.json();
-                    suggestedName = nameData.name || suggestedName;
-                } catch (e) {
-                    console.error('Name API error:', e);
+                    const data = await res.json();
+                    if (data.content) {
+                        setMessages(prev => [...prev, {
+                            id: generateId(),
+                            role: 'assistant',
+                            content: data.content
+                        }]);
+                    } else {
+                        throw new Error(data.error || '对话失败');
+                    }
+                } else {
+                    // 使用 Image API，无特殊提示词
+                    const res = await fetch('/api/ai/image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt: prompt,
+                            model: imageModel,
+                            // freeChat 模式不使用 subMode 模板
+                            subMode: undefined,
+                            imageBase64: currentAttachedImage || undefined
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.url) {
+                        setMessages(prev => [...prev, {
+                            id: generateId(),
+                            role: 'assistant',
+                            content: '🖼️ 生成完成',
+                            type: 'image',
+                            imageUrl: data.url
+                        }]);
+                    } else {
+                        throw new Error(data.error || '图片生成失败');
+                    }
                 }
-
-                setMessages(prev => [...prev, {
-                    id: generateId(),
-                    role: 'assistant',
-                    content: `✨ 生成完成`,
-                    type: 'image',
-                    imageUrl: data.url,
-                    subMode: inspirationSubMode,
-                    suggestedName
-                }]);
-
-                clearUploadedImage();
             } else {
-                throw new Error(data.error || '图片生成失败');
+                // 灵感模式：生成图片 (原有逻辑)
+                const res = await fetch('/api/ai/image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        model: imageModel,
+                        subMode: inspirationSubMode,
+                        imageBase64: currentAttachedImage || undefined
+                    })
+                });
+                const data = await res.json();
+
+                if (data.url) {
+                    // 获取 AI 命名
+                    let suggestedName = 'AI生成';
+                    try {
+                        const nameRes = await fetch('/api/ai/name', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                imageUrl: data.url,
+                                subMode: inspirationSubMode
+                            })
+                        });
+                        const nameData = await nameRes.json();
+                        suggestedName = nameData.name || suggestedName;
+                    } catch (e) {
+                        console.error('Name API error:', e);
+                    }
+
+                    setMessages(prev => [...prev, {
+                        id: generateId(),
+                        role: 'assistant',
+                        content: `✨ 生成完成`,
+                        type: 'image',
+                        imageUrl: data.url,
+                        subMode: inspirationSubMode,
+                        suggestedName
+                    }]);
+
+                    clearUploadedImage();
+                } else {
+                    throw new Error(data.error || '图片生成失败');
+                }
             }
         } catch (err: any) {
             setMessages(prev => [...prev, {
@@ -405,7 +461,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         } finally {
             setIsGenerating(false);
         }
-    }, [inputValue, inspirationSubMode, imageModel, uploadedImage, isGenerating, clearUploadedImage]);
+    }, [inputValue, inspirationSubMode, imageModel, chatModel, freeChatModelType, uploadedImage, isGenerating, clearUploadedImage, messages]);
 
     // === 保存预设 ===
     const handleSavePreset = useCallback(async (msg: ChatMessage, customName?: string) => {
@@ -830,8 +886,17 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                             {CHAT_MODELS.map(m => (
                                                                 <button
                                                                     key={m.id}
-                                                                    onClick={() => { setChatModel(m.id); setShowModelSelector(false); }}
-                                                                    className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}
+                                                                    onClick={() => {
+                                                                        setChatModel(m.id);
+                                                                        if (inspirationSubMode === 'freeChat') {
+                                                                            setFreeChatModelType('chat');
+                                                                        }
+                                                                        setShowModelSelector(false);
+                                                                    }}
+                                                                    className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${inspirationSubMode === 'freeChat'
+                                                                            ? (freeChatModelType === 'chat' && chatModel === m.id ? 'bg-white/10 text-white ring-1 ring-white/30' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                            : (chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                        }`}
                                                                 >
                                                                     {m.name}
                                                                 </button>
@@ -842,8 +907,17 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                             {IMAGE_MODELS.map(m => (
                                                                 <button
                                                                     key={m.id}
-                                                                    onClick={() => { setImageModel(m.id); setShowModelSelector(false); }}
-                                                                    className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}
+                                                                    onClick={() => {
+                                                                        setImageModel(m.id);
+                                                                        if (inspirationSubMode === 'freeChat') {
+                                                                            setFreeChatModelType('image');
+                                                                        }
+                                                                        setShowModelSelector(false);
+                                                                    }}
+                                                                    className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${inspirationSubMode === 'freeChat'
+                                                                            ? (freeChatModelType === 'image' && imageModel === m.id ? 'bg-white/10 text-white ring-1 ring-white/30' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                            : (imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                        }`}
                                                                 >
                                                                     {m.name}
                                                                 </button>
