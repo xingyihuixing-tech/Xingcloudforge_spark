@@ -479,16 +479,17 @@ canvas {
 }
 
 .xingspark-logo {
-  font-family: 'Pacifico', cursive;
+  font-family: var(--xing-font, 'Pacifico'), cursive;
   font-size: 1.4rem;
+  /* 使用 CSS 变量接收动态颜色，默认为蓝粉渐变 */
   background: conic-gradient(from var(--xing-angle) at var(--xing-cx) var(--xing-cy),
-      #71b0ff, #FFB6C1, #2bf6a5, #37f1d2, #71b0ff);
+      var(--xing-c1, #71b0ff), var(--xing-c2, #FFB6C1), var(--xing-c3, #2bf6a5), var(--xing-c4, #37f1d2), var(--xing-c1, #71b0ff));
   animation: xing-rotate-angle 4s linear infinite, xing-orbit-move 10s ease-in-out infinite;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
   color: transparent;
-  filter: saturate(120%) brightness(105%);
+  filter: var(--xing-filter, saturate(120%) brightness(105%));
   cursor: pointer;
   user-select: none;
 }
@@ -528,16 +529,11 @@ canvas {
   /* Fixed Height */
   display: flex;
   flex-direction: column;
-  /* Glassmorphism - Dark Mode Only */
-  background: rgba(15, 23, 42, 0.12);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  /* Glassmorphism - 3% 不透明度，模糊调低 */
+  background: rgba(15, 23, 42, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 16px;
-  box-shadow:
-    0 24px 48px rgba(0, 0, 0, 0.15),
-    0 8px 16px rgba(0, 0, 0, 0.1),
-    0 0 20px rgba(6, 182, 212, 0.15),
-    0 0 40px rgba(244, 114, 182, 0.1);
   overflow: hidden;
 }
 

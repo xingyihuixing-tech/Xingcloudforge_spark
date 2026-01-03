@@ -510,32 +510,31 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     {/* 标题栏 (Drag Handle) */}
                     <div className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5">
                         <div className="flex items-center gap-2 relative">
-                            {/* XingSpark Logo with Dynamic Gradient (Reference Style) */}
-                            <span
-                                className={`cursor-pointer select-none ${logoState === 'blinking' ? 'animate-pulse' : ''}`}
-                                style={{
-                                    fontFamily: `'${xingConfig.font}', cursive`,
-                                    fontSize: '1.4rem',
-                                    // 归一化颜色数组确保至少 4 个颜色点
-                                    background: `conic-gradient(from 0deg at 50% 50%, ${(() => {
-                                        const colors = xingConfig.gradient.colors;
-                                        const normalized = colors.length >= 4 ? colors : [...colors, ...Array(4 - colors.length).fill(colors[colors.length - 1])];
-                                        return [...normalized, normalized[0]].join(', ');
-                                    })()})`,
-                                    WebkitBackgroundClip: 'text',
-                                    backgroundClip: 'text',
-                                    WebkitTextFillColor: 'transparent',
-                                    color: 'transparent',
-                                    filter: `saturate(${xingConfig.gradient.saturation}%) brightness(${xingConfig.gradient.brightness}%)`,
-                                }}
-                                onDoubleClick={handleLogoDoubleClick}
-                                title="双击打开设置"
-                            >
-                                <span style={{ fontSize: '1em' }}>X</span>
-                                <span style={{ fontSize: '0.9em' }}>ing</span>
-                                <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
-                                <span style={{ fontSize: '0.9em' }}>park</span>
-                            </span>
+                            {/* XingSpark Logo with Dynamic Gradient - 使用 CSS 类名触发动画 */}
+                            {(() => {
+                                const colors = xingConfig.gradient.colors;
+                                const normalized = colors.length >= 4 ? colors : [...colors, ...Array(4 - colors.length).fill(colors[colors.length - 1])];
+                                return (
+                                    <span
+                                        className={`xingspark-logo ${logoState === 'blinking' ? 'blinking' : ''}`}
+                                        style={{
+                                            '--xing-font': `'${xingConfig.font}'`,
+                                            '--xing-c1': normalized[0],
+                                            '--xing-c2': normalized[1],
+                                            '--xing-c3': normalized[2],
+                                            '--xing-c4': normalized[3],
+                                            '--xing-filter': `saturate(${xingConfig.gradient.saturation}%) brightness(${xingConfig.gradient.brightness}%)`,
+                                        } as React.CSSProperties}
+                                        onDoubleClick={handleLogoDoubleClick}
+                                        title="双击打开设置"
+                                    >
+                                        <span style={{ fontSize: '1em' }}>X</span>
+                                        <span style={{ fontSize: '0.9em' }}>ing</span>
+                                        <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
+                                        <span style={{ fontSize: '0.9em' }}>park</span>
+                                    </span>
+                                );
+                            })()}
                             {/* 展开/收起指示 */}
                             {showXingSettings && (
                                 <span className="text-xs text-white/30 ml-2">▼</span>
@@ -662,20 +661,61 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
                                 {/* 6.2 Strict UI: Input Box Flowing Glow (Conditional) */}
                                 <div
-                                    className={`flex items-end gap-2 bg-white/5 rounded-xl p-1 transition-colors ai-input-container ${isRefining ? 'refining' : ''}`}
+                                    className={`flex flex-col bg-white/5 rounded-xl transition-colors ai-input-container ${isRefining ? 'refining' : ''}`}
                                     onDrop={handleDrop}
                                     onDragOver={handleDragOver}
                                     style={{
-                                        // 常态静态光晕 + 边框颜色
+                                        // 常态静态光晕 + 边框颜色 (增强版)
                                         borderColor: isRefining ? 'transparent' : `rgba(${parseInt(xingConfig.inputGlow.colors[0].slice(1, 3), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(3, 5), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(5, 7), 16)}, ${xingConfig.inputGlow.borderOpacity})`,
                                         boxShadow: isRefining ? undefined : `
-                                            0 0 ${xingConfig.inputGlow.thickBlur}px ${xingConfig.inputGlow.colors[0]}${Math.round(xingConfig.inputGlow.thickOpacity * 255).toString(16).padStart(2, '0')},
-                                            0 0 ${xingConfig.inputGlow.thinBlur}px ${xingConfig.inputGlow.colors[1] || xingConfig.inputGlow.colors[0]}${Math.round(xingConfig.inputGlow.thinOpacity * 255).toString(16).padStart(2, '0')}
+                                            0 0 ${xingConfig.inputGlow.thickBlur * 2}px ${xingConfig.inputGlow.colors[0]}${Math.round(Math.min(xingConfig.inputGlow.thickOpacity * 1.5, 1) * 255).toString(16).padStart(2, '0')},
+                                            0 0 ${xingConfig.inputGlow.thinBlur * 2}px ${xingConfig.inputGlow.colors[1] || xingConfig.inputGlow.colors[0]}${Math.round(Math.min(xingConfig.inputGlow.thinOpacity * 1.5, 1) * 255).toString(16).padStart(2, '0')},
+                                            0 0 ${xingConfig.inputGlow.thickBlur * 3}px ${xingConfig.inputGlow.colors[0]}20
                                         `,
                                     }}
                                 >
-                                    {/* 左：上传按钮 (+号) */}
-                                    <div className="flex-shrink-0 mb-0.5">
+                                    {/* 输入区域 - 左边textarea + 右边按钮 */}
+                                    <div className="flex items-center gap-1 p-1">
+                                        <textarea
+                                            ref={textareaRef}
+                                            value={inputValue}
+                                            onChange={e => setInputValue(e.target.value)}
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleSend();
+                                                }
+                                            }}
+                                            onPaste={handlePaste}
+                                            placeholder="输入描述..."
+                                            className="flex-1 bg-transparent text-white/90 placeholder-white/20 text-sm py-2 px-2 focus:outline-none resize-none overflow-hidden min-h-[40px]"
+                                            rows={2}
+                                        />
+                                        {/* 右侧按钮 - 固定正方形，上下居中 */}
+                                        <div className="flex-shrink-0 flex flex-col gap-1 self-center pr-1">
+                                            <button
+                                                onClick={handleRefine}
+                                                disabled={!inputValue.trim() || isRefining}
+                                                className={`w-8 h-8 flex items-center justify-center rounded-lg ${isRefining ? 'text-white animate-pulse' : 'text-white/40 hover:text-white hover:bg-white/10'} transition-colors`}
+                                                title="润色"
+                                            >
+                                                ✨
+                                            </button>
+                                            <button
+                                                onClick={handleSend}
+                                                disabled={isGenerating || !inputValue.trim()}
+                                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 text-white/90 hover:bg-white/20 transition-all disabled:opacity-30"
+                                            >
+                                                ➤
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* 分隔线 */}
+                                    <div className="border-t border-white/10 mx-2" />
+
+                                    {/* 底部工具栏: [+ 小] [模型选择] */}
+                                    <div className="flex items-center gap-2 px-2 py-1.5">
                                         <input
                                             ref={fileInputRef}
                                             type="file"
@@ -685,51 +725,21 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         />
                                         <button
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="w-8 h-8 flex items-center justify-center rounded-lg text-white/40 hover:text-white hover:bg-white/10 transition-colors text-lg"
+                                            className="w-6 h-6 flex items-center justify-center rounded text-white/30 hover:text-white hover:bg-white/10 transition-colors text-sm"
                                             title="上传"
                                         >
                                             +
                                         </button>
-                                    </div>
-
-                                    {/* 中：输入框 */}
-                                    <textarea
-                                        ref={textareaRef}
-                                        value={inputValue}
-                                        onChange={e => setInputValue(e.target.value)}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleSend();
-                                            }
-                                        }}
-                                        onPaste={handlePaste}
-                                        placeholder="输入描述..."
-                                        className="flex-1 bg-transparent text-white/90 placeholder-white/20 text-sm py-2 px-1 focus:outline-none resize-none overflow-hidden min-h-[40px]"
-                                        rows={2}
-                                    />
-
-                                    {/* 右：功能按钮 (正方形) */}
-                                    <div className="flex-shrink-0 flex gap-1 items-center pb-0.5">
-                                        <button
-                                            onClick={handleRefine}
-                                            disabled={!inputValue.trim() || isRefining}
-                                            className={`w-8 h-8 flex items-center justify-center rounded-lg ${isRefining ? 'text-white animate-pulse' : 'text-white/40 hover:text-white hover:bg-white/10'
-                                                } transition-colors`}
-                                            title="润色"
+                                        <select
+                                            value={chatModel}
+                                            onChange={e => setChatModel(e.target.value)}
+                                            className="text-[10px] text-white/40 bg-transparent border-none cursor-pointer hover:text-white/70 focus:outline-none"
                                         >
-                                            ✨
-                                        </button>
-                                        <button
-                                            onClick={handleSend}
-                                            disabled={isGenerating || !inputValue.trim()}
-                                            style={{ height: textareaRef.current ? Math.min(Math.max(textareaRef.current.scrollHeight, 40), 120) : 40 }}
-                                            className="w-10 flex items-center justify-center rounded-lg bg-white/10 text-white/90 hover:bg-white/20 transition-all disabled:opacity-30 disabled:hover:bg-white/10"
-                                        >
-                                            ➤
-                                        </button>
+                                            {CHAT_MODELS.map(m => (
+                                                <option key={m.id} value={m.id} className="bg-slate-800">{m.name}</option>
+                                            ))}
+                                        </select>
                                     </div>
-
                                 </div>
                             </div>
 
@@ -783,7 +793,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         </>
                     )}
                 </div>
-            </div>
+            </div >
         </>,
         document.body
     );
