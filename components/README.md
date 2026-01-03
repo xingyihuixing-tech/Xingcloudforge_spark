@@ -34,3 +34,11 @@
   - 地位: 输入/手势采集与转发
   - 功能: 将手势/交互数据传递给上层状态与渲染组件
 
+- XingSparkSettings.tsx
+  - 地位: AI 品牌 XingSpark 的完整设置组件
+  - 功能: 管理 Logo 风格/颜色/渐变预设、对话字体、输入框光晕、用户消息气泡样式
+  - 导出: XingSparkConfig, DEFAULT_XING_CONFIG, UserMsgConfig, CHAT_FONT_OPTIONS
+
+- AIAssistantPanel.tsx
+  - 地位: AI 交互面板主入口
+  - 功能: 灵感模式图片生成、消息渲染、XingSpark 设置集成、模型选择
