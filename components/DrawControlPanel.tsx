@@ -42,7 +42,8 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
 
     // Action: Switch Planet (Instance)
     const switchInstance = (planetId: string) => {
-        const existingInstance = settings.instances.find(i => i.bindPlanetId === planetId);
+        const instances = settings.instances || [];
+        const existingInstance = instances.find(i => i.bindPlanetId === planetId);
 
         if (existingInstance) {
             setSettings(prev => ({ ...prev, activeInstanceId: existingInstance.id }));
@@ -75,7 +76,7 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
             visible: true,
             tilt: { x: 0, y: 0, z: 0 },
             scale: 1,
-            altitude: settings.altitude || 10,
+            altitude: 10, // Default altitude for new layers
             rotationSpeed: 0,
             projection: settings.projection,
             brushType: settings.brush.type,
@@ -427,7 +428,7 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                                         key={m.id}
                                         onClick={() => updateSymmetry({ mode: m.id })}
                                         className={`py-1 rounded text-[10px] transition-all border
-                                             ${settings.symmetry.mode === m.id
+                                             ${settings.symmetry?.mode === m.id
                                                 ? 'bg-purple-600/30 text-purple-200 border-purple-500/50'
                                                 : 'bg-black/20 text-gray-400 border-transparent hover:bg-white/5'}`}
                                     >
@@ -437,13 +438,13 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                             </div>
 
                             {/* Symmetry Params */}
-                            {settings.symmetry.mode === SymmetryMode.Mirror && (
+                            {settings.symmetry?.mode === SymmetryMode.Mirror && (
                                 <div className="flex gap-2">
                                     {['x', 'y', 'quad'].map(axis => (
                                         <button
                                             key={axis}
                                             onClick={() => updateSymmetry({ mirrorAxis: axis as any })}
-                                            className={`px-2 py-1 text-[10px] rounded border ${settings.symmetry.mirrorAxis === axis ? 'bg-purple-500/30 border-purple-500' : 'border-white/10'}`}
+                                            className={`px-2 py-1 text-[10px] rounded border ${settings.symmetry?.mirrorAxis === axis ? 'bg-purple-500/30 border-purple-500' : 'border-white/10'}`}
                                         >
                                             {axis.toUpperCase()}轴
                                         </button>
@@ -451,15 +452,15 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                                 </div>
                             )}
 
-                            {(settings.symmetry.mode === SymmetryMode.Radial || settings.symmetry.mode === SymmetryMode.Spiral) && (
+                            {(settings.symmetry?.mode === SymmetryMode.Radial || settings.symmetry?.mode === SymmetryMode.Spiral) && (
                                 <div className="space-y-1">
                                     <div className="flex justify-between text-[10px] text-gray-500">
                                         <span>份数</span>
-                                        <span>{settings.symmetry.segments}</span>
+                                        <span>{settings.symmetry?.segments}</span>
                                     </div>
                                     <input
                                         type="range" min="2" max="32" step="1"
-                                        value={settings.symmetry.segments}
+                                        value={settings.symmetry?.segments || 8}
                                         onChange={(e) => updateSymmetry({ segments: parseInt(e.target.value) })}
                                         className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
                                     />
@@ -471,7 +472,7 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                         <div className="space-y-1 pt-2 border-t border-white/5">
                             <div className="flex justify-between text-[10px] text-gray-500">
                                 <span>画板透明度 (辅助线)</span>
-                                <span>{(settings.canvasOpacity * 100).toFixed(0)}%</span>
+                                <span>{((settings.canvasOpacity || 0.3) * 100).toFixed(0)}%</span>
                             </div>
                             <input
                                 type="range" min="0" max="1" step="0.1"

@@ -265,8 +265,9 @@ export class InkManager {
     public setSettings(settings: DrawSettings) {
         this.settings = settings;
 
-        // 1. Resolve Active Instance
-        const activeInstance = settings.instances.find(i => i.id === settings.activeInstanceId);
+        // 1. Resolve Active Instance (Defensive: handle legacy settings without instances)
+        const instances = settings.instances || [];
+        const activeInstance = instances.find(i => i.id === settings.activeInstanceId);
 
         if (activeInstance) {
             this.activeLayerId = activeInstance.activeLayerId;
@@ -275,7 +276,6 @@ export class InkManager {
             this.syncLayers([]); // No instance, clear layers
         }
 
-        // 2. Update Canvas State
         // 2. Update Canvas State
         const isEnabled = settings.enabled;
         if (this.canvasMesh) {
@@ -329,13 +329,14 @@ export class InkManager {
         // For now, assume Sphere Projection default
         // Start radius = Planet Radius (e.g. 100) + Altitude
         const baseRadius = 100; // Fixed planet radius assumption or get from targetPlanet bounding box
-        const altitude = this.settings.altitude || 10;
+        const altitude = 10; // Default altitude since new DrawSettings no longer has this at top level
         const radius = baseRadius + altitude;
 
-        // Symmetry Settings
-        const sym = this.settings.symmetry;
-        const segments = (sym.mode === SymmetryMode.Radial || sym.mode === SymmetryMode.Spiral) ? sym.segments : 1;
-        const mirrors = (sym.mode === SymmetryMode.Mirror) ? (sym.mirrorAxis === 'quad' ? 4 : 2) : 1;
+        // Symmetry Settings (Defensive: handle legacy settings)
+        const sym = this.settings.symmetry || { mode: SymmetryMode.None, mirrorAxis: 'x', segments: 8 };
+        const symMode = sym.mode || SymmetryMode.None;
+        const segments = (symMode === SymmetryMode.Radial || symMode === SymmetryMode.Spiral) ? (sym.segments || 8) : 1;
+        const mirrors = (symMode === SymmetryMode.Mirror) ? (sym.mirrorAxis === 'quad' ? 4 : 2) : 1;
 
         // Total copies = segments * mirrors (simplified, usually exclusive)
         // If Mirror Mode: 2 or 4 copies.
@@ -351,7 +352,7 @@ export class InkManager {
             if (count >= positions.length / 3) break;
 
             // Generate Symmetry Points
-            const iterations = (sym.mode === SymmetryMode.Mirror) ? mirrors : segments;
+            const iterations = (symMode === SymmetryMode.Mirror) ? mirrors : segments;
 
             for (let s = 0; s < iterations; s++) {
                 if (count >= positions.length / 3) break;
@@ -360,7 +361,7 @@ export class InkManager {
                 let v = vRaw;
 
                 // --- APPY SYMMETRY (UV Space Manipulation) ---
-                if (sym.mode === SymmetryMode.Mirror) {
+                if (symMode === SymmetryMode.Mirror) {
                     if (sym.mirrorAxis === 'x' && s === 1) u = 1.0 - u;
                     if (sym.mirrorAxis === 'y' && s === 1) v = 1.0 - v;
                     if (sym.mirrorAxis === 'quad') {
@@ -381,7 +382,7 @@ export class InkManager {
                 let spiralHeight = 0;
                 let spiralScale = 1.0;
 
-                if (sym.mode === SymmetryMode.Spiral) {
+                if (symMode === SymmetryMode.Spiral) {
                     // Spiral logic: Shift Altitude or Y per segment?
                     // User want "Spiral Ring" or "Spiral Projection"?
                     // Let's assume logic: Rotate Angle + Shift Height
@@ -414,7 +415,7 @@ export class InkManager {
                 }
 
                 // --- APPLY 3D SYMMETRY (Rotation) ---
-                if (sym.mode === SymmetryMode.Radial || sym.mode === SymmetryMode.Spiral) {
+                if (symMode === SymmetryMode.Radial || symMode === SymmetryMode.Spiral) {
                     const angleStep = (Math.PI * 2) / segments;
                     const rotAngle = s * angleStep;
 
@@ -427,7 +428,7 @@ export class InkManager {
                     z = rz;
 
                     // Spiral Twist (Height offset or Radius decay?)
-                    if (sym.mode === SymmetryMode.Spiral) {
+                    if (symMode === SymmetryMode.Spiral) {
                         y += (s * 2.0); // Simple height stack
                         // x *= (1.0 - s * 0.05); // Decay radius
                         // z *= (1.0 - s * 0.05);
