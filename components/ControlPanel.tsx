@@ -2549,6 +2549,9 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   const [planetSubTab, setPlanetSubTab] = useState<'core' | 'flame' | 'rings' | 'afterimage' | 'radiation' | 'fireflies' | 'magicCircle' | 'energyBody'>('core');
   const [afterimageSubTab, setAfterimageSubTab] = useState<'texture' | 'particles'>('texture');
 
+  // 环系统选中状态
+  const [selectedSilkRingId, setSelectedSilkRingId] = useState<string | null>(null);
+
   // 设置面板状态
   const [showSettings, setShowSettings] = useState(false);
   const [showMaterialSettings, setShowMaterialSettings] = useState(false);
@@ -3810,7 +3813,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   const [coreSubTab, setCoreSubTab] = useState<'particle' | 'solid'>('particle');
   const [selectedParticleRingId, setSelectedParticleRingId] = useState<string | null>(null);
   const [selectedContinuousRingId, setSelectedContinuousRingId] = useState<string | null>(null);
-  const [ringSubTab, setRingSubTab] = useState<'particle' | 'continuous' | 'spiral'>('particle');
+  const [selectedSilkRingId, setSelectedSilkRingId] = useState<string | null>(null);
+  const [ringSubTab, setRingSubTab] = useState<'particle' | 'continuous' | 'silk' | 'spiral'>('particle');
   const [flameSubTab, setFlameSubTab] = useState<'surface' | 'jet' | 'spiral'>('surface');
   const [selectedEnergyBodyId, setSelectedEnergyBodyId] = useState<string | null>(null);
   // Solo 功能：仅显示某个能量罩
