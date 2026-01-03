@@ -1,8 +1,9 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { DrawSettings, BrushSettings, SymmetrySettings, SymmetryMode, Point2D } from '../types';
+import { DrawSettings, BrushSettings, SymmetrySettings, SymmetryMode, Drawing, DrawingLayer, BrushType, ProjectionMode } from '../types';
 
 interface HoloCanvasProps {
     settings: DrawSettings;
+    setSettings: React.Dispatch<React.SetStateAction<DrawSettings>>;
     onStrokeComplete: (points: Float32Array) => void; // Callback to send stroke data to 3D manager
 }
 
@@ -14,7 +15,7 @@ interface DrawingPoint {
     time: number;
 }
 
-const HoloCanvas: React.FC<HoloCanvasProps> = ({ settings, onStrokeComplete }) => {
+const HoloCanvas: React.FC<HoloCanvasProps> = ({ settings, setSettings, onStrokeComplete }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -40,6 +41,81 @@ const HoloCanvas: React.FC<HoloCanvasProps> = ({ settings, onStrokeComplete }) =
     // Drawing Logic
     const startStroke = (e: React.PointerEvent) => {
         if (!containerRef.current) return;
+
+        // Auto-create Drawing and Layer if needed
+        const drawings = settings.drawings || [];
+        let activeDrawing = drawings.find(d => d.id === settings.activeDrawingId);
+
+        if (!activeDrawing) {
+            // Create default Drawing
+            const newDrawing: Drawing = {
+                id: 'drawing-' + Date.now(),
+                name: '自动绘图',
+                visible: true,
+                layers: [],
+                activeLayerId: null
+            };
+            // Create default Layer
+            const newLayer: DrawingLayer = {
+                id: 'layer-' + Date.now(),
+                name: '图层 1',
+                visible: true,
+                tilt: { x: 0, y: 0, z: 0 },
+                scale: 1,
+                altitude: 10,
+                rotationSpeed: 0,
+                projection: settings.projection || ProjectionMode.Sphere,
+                brushType: settings.brush?.type || BrushType.Stardust,
+                color: settings.brush?.color || '#ffffff',
+                opacity: 1,
+                blending: 'additive',
+                params: {},
+                points: new Float32Array(),
+                count: 0
+            };
+            newDrawing.layers.push(newLayer);
+            newDrawing.activeLayerId = newLayer.id;
+
+            setSettings(prev => ({
+                ...prev,
+                drawings: [newDrawing],
+                activeDrawingId: newDrawing.id
+            }));
+        } else if (!activeDrawing.activeLayerId || !activeDrawing.layers.find(l => l.id === activeDrawing!.activeLayerId)) {
+            // Drawing exists but no active layer - create one
+            const newLayer: DrawingLayer = {
+                id: 'layer-' + Date.now(),
+                name: `图层 ${activeDrawing.layers.length + 1}`,
+                visible: true,
+                tilt: { x: 0, y: 0, z: 0 },
+                scale: 1,
+                altitude: 10,
+                rotationSpeed: 0,
+                projection: settings.projection || ProjectionMode.Sphere,
+                brushType: settings.brush?.type || BrushType.Stardust,
+                color: settings.brush?.color || '#ffffff',
+                opacity: 1,
+                blending: 'additive',
+                params: {},
+                points: new Float32Array(),
+                count: 0
+            };
+
+            setSettings(prev => ({
+                ...prev,
+                drawings: (prev.drawings || []).map(d => {
+                    if (d.id === activeDrawing!.id) {
+                        return {
+                            ...d,
+                            layers: [...d.layers, newLayer],
+                            activeLayerId: newLayer.id
+                        };
+                    }
+                    return d;
+                })
+            }));
+        }
+
         setIsDrawing(true);
         containerRef.current.setPointerCapture(e.pointerId);
 

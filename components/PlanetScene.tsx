@@ -5751,6 +5751,7 @@ interface PlanetSceneProps {
   nebulaInstancesData?: Map<string, ProcessedData>;
   sidebarOpen?: boolean;  // 侧边栏是否展开
   drawSettings?: DrawSettings;  // 绘图模式设置
+  setDrawSettings?: React.Dispatch<React.SetStateAction<DrawSettings>>;  // 绘图设置更新函数
 }
 
 // �嘥��豢㦤霈曄蔭
@@ -5761,7 +5762,7 @@ const INITIAL_CAMERA = {
 
 // ==================== 銝餌�隞?====================
 
-const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraChange, resetCameraRef, overlayMode = false, nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false, drawSettings }) => {
+const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraChange, resetCameraRef, overlayMode = false, nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false, drawSettings, setDrawSettings }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -9210,19 +9211,10 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         if (drawSettings) {
           inkManagerRef.current.setSettings(drawSettings);
 
-          // Find and set planet mesh for raycasting
-          const activeInstance = drawSettings.instances?.find(i => i.id === drawSettings.activeInstanceId);
-          const targetPlanetId = activeInstance?.bindPlanetId || settings.planets[0]?.id;
-          const targetPlanetData = targetPlanetId ? planetMeshesRef.current.get(targetPlanetId) : null;
-
-          if (targetPlanetData?.core) {
-            inkManagerRef.current.setPlanet(targetPlanetData.core);
-          } else {
-            // Fallback
-            const firstPlanetData = Array.from(planetMeshesRef.current.values())[0];
-            if (firstPlanetData?.core) {
-              inkManagerRef.current.setPlanet(firstPlanetData.core);
-            }
+          // Set planet for positioning (use first planet since drawings are now decoupled)
+          const firstPlanetData = Array.from(planetMeshesRef.current.values())[0];
+          if (firstPlanetData?.core) {
+            inkManagerRef.current.setPlanet(firstPlanetData.core);
           }
         }
 
@@ -11389,9 +11381,10 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       }}
     >
       {/* 2D Holo-Pad Overlay */}
-      {drawSettings?.enabled && (
+      {drawSettings?.enabled && setDrawSettings && (
         <HoloCanvas
           settings={drawSettings}
+          setSettings={setDrawSettings}
           onStrokeComplete={(points) => {
             if (inkManagerRef.current) {
               inkManagerRef.current.projectStroke(points);

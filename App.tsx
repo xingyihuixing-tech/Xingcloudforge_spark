@@ -37,7 +37,7 @@ import { processImage, ProcessedData, extractDominantColors } from './services/i
 const SETTINGS_STORAGE_KEY = 'nebula-viz-settings';
 
 // 数据版本 - 更新此版本号会自动清除旧数据
-const DATA_VERSION = 72;
+const DATA_VERSION = 73;
 const DATA_VERSION_KEY = 'nebula-viz-data-version';
 
 // 用户隔离的 localStorage 键生成函数
@@ -1222,6 +1222,7 @@ const App: React.FC = () => {
               nebulaInstancesData={overlayMode ? nebulaInstancesData : undefined}
               sidebarOpen={showControls}
               drawSettings={drawSettings}
+              setDrawSettings={setDrawSettings}
             />
           </div>
         )}
