@@ -480,14 +480,28 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 onMouseDown={handleDragStart}
             >
                 <div
-                    className={`w-[600px] ai-panel-container ${isRefining ? 'refining' : ''}`}
-                // 样式由 CSS .ai-panel-container 控制 (4-segment breathe borders)
+                    className="w-[600px] ai-panel-container"
+                    style={{
+                        // 6.1 Strict UI: Dynamic Border Color from XingConfig
+                        borderColor: `rgba(${parseInt(xingConfig.inputGlow.colors[0].slice(1, 3), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(3, 5), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(5, 7), 16)}, ${xingConfig.inputGlow.borderOpacity})`,
+                        // 确保 AI Panel Container 定义了 border-width，或者我们在 style 中强制覆盖
+                        borderWidth: '1px',
+                        borderStyle: 'solid'
+                    }}
                 >
-                    {/* 4-Segment Breathe Borders */}
-                    <div className="ai-panel-border-top"></div>
-                    <div className="ai-panel-border-bottom"></div>
-                    <div className="ai-panel-border-left"></div>
-                    <div className="ai-panel-border-right"></div>
+                    {/* 4-Segment Breathe Borders - colors are in CSS, but check if they need to match user config. 
+                        Ref project uses fixed gradients for borders, but user asked for "follow logo color gradient preset".
+                        If strictly following reference AISidebar.tsx (which I can't fully see all lines of right now but know the concept),
+                        the border segments inside are gradient. The MAIN container border might be separate.
+                        User said: "ai面板的边框颜色也被你硬编码了... 跟随着logo颜色的渐变预设来的".
+                        So I will actually apply the Gradient Colors to the 4 border segments if possible, 
+                        OR just the main border if that's what they meant. 
+                        Let's apply dynamic main border first as per plan.
+                     */}
+                    <div className="ai-panel-border-top" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[0]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[2]} 80%, transparent 100%)` }}></div>
+                    <div className="ai-panel-border-bottom" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[2]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[0]} 80%, transparent 100%)` }}></div>
+                    <div className="ai-panel-border-left" style={{ background: `linear-gradient(to bottom, ${xingConfig.gradient.colors[0]}80 0%, ${xingConfig.gradient.colors[1]}80 50%, transparent 100%)` }}></div>
+                    <div className="ai-panel-border-right" style={{ background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
 
                     {/* 标题栏 (Drag Handle) */}
                     <div className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5">
@@ -625,11 +639,15 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     ))}
                                 </div>
 
-                                {/* 真正的输入框 Wrapper - 应用 .ai-input-container */}
+                                {/* 6.2 Strict UI: Input Box Flowing Glow (Conditional) */}
                                 <div
                                     className={`flex items-end gap-2 bg-white/5 rounded-xl p-1 transition-colors ai-input-container ${isRefining ? 'refining' : ''}`}
                                     onDrop={handleDrop}
                                     onDragOver={handleDragOver}
+                                    style={{
+                                        // Static state: Border color matches inputGlow config
+                                        borderColor: isRefining ? 'transparent' : `rgba(${parseInt(xingConfig.inputGlow.colors[0].slice(1, 3), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(3, 5), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(5, 7), 16)}, ${xingConfig.inputGlow.borderOpacity})`,
+                                    }}
                                 >
                                     {/* 左：上传按钮 (+号) */}
                                     <div className="flex-shrink-0 mb-0.5">

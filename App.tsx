@@ -9,6 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
+import DrawControlPanel from './components/DrawControlPanel';
 import GestureHandler from './components/GestureHandler';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { UserMenu } from './components/UserMenu';
@@ -1239,14 +1240,21 @@ const App: React.FC = () => {
           title="打开 AI 助手"
         />
 
-        {/* Draw Mode Button - 星球模式或互通模式下显示 */}
-        {(appMode === 'planet' || overlayMode) && (
+        {/* Draw Mode Button - 仅星球模式显示 */}
+        {appMode === 'planet' && (
           <button
-            onClick={() => setDrawSettings(prev => ({
-              ...prev,
-              enabled: !prev.enabled,
-              mode: prev.enabled ? DrawMode.Off : DrawMode.Kaleidoscope
-            }))}
+            onClick={() => {
+              const newEnabled = !drawSettings.enabled;
+              setDrawSettings(prev => ({
+                ...prev,
+                enabled: newEnabled,
+                mode: newEnabled ? DrawMode.Kaleidoscope : DrawMode.Off
+              }));
+              // 进入绘图模式时强制打开侧边栏
+              if (newEnabled) {
+                setShowControls(true);
+              }
+            }}
             className={`absolute top-40 z-[199] w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
             style={{
               background: drawSettings.enabled
@@ -1261,7 +1269,7 @@ const App: React.FC = () => {
                 ? '1px solid rgba(255,255,255,0.4)'
                 : '1px solid rgba(255,255,255,0.25)'
             }}
-            title={drawSettings.enabled ? "关闭绘图模式" : "开启绘图模式 (🖌️ 对称绘制)"}
+            title={drawSettings.enabled ? "关闭绘图模式" : "开启绘图模式"}
           >
             <span className="text-xl">{drawSettings.enabled ? '✨' : '🖌️'}</span>
           </button>
@@ -1356,30 +1364,38 @@ const App: React.FC = () => {
         z-[100]
       `}>
         <div className="w-full md:w-80 h-full">
-          <ControlPanel
-            settings={settings}
-            setSettings={setSettings}
-            planetSettings={planetSettings}
-            setPlanetSettings={setPlanetSettings}
-            appMode={appMode}
-            onImageUpload={handleFileUpload}
-            onSampleSelect={handleLoadSample}
-            onClearMainNebula={() => setData(null)}
-            nebulaPreviewMode={nebulaPreviewMode}
-            setNebulaPreviewMode={setNebulaPreviewMode}
-            fps={fps}
-            particleCount={calculateTotalParticles()}
-            colorPickMode={colorPickMode}
-            setColorPickMode={setColorPickMode}
-            pickedColor={pickedColor}
-            onExtractColors={handleExtractColors}
-            gestureEnabled={gestureEnabled}
-            setGestureEnabled={setGestureEnabled}
-            overlayMode={overlayMode}
-            materialSettings={materialSettings}
-            nebulaPresets={nebulaPresets}
-            setNebulaPresets={setNebulaPresets}
-          />
+          {drawSettings.enabled && appMode === 'planet' ? (
+            <DrawControlPanel
+              settings={drawSettings}
+              setSettings={setDrawSettings}
+              planetSettings={planetSettings}
+            />
+          ) : (
+            <ControlPanel
+              settings={settings}
+              setSettings={setSettings}
+              planetSettings={planetSettings}
+              setPlanetSettings={setPlanetSettings}
+              appMode={appMode}
+              onImageUpload={handleFileUpload}
+              onSampleSelect={handleLoadSample}
+              onClearMainNebula={() => setData(null)}
+              nebulaPreviewMode={nebulaPreviewMode}
+              setNebulaPreviewMode={setNebulaPreviewMode}
+              fps={fps}
+              particleCount={calculateTotalParticles()}
+              colorPickMode={colorPickMode}
+              setColorPickMode={setColorPickMode}
+              pickedColor={pickedColor}
+              onExtractColors={handleExtractColors}
+              gestureEnabled={gestureEnabled}
+              setGestureEnabled={setGestureEnabled}
+              overlayMode={overlayMode}
+              materialSettings={materialSettings}
+              nebulaPresets={nebulaPresets}
+              setNebulaPresets={setNebulaPresets}
+            />
+          )}
         </div>
       </div>
 
