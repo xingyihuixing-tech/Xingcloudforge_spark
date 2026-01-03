@@ -7,7 +7,7 @@
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { Palette, ChevronDown, X } from 'lucide-react';
 
 // ============================================
@@ -171,6 +171,8 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     const [presetEditName, setPresetEditName] = useState('');
     // 删除确认状态
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+    // 当前正在编辑的预设 ID (用于保存/更新逻辑，即使颜色偏离也保持选中)
+    const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
 
     // 安全获取配置 (防止云端旧配置缺少新字段)
     const theme = config.theme ?? DEFAULT_XING_CONFIG.theme;
@@ -186,11 +188,21 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     const visibleSystemPresets = GRADIENT_PRESETS.filter(p => !hiddenIds.includes(p.id));
     const allPresets = [...visibleSystemPresets, ...userPresets];
 
-    // 匹配当前颜色的预设
-    const currentPreset = allPresets.find(p =>
+    // 颜色匹配的预设 (仅用于初始定位)
+    const colorMatchPreset = allPresets.find(p =>
         p.colors.length === gradient.colors.length &&
         p.colors.every((c: string, i: number) => c.toLowerCase() === gradient.colors[i].toLowerCase())
     );
+
+    // 初始化 editingPresetId
+    useEffect(() => {
+        if (colorMatchPreset && !editingPresetId) {
+            setEditingPresetId(colorMatchPreset.id);
+        }
+    }, [colorMatchPreset, editingPresetId]);
+
+    // 当前活跃的预设 (优先使用 editingPresetId，否则降级到颜色匹配)
+    const currentPreset = allPresets.find(p => p.id === editingPresetId) || colorMatchPreset;
 
     // 颜色数组归一化 (确保至少 4 个颜色点)
     const normalizeColors = (colors: string[]): string[] => {
@@ -253,7 +265,7 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                             style={isActive ? {
                                 color: gradient.colors[0],
                                 borderBottom: `2px solid ${gradient.colors[0]}`,
-                                boxShadow: `0 2px 8px ${gradient.colors[0]}40`,
+                                boxShadow: `0 0 12px ${gradient.colors[0]}60`, // 增强光晕
                             } : undefined}
                         >
                             {tab.label}
@@ -331,7 +343,10 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                                             return (
                                                 <div key={preset.id} className="relative group">
                                                     <button
-                                                        onClick={() => updateGradient({ colors: [...preset.colors] })}
+                                                        onClick={() => {
+                                                            updateGradient({ colors: [...preset.colors] });
+                                                            setEditingPresetId(preset.id);
+                                                        }}
                                                         className={`w-full p-2 rounded-lg text-center transition-all hover:scale-105 hover:bg-slate-700 ${isActive ? 'ring-2 ring-blue-400' : ''}`}
                                                         title={preset.name}
                                                     >

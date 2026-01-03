@@ -9,6 +9,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { Sparkles, Send, X } from 'lucide-react';
 
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
@@ -578,9 +579,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 );
                             })()}
                             {/* 展开/收起指示 */}
-                            {showXingSettings && (
-                                <span className="text-xs text-white/30 ml-2">▼</span>
-                            )}
+                            {/* 三角符号已移除 */}
                         </div>
                         <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">✕</button>
                     </div>
@@ -740,17 +739,20 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                             <button
                                                 onClick={handleRefine}
                                                 disabled={!inputValue.trim() || isRefining}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg ${isRefining ? 'text-white animate-pulse' : 'text-white/40 hover:text-white hover:bg-white/10'} transition-colors`}
+                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${isRefining ? 'bg-white/20 text-white animate-pulse' : 'bg-transparent text-white/80 hover:text-white hover:bg-white/10'}`}
                                                 title="润色"
+                                                style={{ filter: `drop-shadow(0 0 5px ${xingConfig.gradient.colors[0]})` }}
                                             >
-                                                ✨
+                                                <Sparkles size={18} strokeWidth={1.5} />
                                             </button>
                                             <button
                                                 onClick={handleSend}
                                                 disabled={isGenerating || !inputValue.trim()}
-                                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/10 text-white/90 hover:bg-white/20 transition-all disabled:opacity-30"
+                                                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all disabled:opacity-30 text-white/90 hover:bg-white/10"
+                                                title="发送"
+                                                style={{ filter: `drop-shadow(0 0 5px ${xingConfig.gradient.colors[2] || xingConfig.gradient.colors[1]})` }}
                                             >
-                                                ➤
+                                                <Send size={18} strokeWidth={1.5} />
                                             </button>
                                         </div>
                                     </div>
@@ -774,6 +776,15 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         >
                                             +
                                         </button>
+                                        <select
+                                            value={chatModel}
+                                            onChange={e => setChatModel(e.target.value)}
+                                            className="text-[10px] text-white/40 bg-transparent border-none cursor-pointer hover:text-white/70 focus:outline-none max-w-[100px]"
+                                        >
+                                            {CHAT_MODELS.map(m => (
+                                                <option key={m.id} value={m.id} className="bg-slate-800 text-white">{m.name}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 </div>
                             </div>
