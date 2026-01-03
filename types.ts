@@ -1850,13 +1850,22 @@ export interface DrawingLayer {
   params: Record<string, number>; // Generic params for shader (density, noise, etc)
 }
 
-export interface DrawingInstance {
+// A Drawing is an independent asset that can be applied to multiple planets
+export interface Drawing {
   id: string;
   name: string;
-  bindPlanetId: string | null;
   layers: DrawingLayer[];
   activeLayerId: string | null;
   visible: boolean;
+}
+
+// Legacy alias for compatibility
+export type DrawingInstance = Drawing;
+
+// Binding between a Drawing and multiple Planets
+export interface DrawingPlanetBinding {
+  drawingId: string;
+  planetIds: string[]; // This drawing is applied to these planets
 }
 
 export interface DrawSettings {
@@ -1868,10 +1877,14 @@ export interface DrawSettings {
   projection: ProjectionMode; // Current selected projection
 
   // Data
-  instances: DrawingInstance[];
-  activeInstanceId: string | null;
+  drawings: Drawing[];          // All drawings (independent from planets)
+  activeDrawingId: string | null;
+
+  // Many-to-Many bindings (optional, for when user wants to apply drawing to specific planets)
+  planetBindings: DrawingPlanetBinding[];
 
   // UI State
-  canvasOpacity: number; // 2D Holo-Pad opacity
+  canvasOpacity: number; // 2D Holo-Pad opacity (default higher for visibility)
   hideCanvasWhilePainting: boolean;
 }
+

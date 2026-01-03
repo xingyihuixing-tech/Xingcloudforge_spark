@@ -79,16 +79,8 @@ const HoloCanvas: React.FC<HoloCanvasProps> = ({ settings, onStrokeComplete }) =
         onStrokeComplete(data);
         strokePointsRef.current = [];
 
-        // Clear Canvas for next stroke (or keep it? Usually persist until "Clear" or pass to 3D and clear 2D)
-        // For "Projection", we want the ink to "transfer" to 3D. 
-        // So we clear the 2D canvas after a short delay or immediately?
-        // Procreate style: You see ink on canvas. 
-        // For Dimension Crafter: You draw on 2D, but the result appears in 3D. 
-        // To avoid double-vision, we might want to fade out the 2D stroke or keep it very subtle.
-        // Let's keep it visible for "Ink" feel, but clear it on endStroke to "Project" it?
-        // Let's clear it for now to signify "Transfer".
-        const ctx = canvasRef.current?.getContext('2d');
-        if (ctx) ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        // DO NOT clear the 2D canvas - persist strokes for visibility
+        // User wants to see what they drew!
     };
 
     const getNormalizedPoint = (e: React.PointerEvent): DrawingPoint => {
@@ -242,8 +234,8 @@ const HoloCanvas: React.FC<HoloCanvasProps> = ({ settings, onStrokeComplete }) =
             onPointerUp={endStroke}
             onPointerLeave={endStroke}
         >
-            {/* Visual Frame/Guide */}
-            <div className="absolute inset-0 border-2 border-white/20 rounded-lg bg-black/10 backdrop-blur-sm pointer-events-none">
+            {/* Visual Frame/Guide - Higher opacity for visibility */}
+            <div className="absolute inset-0 border-2 border-white/30 rounded-lg bg-black/30 backdrop-blur-sm pointer-events-none">
                 {/* Center Crosshair */}
                 <div className="absolute top-1/2 left-0 w-full h-px bg-white/10"></div>
                 <div className="absolute left-1/2 top-0 h-full w-px bg-white/10"></div>

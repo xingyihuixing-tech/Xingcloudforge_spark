@@ -37,7 +37,7 @@ import { processImage, ProcessedData, extractDominantColors } from './services/i
 const SETTINGS_STORAGE_KEY = 'nebula-viz-settings';
 
 // 数据版本 - 更新此版本号会自动清除旧数据
-const DATA_VERSION = 71;
+const DATA_VERSION = 72;
 const DATA_VERSION_KEY = 'nebula-viz-data-version';
 
 // 用户隔离的 localStorage 键生成函数
@@ -337,10 +337,11 @@ const App: React.FC = () => {
       decay: 0.1
     },
     projection: 'sphere' as any, // ProjectionMode.Sphere
-    instances: [],
-    activeInstanceId: null,
-    canvasOpacity: 0.3,
-    hideCanvasWhilePainting: true
+    drawings: [],             // Independent from planets
+    activeDrawingId: null,
+    planetBindings: [],       // Many-to-many bindings
+    canvasOpacity: 0.7,       // Higher default for visibility
+    hideCanvasWhilePainting: false
   });
 
   const [data, setData] = useState<ProcessedData | null>(null);

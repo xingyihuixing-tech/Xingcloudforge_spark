@@ -222,20 +222,22 @@ export class InkManager {
         this.mouse = new THREE.Vector2();
         this.ghostPositions = new Float32Array(64 * 3);
 
-        // 1. Initialize Interaction Canvas (Independent)
+        // 1. Initialize Interaction Canvas (Independent) - HIDDEN, only for raycasting if needed
         const geometry = new THREE.SphereGeometry(100, 64, 64);
         const material = new THREE.MeshBasicMaterial({
             color: 0xffffff,
             transparent: true,
-            opacity: 0.0, // Invisible hit target
-            wireframe: true,
+            opacity: 0.0, // Completely invisible
+            wireframe: false, // No wireframe visualization
             visible: false,
-            depthWrite: false // Prevents messing with background
+            depthWrite: false
         });
         this.canvasMesh = new THREE.Mesh(geometry, material);
         this.canvasMesh.name = 'InteractionCanvas';
+        this.canvasMesh.visible = false; // ALWAYS hidden - we use HoloCanvas for 2D input now
         this.canvasMesh.renderOrder = 9999;
-        this.scene.add(this.canvasMesh);
+        // Don't add to scene if we're using HoloCanvas exclusively
+        // this.scene.add(this.canvasMesh);
 
         this.initGhostMesh();
 
@@ -259,21 +261,23 @@ export class InkManager {
         this.ghostMesh = new THREE.Points(geometry, material);
         this.ghostMesh.renderOrder = 10000;
         this.ghostMesh.visible = false;
-        this.scene.add(this.ghostMesh);
+        geometry.setDrawRange(0, 0); // Start with zero points visible
+        // Don't add ghost mesh - we don't need preview dots on 3D scene
+        // this.scene.add(this.ghostMesh);
     }
 
     public setSettings(settings: DrawSettings) {
         this.settings = settings;
 
-        // 1. Resolve Active Instance (Defensive: handle legacy settings without instances)
-        const instances = settings.instances || [];
-        const activeInstance = instances.find(i => i.id === settings.activeInstanceId);
+        // 1. Resolve Active Drawing (Defensive: handle legacy settings)
+        const drawings = settings.drawings || [];
+        const activeDrawing = drawings.find(d => d.id === settings.activeDrawingId);
 
-        if (activeInstance) {
-            this.activeLayerId = activeInstance.activeLayerId;
-            this.syncLayers(activeInstance.layers);
+        if (activeDrawing) {
+            this.activeLayerId = activeDrawing.activeLayerId;
+            this.syncLayers(activeDrawing.layers);
         } else {
-            this.syncLayers([]); // No instance, clear layers
+            this.syncLayers([]); // No drawing, clear layers
         }
 
         // 2. Update Canvas State
