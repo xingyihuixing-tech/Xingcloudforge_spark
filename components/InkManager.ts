@@ -1,5 +1,24 @@
+/**
+ * input: DrawSettings（drawings + placements + symmetry2D/3D + brush）与 PlanetScene 提供的 planetMeshesRef
+ * output: 在 Three.js Scene 中生成/更新绘图特效渲染对象（Points / InstancedMesh），并支持 placement 绑定到多个星球
+ * pos: Workbench 绘图渲染器（PlanetScene 子系统），负责把 2D strokes 转为 3D Growth Space 并渲染
+ * update: 一旦我被更新，请同步更新 components/README.md
+ */
+
 import * as THREE from 'three';
-import { DrawSettings, DrawMode, DrawingLayer, BrushType, ProjectionMode, SymmetryMode } from '../types';
+import {
+    BrushType,
+    DrawPoint2D,
+    DrawSettings,
+    Drawing,
+    DrawingLayer,
+    DrawingPlacement,
+    RadialReflectionMode,
+    Symmetry2DMode,
+    Symmetry2DSettings,
+    Symmetry3DMode,
+    Symmetry3DSettings
+} from '../types';
 
 // ==================== SHADERS ====================
 
@@ -183,632 +202,711 @@ void main() {
 }
 `;
 
-// ==================== INK MANAGER ====================
+// --- ENERGY BEAM SHADER ---
+const energyVertexShader = `
+varying float vAlpha;
+attribute float aSize;
+attribute float aAlpha;
+
+uniform float uTime;
+uniform float uFlow;
+
+void main() {
+    vAlpha = aAlpha;
+    vec3 pos = position;
+
+    // subtle flicker/stream motion
+    float wobble = sin(uTime * 10.0 + pos.x * 0.03 + pos.y * 0.03 + pos.z * 0.02);
+    pos += normalize(pos + vec3(0.001)) * wobble * uFlow * 0.8;
+
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = size * aSize * (300.0 / -mvPosition.z);
+}
+`;
+
+const energyFragmentShader = `
+varying float vAlpha;
+
+uniform vec3 uColor;
+uniform float uOpacity;
+uniform float uGlowIntensity;
+uniform float uCoreWidth;
+
+void main() {
+    vec2 uv = gl_PointCoord - 0.5;
+    float dist = length(uv);
+    if (dist > 0.5) discard;
+
+    float coreR = mix(0.05, 0.28, clamp(uCoreWidth, 0.0, 1.0));
+    float core = 1.0 - smoothstep(0.0, coreR, dist);
+    float glow = 1.0 - smoothstep(coreR, 0.5, dist);
+
+    float glowBoost = 0.35 + 1.6 * clamp(uGlowIntensity, 0.0, 2.0);
+    float a = core + glow * glowBoost;
+
+    vec3 col = uColor * (1.0 + 1.6 * clamp(uGlowIntensity, 0.0, 2.0)) + vec3(0.15) * clamp(uGlowIntensity, 0.0, 2.0);
+    gl_FragColor = vec4(col, a * uOpacity * vAlpha);
+}
+`;
+
+// ==================== INK MANAGER（渲染器） ====================
+
+type PlanetMeshesMap = Map<string, { core: THREE.Object3D }>;
+
+type LayerRender = {
+    id: string;
+    group: THREE.Group;
+    points?: THREE.Points;
+    instanced?: THREE.InstancedMesh;
+    signature: string;
+};
+
+type PlacementRender = {
+    id: string;
+    group: THREE.Group;
+    layerRenders: Map<string, LayerRender>;
+    signature: string;
+};
+
+const BLOOM_LAYER = 1;
 
 export class InkManager {
     private scene: THREE.Scene;
-    private camera: THREE.Camera;
-    private domElement: HTMLElement;
-    private raycaster: THREE.Raycaster;
-    private mouse: THREE.Vector2;
+    private renderRoot: THREE.Group;
 
-    // Meshes for the active instance's layers
-    private layerMeshes: Map<string, THREE.Points> = new Map();
-    private activeLayerId: string | null = null;
-
-    // The single Interaction Canvas (Always exists, toggled visible)
-    private canvasMesh: THREE.Mesh;
-
-    // Target Planet Tracking
-    private targetPlanet: THREE.Object3D | null = null;
-
-    private isDrawing: boolean = false;
     private settings: DrawSettings | null = null;
+    private planets: Map<string, any> | null = null;
 
-    // Event listeners
-    private _onDown: (e: PointerEvent) => void;
-    private _onMove: (e: PointerEvent) => void;
-    private _onUp: (e: PointerEvent) => void;
+    private placementRenders: Map<string, PlacementRender> = new Map();
 
-    private ghostMesh: THREE.Points | null = null;
-    private ghostPositions: Float32Array;
-
-    constructor(scene: THREE.Scene, camera: THREE.Camera, domElement: HTMLElement) {
+    constructor(scene: THREE.Scene, _camera: THREE.Camera, _domElement: HTMLElement) {
         this.scene = scene;
-        this.camera = camera;
-        this.domElement = domElement;
-
-        this.raycaster = new THREE.Raycaster();
-        this.mouse = new THREE.Vector2();
-        this.ghostPositions = new Float32Array(64 * 3);
-
-        // 1. Initialize Interaction Canvas (Independent) - HIDDEN, only for raycasting if needed
-        const geometry = new THREE.SphereGeometry(100, 64, 64);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.0, // Completely invisible
-            wireframe: false, // No wireframe visualization
-            visible: false,
-            depthWrite: false
-        });
-        this.canvasMesh = new THREE.Mesh(geometry, material);
-        this.canvasMesh.name = 'InteractionCanvas';
-        this.canvasMesh.visible = false; // ALWAYS hidden - we use HoloCanvas for 2D input now
-        this.canvasMesh.renderOrder = 9999;
-        // Don't add to scene if we're using HoloCanvas exclusively
-        // this.scene.add(this.canvasMesh);
-
-        this.initGhostMesh();
-
-        this._onDown = this.onPointerDown.bind(this);
-        this._onMove = this.onPointerMove.bind(this);
-        this._onUp = this.onPointerUp.bind(this);
-
-        this.addListeners();
-    }
-
-    private initGhostMesh() {
-        const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.BufferAttribute(this.ghostPositions, 3).setUsage(THREE.DynamicDrawUsage));
-
-        const material = new THREE.PointsMaterial({
-            color: 0xffffff, size: 5, sizeAttenuation: false,
-            transparent: true, opacity: 0.5,
-            depthTest: false, depthWrite: false
-        });
-
-        this.ghostMesh = new THREE.Points(geometry, material);
-        this.ghostMesh.renderOrder = 10000;
-        this.ghostMesh.visible = false;
-        geometry.setDrawRange(0, 0); // Start with zero points visible
-        // Don't add ghost mesh - we don't need preview dots on 3D scene
-        // this.scene.add(this.ghostMesh);
+        this.renderRoot = new THREE.Group();
+        this.renderRoot.name = 'InkWorkbenchRoot';
+        this.renderRoot.renderOrder = 998;
+        this.scene.add(this.renderRoot);
     }
 
     public setSettings(settings: DrawSettings) {
         this.settings = settings;
-
-        // 1. Resolve Active Drawing (Defensive: handle legacy settings)
-        const drawings = settings.drawings || [];
-        const activeDrawing = drawings.find(d => d.id === settings.activeDrawingId);
-
-        if (activeDrawing) {
-            this.activeLayerId = activeDrawing.activeLayerId;
-            this.syncLayers(activeDrawing.layers);
-        } else {
-            this.syncLayers([]); // No drawing, clear layers
-        }
-
-        // 2. Update Canvas State
-        const isEnabled = settings.enabled;
-        if (this.canvasMesh) {
-            this.canvasMesh.visible = isEnabled;
-            // Scale based on altitude (Visual feedback)
-            const alt = settings.altitude || 10;
-            const scale = 1.0 + (alt / 100.0);
-            this.canvasMesh.scale.setScalar(scale);
-
-            if (this.canvasMesh.material instanceof THREE.MeshBasicMaterial) {
-                this.canvasMesh.material.opacity = isEnabled ? 0.05 : 0;
-            }
-        }
-
-        // 3. Ghost Cursor
-        if (this.ghostMesh) {
-            this.ghostMesh.visible = settings.ghostCursorEnabled && isEnabled;
-            if (this.ghostMesh.material instanceof THREE.PointsMaterial) {
-                this.ghostMesh.material.color.set(settings.brush.color);
-            }
-        }
     }
 
-    // ==================== 4. PROJECTION ENGINE (Dimension Crafter) ====================
-
-    public projectStroke(strokeData: Float32Array) {
-        if (!this.settings || !this.activeLayerId) return;
-
-        const layerMesh = this.layerMeshes.get(this.activeLayerId);
-        if (!layerMesh) return;
-
-        // Find the layer data object (we need to update the source data too, ideally)
-        // For now, we update the MESH directly. 
-        // In a real app, we should update the valid source-of-truth in React/State.
-        // But for performance, we update Mesh here and maybe sync back later?
-        // Let's assume 'layerMesh.userData' holds reference or we just append to geometry.
-
-        const geometry = layerMesh.geometry;
-        const positions = geometry.attributes.position.array as Float32Array;
-        const sizes = geometry.attributes.aSize.array as Float32Array;
-        const alphas = geometry.attributes.aAlpha.array as Float32Array;
-
-        // Get current draw range/count to append
-        let count = geometry.drawRange.count;
-        if (count >= positions.length / 3) {
-            console.warn("Layer Full!"); // Should handle resize/rotation buffer
-            return;
-        }
-
-        // Projection Parameters
-        // For now, assume Sphere Projection default
-        // Start radius = Planet Radius (e.g. 100) + Altitude
-        const baseRadius = 100; // Fixed planet radius assumption or get from targetPlanet bounding box
-        const altitude = 10; // Default altitude since new DrawSettings no longer has this at top level
-        const radius = baseRadius + altitude;
-
-        // Symmetry Settings (Defensive: handle legacy settings)
-        const sym = this.settings.symmetry || { mode: SymmetryMode.None, mirrorAxis: 'x', segments: 8 };
-        const symMode = sym.mode || SymmetryMode.None;
-        const segments = (symMode === SymmetryMode.Radial || symMode === SymmetryMode.Spiral) ? (sym.segments || 8) : 1;
-        const mirrors = (symMode === SymmetryMode.Mirror) ? (sym.mirrorAxis === 'quad' ? 4 : 2) : 1;
-
-        // Total copies = segments * mirrors (simplified, usually exclusive)
-        // If Mirror Mode: 2 or 4 copies.
-        // If Radial Mode: N segments.
-        // If Spiral Mode: N segments with offset.
-
-        // Iterate Stroke Points
-        for (let i = 0; i < strokeData.length; i += 4) {
-            const uRaw = strokeData[i];
-            const vRaw = strokeData[i + 1];
-            const pressure = strokeData[i + 2];
-
-            if (count >= positions.length / 3) break;
-
-            // Generate Symmetry Points
-            const iterations = (symMode === SymmetryMode.Mirror) ? mirrors : segments;
-
-            for (let s = 0; s < iterations; s++) {
-                if (count >= positions.length / 3) break;
-
-                let u = uRaw;
-                let v = vRaw;
-
-                // --- APPY SYMMETRY (UV Space Manipulation) ---
-                if (symMode === SymmetryMode.Mirror) {
-                    if (sym.mirrorAxis === 'x' && s === 1) u = 1.0 - u;
-                    if (sym.mirrorAxis === 'y' && s === 1) v = 1.0 - v;
-                    if (sym.mirrorAxis === 'quad') {
-                        if (s === 1) u = 1.0 - u;
-                        if (s === 2) v = 1.0 - v;
-                        if (s === 3) { u = 1.0 - u; v = 1.0 - v; }
-                    }
-                }
-
-                // Radial Symmetry is usually rotational in 3D, not just UV flip.
-                // But for "Kaleidoscope" in 2D, it is UV rot.
-                // For "Radial" in 3D (Planet), it usually means repeating the stroke at different Longitudes.
-
-                // --- PROJECTION (UV -> 3D Local) ---
-                let x = 0, y = 0, z = 0;
-
-                // 3D Offset for Spiral
-                let spiralHeight = 0;
-                let spiralScale = 1.0;
-
-                if (symMode === SymmetryMode.Spiral) {
-                    // Spiral logic: Shift Altitude or Y per segment?
-                    // User want "Spiral Ring" or "Spiral Projection"?
-                    // Let's assume logic: Rotate Angle + Shift Height
-                    spiralHeight = (s / segments) * (sym.twist || 50); // Vertical offset ?
-                    // Actually, let's keep it simple: Just rotation for now, handled below.
-                }
-
-                switch (layerMesh.userData.projection) {
-                    case ProjectionMode.Ring:
-                        // RING PROJECTION (Top-down disc)
-                        // U = Angle (0..1 -> 0..2PI)
-                        // V = Radius (0..1 -> Inner..Outer)
-                        const angle = (u - 0.5) * Math.PI * 2;
-                        const r = (v * 50) + radius; // Map V to width of ring
-
-                        x = r * Math.cos(angle);
-                        z = r * Math.sin(angle);
-                        y = 0; // Flat ring? Or allow tilt?
-                        break;
-                    case ProjectionMode.Sphere:
-                    default:
-                        // SPHERE PROJECTION (Default)
-                        const theta = (u - 0.5) * Math.PI * 2; // Longitude
-                        const phi = (v - 0.5) * Math.PI;       // Latitude
-
-                        x = radius * Math.cos(phi) * Math.cos(theta);
-                        y = radius * Math.sin(phi);
-                        z = radius * Math.cos(phi) * Math.sin(theta);
-                        break;
-                }
-
-                // --- APPLY 3D SYMMETRY (Rotation) ---
-                if (symMode === SymmetryMode.Radial || symMode === SymmetryMode.Spiral) {
-                    const angleStep = (Math.PI * 2) / segments;
-                    const rotAngle = s * angleStep;
-
-                    // Rotate (x,z) around Y axis
-                    const cosA = Math.cos(rotAngle);
-                    const sinA = Math.sin(rotAngle);
-                    const rx = x * cosA - z * sinA;
-                    const rz = x * sinA + z * cosA;
-                    x = rx;
-                    z = rz;
-
-                    // Spiral Twist (Height offset or Radius decay?)
-                    if (symMode === SymmetryMode.Spiral) {
-                        y += (s * 2.0); // Simple height stack
-                        // x *= (1.0 - s * 0.05); // Decay radius
-                        // z *= (1.0 - s * 0.05);
-                    }
-                }
-
-                positions[count * 3] = x;
-                positions[count * 3 + 1] = y;
-                positions[count * 3 + 2] = z;
-
-                // Size & Alpha
-                const brush = this.settings.brush;
-                sizes[count] = brush.size * (brush.pressureInfluence.size ? pressure : 1.0);
-                alphas[count] = brush.opacity * (brush.pressureInfluence.opacity ? pressure : 1.0);
-
-                count++;
-            }
-        }
-
-        // Update Geometry
-        geometry.setDrawRange(0, count);
-        geometry.attributes.position.needsUpdate = true;
-        geometry.attributes.aSize.needsUpdate = true;
-        geometry.attributes.aAlpha.needsUpdate = true;
-
-        // Persist count? 
-        // layer.count = count; // Need to sync back to settings somehow if we want persistence
+    public setPlanets(planets: Map<string, any>) {
+        this.planets = planets;
     }
 
-
-    private syncLayers(layers: DrawingLayer[]) {
-        const layerIds = new Set(layers.map(l => l.id));
-
-        // Delete removed layers
-        for (const [id, mesh] of this.layerMeshes) {
-            if (!layerIds.has(id)) {
-                if (mesh.parent) mesh.parent.remove(mesh);
-                mesh.geometry.dispose();
-                (mesh.material as THREE.Material).dispose();
-                this.layerMeshes.delete(id);
-            }
-        }
-
-        // Create/Update layers
-        layers.forEach(layer => {
-            let mesh = this.layerMeshes.get(layer.id);
-
-            // Init Mesh
-            if (!mesh) {
-                const maxPoints = 30000;
-                const positions = new Float32Array(maxPoints * 3);
-                const sizes = new Float32Array(maxPoints);
-                const alphas = new Float32Array(maxPoints);
-
-                // Load existing data if any
-                if (layer.points && layer.points.length > 0) {
-                    positions.set(layer.points);
-                }
-                sizes.fill(10.0);
-                alphas.fill(1.0);
-
-                const geometry = new THREE.BufferGeometry();
-                geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
-                geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1).setUsage(THREE.DynamicDrawUsage));
-                geometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1).setUsage(THREE.DynamicDrawUsage));
-                geometry.setDrawRange(0, layer.count);
-
-                let vShader = inkVertexShader;
-                let fShader = inkFragmentShader;
-
-                if (layer.brushType === BrushType.Stardust) {
-                    vShader = stardustVertexShader;
-                    fShader = stardustFragmentShader;
-                } else if (layer.brushType === BrushType.GasCloud) {
-                    vShader = gasVertexShader;
-                    fShader = gasFragmentShader;
-                }
-
-                const material = new THREE.ShaderMaterial({
-                    vertexShader: vShader,
-                    fragmentShader: fShader,
-                    uniforms: {
-                        uTime: { value: 0 },
-                        uColor: { value: new THREE.Color(layer.color) },
-                        uOpacity: { value: layer.opacity },
-                        uFlow: { value: 0.0 },
-                        size: { value: 1.0 }
-                    },
-                    transparent: true,
-                    depthWrite: false,
-                    blending: layer.blending === 'additive' ? THREE.AdditiveBlending : THREE.NormalBlending
-                });
-
-                mesh = new THREE.Points(geometry, material);
-                mesh.frustumCulled = false;
-                mesh.renderOrder = 999;
-                mesh.userData = {
-                    layerId: layer.id,
-                    rotationSpeed: layer.rotationSpeed,
-                    projection: layer.projection || ProjectionMode.Sphere
-                };
-                this.layerMeshes.set(layer.id, mesh);
-
-                // Add to scene (not planet, to avoid scale inheritance issues)
-                this.scene.add(mesh);
-            }
-
-            if (mesh) {
-                mesh.visible = layer.visible;
-                const mat = mesh.material as THREE.ShaderMaterial;
-                mat.uniforms.uColor.value.set(layer.color);
-                mat.uniforms.uOpacity.value = layer.opacity;
-                mesh.userData.rotationSpeed = layer.rotationSpeed;
-
-                this.updateLayerTransform(mesh, layer);
-            }
-        });
-    }
-
-    private updateLayerTransform(mesh: THREE.Points, layer: DrawingLayer) {
-        // Apply Transform relative to Planet Center
-        // We do this by keeping the mesh at (0,0,0) locally but rotating/scaling it.
-        // It should follow the planet position.
-
-        if (this.targetPlanet) {
-            mesh.position.copy(this.targetPlanet.getWorldPosition(new THREE.Vector3()));
-        }
-
-        mesh.rotation.set(
-            THREE.MathUtils.degToRad(layer.tilt.x),
-            THREE.MathUtils.degToRad(layer.tilt.y),
-            THREE.MathUtils.degToRad(layer.tilt.z)
-        );
-
-        const alt = layer.altitude || 0;
-        const altitudeScale = 1.0 + (alt / 100.0);
-        const finalScale = layer.scale * altitudeScale;
-        mesh.scale.setScalar(finalScale);
-    }
-
-    public setPlanet(planet: THREE.Object3D | null) {
-        this.targetPlanet = planet;
-        if (this.targetPlanet && this.canvasMesh) {
-            // Move canvas to planet position
-            const worldPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
-            this.canvasMesh.position.copy(worldPos);
-        }
+    public dispose() {
+        this.placementRenders.forEach(p => this.disposePlacement(p));
+        this.placementRenders.clear();
+        this.scene.remove(this.renderRoot);
     }
 
     public update(time: number) {
-        // Update Canvas Position
-        if (this.targetPlanet && this.canvasMesh) {
-            const worldPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
-            this.canvasMesh.position.copy(worldPos);
+        if (!this.settings?.enabled) {
+            this.renderRoot.visible = false;
+            return;
+        }
+        this.renderRoot.visible = true;
+
+        const settings = this.settings;
+        const placements = settings.placements || [];
+
+        // 1) 同步 placements（创建/删除）
+        const visiblePlacementIds = new Set(placements.filter(p => p.visible !== false).map(p => p.id));
+        for (const [id, pr] of this.placementRenders) {
+            if (!visiblePlacementIds.has(id)) {
+                this.disposePlacement(pr);
+                this.placementRenders.delete(id);
+            }
         }
 
-        // Update Layers
-        this.layerMeshes.forEach(mesh => {
-            // Follow planet
-            if (this.targetPlanet) {
-                const worldPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
-                mesh.position.copy(worldPos);
-
-                // Inherit planet rotation for "sticking" effect?
-                // If we want layers to stick to planet surface, we should multiply by planet rotation.
-                // But for "Halo" effects, independent rotation is better.
-                // For now, let's just support self-rotation + position tracking.
+        placements.forEach(p => {
+            if (p.visible === false) return;
+            const pr = this.ensurePlacement(p);
+            this.updatePlacementTransform(pr.group, p);
+            const drawing = (settings.drawings || []).find(d => d.id === p.drawingId);
+            if (!drawing) {
+                this.clearPlacementLayers(pr);
+                return;
             }
-
-            const mat = mesh.material as THREE.ShaderMaterial;
-            if (mat.uniforms) {
-                mat.uniforms.uTime.value = time;
-            }
-            if (mesh.userData.rotationSpeed) {
-                mesh.rotation.y += mesh.userData.rotationSpeed * 0.001;
-            }
+            this.syncDrawingLayers(pr, drawing, p, time);
         });
     }
 
-    // ... [Event Listeners: addListeners, removeListeners, onPointerDown, onPointerUp, dispose] ...
-    private addListeners() {
-        this.domElement.addEventListener('pointerdown', this._onDown);
-        window.addEventListener('pointermove', this._onMove);
-        window.addEventListener('pointerup', this._onUp);
+    private ensurePlacement(p: DrawingPlacement): PlacementRender {
+        let pr = this.placementRenders.get(p.id);
+        if (!pr) {
+            const group = new THREE.Group();
+            group.name = `InkPlacement:${p.id}`;
+            group.layers.enable(BLOOM_LAYER);
+            this.renderRoot.add(group);
+            pr = { id: p.id, group, layerRenders: new Map(), signature: '' };
+            this.placementRenders.set(p.id, pr);
+        }
+        return pr;
     }
-    private removeListeners() {
-        this.domElement.removeEventListener('pointerdown', this._onDown);
-        window.removeEventListener('pointermove', this._onMove);
-        window.removeEventListener('pointerup', this._onUp);
+
+    private disposePlacement(pr: PlacementRender) {
+        pr.layerRenders.forEach(lr => this.disposeLayerRender(lr));
+        pr.layerRenders.clear();
+        if (pr.group.parent) pr.group.parent.remove(pr.group);
     }
-    public dispose() {
-        this.removeListeners();
-        this.scene.remove(this.canvasMesh);
-        this.canvasMesh.geometry.dispose();
-        this.layerMeshes.forEach(m => {
-            this.scene.remove(m);
-            m.geometry.dispose();
+
+    private clearPlacementLayers(pr: PlacementRender) {
+        pr.layerRenders.forEach(lr => this.disposeLayerRender(lr));
+        pr.layerRenders.clear();
+    }
+
+    private disposeLayerRender(lr: LayerRender) {
+        if (lr.points) {
+            if (lr.points.parent) lr.points.parent.remove(lr.points);
+            lr.points.geometry.dispose();
+            (lr.points.material as THREE.Material).dispose();
+        }
+        if (lr.instanced) {
+            if (lr.instanced.parent) lr.instanced.parent.remove(lr.instanced);
+            lr.instanced.geometry.dispose();
+            (lr.instanced.material as THREE.Material).dispose();
+        }
+        if (lr.group.parent) lr.group.parent.remove(lr.group);
+    }
+
+    private updatePlacementTransform(group: THREE.Group, p: DrawingPlacement) {
+        const planetCore = this.planets?.get(p.planetId)?.core || null;
+        const planetPos = planetCore ? planetCore.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3();
+        const planetQuat = planetCore ? planetCore.getWorldQuaternion(new THREE.Quaternion()) : new THREE.Quaternion();
+
+        const follow = THREE.MathUtils.clamp(p.followPlanetRotation ?? 1, 0, 1);
+        const baseQuat = new THREE.Quaternion();
+        baseQuat.slerp(planetQuat, follow);
+
+        const tiltQuat = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+            THREE.MathUtils.degToRad(p.tilt?.x || 0),
+            THREE.MathUtils.degToRad(p.tilt?.y || 0),
+            THREE.MathUtils.degToRad(p.tilt?.z || 0)
+        ));
+
+        group.position.copy(planetPos);
+        group.position.x += p.offset?.x || 0;
+        group.position.y += p.offset?.y || 0;
+        group.position.z += p.offset?.z || 0;
+
+        group.quaternion.copy(baseQuat).multiply(tiltQuat);
+        group.scale.setScalar(p.scale || 1);
+    }
+
+    private syncDrawingLayers(pr: PlacementRender, drawing: Drawing, placement: DrawingPlacement, time: number) {
+        const layerIds = new Set((drawing.layers || []).filter(l => l.visible !== false).map(l => l.id));
+        for (const [id, lr] of pr.layerRenders) {
+            if (!layerIds.has(id)) {
+                this.disposeLayerRender(lr);
+                pr.layerRenders.delete(id);
+            }
+        }
+
+        (drawing.layers || []).forEach(layer => {
+            if (layer.visible === false) return;
+            let lr = pr.layerRenders.get(layer.id);
+            if (!lr) {
+                const g = new THREE.Group();
+                g.name = `InkLayer:${layer.id}`;
+                g.layers.enable(BLOOM_LAYER);
+                pr.group.add(g);
+                lr = { id: layer.id, group: g, signature: '' };
+                pr.layerRenders.set(layer.id, lr);
+            }
+
+            this.updateLayerTransform(lr.group, layer);
+            this.updateLayerMeshes(lr, layer, drawing, placement);
+            this.updateLayerUniforms(lr, layer, time);
         });
-        this.layerMeshes.clear();
-    }
-    private onPointerDown(e: PointerEvent) {
-        if (!this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
-        if (e.button !== 0) return;
-        this.isDrawing = true;
-    }
-    private onPointerUp(e: PointerEvent) {
-        this.isDrawing = false;
     }
 
-    private onPointerMove(e: PointerEvent) {
-        if (!this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
-        if (!this.canvasMesh || !this.canvasMesh.visible) return;
+    private updateLayerTransform(group: THREE.Group, layer: DrawingLayer) {
+        group.rotation.set(
+            THREE.MathUtils.degToRad(layer.tilt?.x || 0),
+            THREE.MathUtils.degToRad(layer.tilt?.y || 0),
+            THREE.MathUtils.degToRad(layer.tilt?.z || 0)
+        );
+        group.scale.setScalar(layer.scale || 1);
+        group.position.set(0, 0, layer.altitude || 0);
+    }
 
-        const rect = this.domElement.getBoundingClientRect();
-        const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    private updateLayerUniforms(lr: LayerRender, layer: DrawingLayer, time: number) {
+        if (lr.points) {
+            const mat = lr.points.material as THREE.ShaderMaterial;
+            if (mat.uniforms?.uTime) mat.uniforms.uTime.value = time;
+            if (mat.uniforms?.uColor) mat.uniforms.uColor.value.set(layer.color);
+            if (mat.uniforms?.uOpacity) mat.uniforms.uOpacity.value = layer.opacity;
 
-        this.mouse.set(x, y);
-        this.raycaster.setFromCamera(this.mouse, this.camera);
-
-        const intersects = this.raycaster.intersectObject(this.canvasMesh, false);
-
-        if (intersects.length > 0) {
-            const hit = intersects[0];
-            if (this.isDrawing) {
-                this.handleAddPoint(hit.point, e.pressure || 0.5);
+            if (layer.brushType === BrushType.EnergyBeam) {
+                const energy = this.getEnergyParams(layer);
+                if (mat.uniforms?.uGlowIntensity) mat.uniforms.uGlowIntensity.value = energy.glowIntensity;
+                if (mat.uniforms?.uCoreWidth) mat.uniforms.uCoreWidth.value = energy.coreWidth;
+                if (mat.uniforms?.uFlow) mat.uniforms.uFlow.value = 0.35 + energy.glowIntensity * 0.25;
+                if (mat.uniforms?.size) mat.uniforms.size.value = 0.85;
+            } else {
+                if (mat.uniforms?.uFlow) mat.uniforms.uFlow.value = 0.0;
+                if (mat.uniforms?.size) mat.uniforms.size.value = 1.0;
             }
-            if (this.settings.ghostCursorEnabled) {
-                this.updateGhostCursor(hit.point);
+        }
+        if (lr.instanced) {
+            const mat = lr.instanced.material as THREE.MeshBasicMaterial;
+            mat.color.set(layer.color);
+            mat.opacity = layer.opacity;
+        }
+
+        if (layer.rotationSpeed) {
+            lr.group.rotation.y += layer.rotationSpeed * 0.001;
+        }
+    }
+
+    private updateLayerMeshes(lr: LayerRender, layer: DrawingLayer, drawing: Drawing, placement: DrawingPlacement) {
+        const strokes = layer.strokes || [];
+        const strokeCount = strokes.length;
+        let totalPoints = 0;
+        let lastStrokeId = '';
+        let lastStrokePoints = 0;
+        if (strokeCount > 0) {
+            const last = strokes[strokeCount - 1];
+            lastStrokeId = last.id;
+            lastStrokePoints = last.points?.length || 0;
+        }
+        strokes.forEach(s => { totalPoints += (s.points?.length || 0); });
+
+        const signature = [
+            drawing.id,
+            placement.id,
+            layer.id,
+            layer.brushType,
+            layer.color,
+            layer.opacity,
+            layer.blending,
+            strokeCount,
+            totalPoints,
+            lastStrokeId,
+            lastStrokePoints
+        ].join('|');
+
+        if (signature === lr.signature) return;
+        lr.signature = signature;
+
+        // Rebuild
+        if (layer.brushType === BrushType.Crystal) {
+            if (lr.points) {
+                if (lr.points.parent) lr.points.parent.remove(lr.points);
+                lr.points.geometry.dispose();
+                (lr.points.material as THREE.Material).dispose();
+                lr.points = undefined;
             }
+            this.buildCrystalLayer(lr, layer);
         } else {
-            // Hide ghost if off canvas
-            if (this.ghostMesh) {
-                this.ghostMesh.geometry.setDrawRange(0, 0);
+            if (lr.instanced) {
+                if (lr.instanced.parent) lr.instanced.parent.remove(lr.instanced);
+                lr.instanced.geometry.dispose();
+                (lr.instanced.material as THREE.Material).dispose();
+                lr.instanced = undefined;
             }
+            this.buildPointsLayer(lr, layer);
         }
     }
 
-    private updateGhostCursor(worldPoint: THREE.Vector3) {
-        if (!this.ghostMesh || !this.targetPlanet) return;
+    private buildPointsLayer(lr: LayerRender, layer: DrawingLayer) {
+        const samples = this.collectLayerSamples(layer);
+        const count = samples.length;
 
-        // Convert World -> Local (Relative to Planet Center)
-        // Since Canvas is centered on Planet, Local = World - PlanetPos
-        const planetPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
-        const localPoint = worldPoint.clone().sub(planetPos);
+        const positions = new Float32Array(count * 3);
+        const sizes = new Float32Array(count);
+        const alphas = new Float32Array(count);
 
-        const points = this.generateSymmetryPoints(localPoint);
-        const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
-
-        // Update Ghost Mesh Position to match Planet
-        this.ghostMesh.position.copy(planetPos);
-
-        points.forEach((p, i) => {
-            if (i < 64) posAttr.setXYZ(i, p.x, p.y, p.z);
+        samples.forEach((s, i) => {
+            positions[i * 3] = s.pos.x;
+            positions[i * 3 + 1] = s.pos.y;
+            positions[i * 3 + 2] = s.pos.z;
+            sizes[i] = s.size;
+            alphas[i] = s.alpha;
         });
 
-        posAttr.needsUpdate = true;
-        this.ghostMesh.geometry.setDrawRange(0, points.length);
-    }
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+        geometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1));
+        geometry.setDrawRange(0, count);
 
-    private handleAddPoint(worldPoint: THREE.Vector3, pressure: number) {
-        if (!this.settings || !this.activeLayerId || !this.targetPlanet) return;
+        let vShader = inkVertexShader;
+        let fShader = inkFragmentShader;
 
-        const activeInstance = this.settings.instances.find(i => i.id === this.settings!.activeInstanceId);
-        const layer = activeInstance?.layers.find(l => l.id === this.activeLayerId);
-        const mesh = this.layerMeshes.get(this.activeLayerId!);
-
-        if (!layer || !mesh) return;
-
-        // Calc Local Point relative to Mesh
-        // Mesh Position = Planet Position
-        // Mesh Rotation = Layer Tilt
-        // Mesh Scale = Layer Scale
-
-        const planetPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
-
-        // 1. Center relative to planet
-        const relPoint = worldPoint.clone().sub(planetPos);
-
-        // 2. Inverse Transform (Scale & Rotation)
-        // We use the Mesh's matrix for convenience, ensuring `updateMatrix()` is called.
-        mesh.updateMatrix();
-        const invMatrix = mesh.matrix.clone().invert();
-
-        // Wait, mesh.matrix includes position. 
-        // worldPoint is World. mesh.matrix maps Local -> World.
-        // So Local = World * Invert(Matrix)
-        const localPoint = worldPoint.clone().applyMatrix4(invMatrix);
-
-        const pointsToAdd = this.generateSymmetryPoints(localPoint);
-        const geometry = mesh.geometry;
-        const positions = geometry.attributes.position.array as Float32Array;
-        const sizes = geometry.attributes.aSize.array as Float32Array;
-        const alphas = geometry.attributes.aAlpha.array as Float32Array;
-
-        pointsToAdd.forEach(p => {
-            if (layer.count >= positions.length / 3) return;
-            const i = layer.count;
-
-            positions[i * 3] = p.x;
-            positions[i * 3 + 1] = p.y;
-            positions[i * 3 + 2] = p.z;
-
-            sizes[i] = (this.settings!.brush.size || 10) * pressure;
-            alphas[i] = pressure;
-
-            layer.count++;
-        });
-
-        geometry.attributes.position.needsUpdate = true;
-        geometry.attributes.aSize.needsUpdate = true;
-        geometry.attributes.aAlpha.needsUpdate = true;
-        geometry.setDrawRange(0, layer.count);
-    }
-
-    private generateSymmetryPoints(localPoint: THREE.Vector3): THREE.Vector3[] {
-        if (!this.settings) return [localPoint];
-        const { mode, segments } = this.settings;
-        const points: THREE.Vector3[] = [];
-
-        const add = (p: THREE.Vector3) => points.push(p);
-
-        if (mode === DrawMode.Normal) {
-            add(localPoint);
-        } else if (mode === DrawMode.MirrorX) {
-            add(localPoint);
-            add(new THREE.Vector3(-localPoint.x, localPoint.y, localPoint.z));
-        } else if (mode === DrawMode.MirrorY) {
-            add(localPoint);
-            add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
-        } else if (mode === DrawMode.Quad) {
-            add(localPoint);
-            add(new THREE.Vector3(-localPoint.x, localPoint.y, localPoint.z));
-            add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
-            add(new THREE.Vector3(-localPoint.x, -localPoint.y, localPoint.z));
-        } else if (mode === DrawMode.Diagonal) {
-            add(localPoint);
-            add(new THREE.Vector3(localPoint.y, localPoint.x, localPoint.z));
-            add(new THREE.Vector3(-localPoint.y, -localPoint.x, localPoint.z));
-        } else if (mode === DrawMode.Radial || mode === DrawMode.Kaleidoscope || mode === DrawMode.PlanetSpin) {
-            const angleStep = (Math.PI * 2) / segments;
-            const spherical = new THREE.Spherical().setFromVector3(localPoint);
-            for (let i = 0; i < segments; i++) {
-                const theta = spherical.theta + angleStep * i;
-                const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
-                add(p);
-            }
-        } else if (mode === DrawMode.Antipodal) {
-            add(localPoint);
-            add(localPoint.clone().negate());
-        } else if (mode === DrawMode.Cubic) {
-            add(localPoint);
-            add(new THREE.Vector3(-localPoint.x, localPoint.y, localPoint.z));
-            add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
-            add(new THREE.Vector3(localPoint.x, localPoint.y, -localPoint.z));
-            add(new THREE.Vector3(-localPoint.x, -localPoint.y, localPoint.z));
-            add(new THREE.Vector3(localPoint.x, -localPoint.y, -localPoint.z));
-            add(new THREE.Vector3(-localPoint.x, localPoint.y, -localPoint.z));
-            add(new THREE.Vector3(-localPoint.x, -localPoint.y, -localPoint.z));
-        } else if (mode === DrawMode.Vortex) {
-            const { vortexHeight = 10, vortexScale = 0.95 } = this.settings;
-            const angleStep = (Math.PI * 2) / segments;
-            const spherical = new THREE.Spherical().setFromVector3(localPoint);
-            for (let i = 0; i < segments; i++) {
-                const theta = spherical.theta + angleStep * i;
-                const yOffset = i * (vortexHeight / segments);
-                const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
-                p.y += yOffset;
-                const scale = Math.pow(vortexScale, i);
-                p.multiplyScalar(scale);
-                add(p);
-            }
-        } else {
-            add(localPoint);
+        if (layer.brushType === BrushType.Stardust) {
+            vShader = stardustVertexShader;
+            fShader = stardustFragmentShader;
+        } else if (layer.brushType === BrushType.GasCloud) {
+            vShader = gasVertexShader;
+            fShader = gasFragmentShader;
+        } else if (layer.brushType === BrushType.EnergyBeam) {
+            vShader = energyVertexShader;
+            fShader = energyFragmentShader;
         }
 
-        return points;
+        const material = new THREE.ShaderMaterial({
+            vertexShader: vShader,
+            fragmentShader: fShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uColor: { value: new THREE.Color(layer.color) },
+                uOpacity: { value: layer.opacity },
+                uBloom: { value: 0.0 },
+                uFlow: { value: 0.0 },
+                uGlowIntensity: { value: 1.0 },
+                uCoreWidth: { value: 0.4 },
+                size: { value: 1.0 }
+            },
+            transparent: true,
+            depthWrite: false,
+            blending: layer.blending === 'additive' ? THREE.AdditiveBlending : THREE.NormalBlending
+        });
+
+        const points = new THREE.Points(geometry, material);
+        points.frustumCulled = false;
+        points.renderOrder = 999;
+        points.layers.enable(BLOOM_LAYER);
+
+        if (lr.points) {
+            if (lr.points.parent) lr.points.parent.remove(lr.points);
+            lr.points.geometry.dispose();
+            (lr.points.material as THREE.Material).dispose();
+        }
+        lr.points = points;
+        lr.group.add(points);
+    }
+
+    private buildCrystalLayer(lr: LayerRender, layer: DrawingLayer) {
+        const samples = this.collectLayerSamples(layer);
+        const maxInstances = 6000;
+        const count = Math.min(samples.length, maxInstances);
+
+        const geometry = new THREE.TetrahedronGeometry(1, 0);
+        const material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(layer.color),
+            transparent: true,
+            opacity: layer.opacity,
+            blending: layer.blending === 'additive' ? THREE.AdditiveBlending : THREE.NormalBlending,
+            depthWrite: false
+        });
+
+        const instanced = new THREE.InstancedMesh(geometry, material, count);
+        instanced.frustumCulled = false;
+        instanced.renderOrder = 999;
+        instanced.layers.enable(BLOOM_LAYER);
+
+        const m = new THREE.Matrix4();
+        const q = new THREE.Quaternion();
+        const s = new THREE.Vector3();
+
+        for (let i = 0; i < count; i++) {
+            const sample = samples[i];
+            const rot = new THREE.Euler(
+                Math.random() * Math.PI,
+                Math.random() * Math.PI,
+                Math.random() * Math.PI
+            );
+            q.setFromEuler(rot);
+            const size = Math.max(0.5, sample.size * 0.2);
+            s.set(size, size * (0.8 + Math.random() * 0.6), size);
+            m.compose(sample.pos, q, s);
+            instanced.setMatrixAt(i, m);
+        }
+        instanced.instanceMatrix.needsUpdate = true;
+
+        if (lr.instanced) {
+            if (lr.instanced.parent) lr.instanced.parent.remove(lr.instanced);
+            lr.instanced.geometry.dispose();
+            (lr.instanced.material as THREE.Material).dispose();
+        }
+        lr.instanced = instanced;
+        lr.group.add(instanced);
+    }
+
+    private getEnergyParams(layer: DrawingLayer): { coreWidth: number; glowIntensity: number } {
+        const fromSettings = this.settings?.brush;
+        if (fromSettings?.type === BrushType.EnergyBeam) {
+            return {
+                coreWidth: THREE.MathUtils.clamp(fromSettings.coreWidth ?? 0.4, 0, 1),
+                glowIntensity: THREE.MathUtils.clamp(fromSettings.glowIntensity ?? 1.0, 0, 2)
+            };
+        }
+
+        const strokes = layer.strokes || [];
+        for (let i = strokes.length - 1; i >= 0; i--) {
+            const b = strokes[i]?.brush;
+            if (b?.type === BrushType.EnergyBeam) {
+                return {
+                    coreWidth: THREE.MathUtils.clamp(b.coreWidth ?? 0.4, 0, 1),
+                    glowIntensity: THREE.MathUtils.clamp(b.glowIntensity ?? 1.0, 0, 2)
+                };
+            }
+        }
+
+        return { coreWidth: 0.4, glowIntensity: 1.0 };
+    }
+
+    private collectLayerSamples(layer: DrawingLayer): Array<{ pos: THREE.Vector3; size: number; alpha: number }> {
+        const out: Array<{ pos: THREE.Vector3; size: number; alpha: number }> = [];
+        const strokes = layer.strokes || [];
+
+        const isEnergy = layer.brushType === BrushType.EnergyBeam;
+
+        strokes.forEach(stroke => {
+            const brush = stroke.brush;
+            const baseSize = brush.size || 10;
+            const baseOpacity = brush.opacity ?? 1;
+            const usePressure = brush.usePressure;
+
+            const pts = stroke.points || [];
+            if (!isEnergy || pts.length <= 1) {
+                pts.forEach(pt => {
+                    const uvCopies = this.applySymmetry2D(pt, stroke.symmetry2D);
+                    uvCopies.forEach(uv => {
+                        const posBase = this.uvToGrowth(uv, stroke.canvasSize, stroke.symmetry3D);
+                        const posCopies = this.applySymmetry3D(posBase, stroke.symmetry3D);
+                        posCopies.forEach(pos => {
+                            const p = usePressure ? (pt.pressure ?? 1) : 1;
+                            const size = (brush.pressureInfluence?.size ? baseSize * p : baseSize);
+                            const alpha = (brush.pressureInfluence?.opacity ? baseOpacity * p : baseOpacity);
+                            out.push({ pos, size, alpha });
+                        });
+                    });
+                });
+                return;
+            }
+
+            const canvasSize = stroke.canvasSize || 300;
+            for (let si = 0; si < pts.length - 1; si++) {
+                const a = pts[si];
+                const b = pts[si + 1];
+
+                const du = (b.u - a.u) * canvasSize;
+                const dv = (b.v - a.v) * canvasSize;
+                const distPx = Math.sqrt(du * du + dv * dv);
+
+                const pa = a.pressure ?? 1;
+                const pb = b.pressure ?? 1;
+                const pAvg = (pa + pb) * 0.5;
+                const flowMul = brush.pressureInfluence?.flow ? THREE.MathUtils.clamp(pAvg, 0.25, 2.0) : 1.0;
+                const steps = Math.min(64, Math.max(1, Math.floor(distPx * 0.25 * flowMul)));
+
+                for (let j = 0; j <= steps; j++) {
+                    if (si > 0 && j === 0) continue;
+                    const t = steps === 0 ? 0 : j / steps;
+
+                    const pt: DrawPoint2D = {
+                        ...a,
+                        u: a.u + (b.u - a.u) * t,
+                        v: a.v + (b.v - a.v) * t,
+                        pressure: pa + (pb - pa) * t,
+                        tiltX: (a.tiltX ?? 0) + ((b.tiltX ?? 0) - (a.tiltX ?? 0)) * t,
+                        tiltY: (a.tiltY ?? 0) + ((b.tiltY ?? 0) - (a.tiltY ?? 0)) * t
+                    };
+
+                    const uvCopies = this.applySymmetry2D(pt, stroke.symmetry2D);
+                    uvCopies.forEach(uv => {
+                        const posBase = this.uvToGrowth(uv, canvasSize, stroke.symmetry3D);
+                        const posCopies = this.applySymmetry3D(posBase, stroke.symmetry3D);
+                        posCopies.forEach(pos => {
+                            const p = usePressure ? (pt.pressure ?? 1) : 1;
+                            const size = (brush.pressureInfluence?.size ? baseSize * p : baseSize) * 0.9;
+                            const alpha = (brush.pressureInfluence?.opacity ? baseOpacity * p : baseOpacity);
+                            out.push({ pos, size, alpha });
+                        });
+                    });
+                }
+            }
+        });
+
+        return out;
+    }
+
+    private applySymmetry2D(pt: DrawPoint2D, sym: Symmetry2DSettings): DrawPoint2D[] {
+        const centerU = 0.5;
+        const centerV = 0.5;
+
+        if (!sym || sym.mode === Symmetry2DMode.None) {
+            return [pt];
+        }
+
+        const relX = pt.u - centerU;
+        const relY = pt.v - centerV;
+
+        if (sym.mode === Symmetry2DMode.Mirror) {
+            const angle = (sym.mirrorAxisAngle || 0) * Math.PI / 180;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+
+            // Rotate -> mirror -> rotate back
+            const x1 = relX * cosA + relY * sinA;
+            const y1 = -relX * sinA + relY * cosA;
+            const y1m = -y1;
+            const xr = x1 * cosA - y1m * sinA;
+            const yr = x1 * sinA + y1m * cosA;
+            return [
+                pt,
+                { ...pt, u: centerU + xr, v: centerV + yr }
+            ];
+        }
+
+        const segments = Math.max(2, sym.segments || 2);
+        const step = (Math.PI * 2) / segments;
+        const radius = Math.sqrt(relX * relX + relY * relY);
+        const baseAngle = Math.atan2(relY, relX) + (sym.rotationOffset || 0) * Math.PI / 180;
+
+        const out: DrawPoint2D[] = [];
+
+        if (sym.radialReflectionMode === RadialReflectionMode.Kaleidoscope) {
+            const local = ((baseAngle % step) + step) % step;
+            for (let i = 0; i < segments; i++) {
+                const a = i * step + (i % 2 === 0 ? local : step - local);
+                out.push({ ...pt, u: centerU + radius * Math.cos(a), v: centerV + radius * Math.sin(a) });
+            }
+            return out;
+        }
+
+        for (let i = 0; i < segments; i++) {
+            const a = baseAngle + step * i;
+            out.push({ ...pt, u: centerU + radius * Math.cos(a), v: centerV + radius * Math.sin(a) });
+
+            if (sym.radialReflectionMode === RadialReflectionMode.Mirror) {
+                const sectorCenter = step * i + step * 0.5;
+                const aMirror = 2 * sectorCenter - a;
+                out.push({ ...pt, u: centerU + radius * Math.cos(aMirror), v: centerV + radius * Math.sin(aMirror) });
+            }
+        }
+
+        return out;
+    }
+
+    private uvToGrowth(pt: DrawPoint2D, canvasSize: number, sym3D: Symmetry3DSettings): THREE.Vector3 {
+        const size = canvasSize || 300;
+        const x = (pt.u - 0.5) * size;
+        const y = (0.5 - pt.v) * size;
+        const r = Math.sqrt(x * x + y * y);
+        const depth = THREE.MathUtils.clamp(sym3D?.depthFromRadius ?? 0, 0, 1);
+        const z = -r * depth;
+        return new THREE.Vector3(x, y, z);
+    }
+
+    private applySymmetry3D(pos: THREE.Vector3, sym: Symmetry3DSettings): THREE.Vector3[] {
+        if (!sym || sym.mode === Symmetry3DMode.None) {
+            return [pos.clone()];
+        }
+
+        if (sym.mode === Symmetry3DMode.Octant) {
+            const sx = sym.octantAxes?.x ? [-1, 1] : [1];
+            const sy = sym.octantAxes?.y ? [-1, 1] : [1];
+            const sz = sym.octantAxes?.z ? [-1, 1] : [1];
+            const out: THREE.Vector3[] = [];
+            sx.forEach(ax => sy.forEach(ay => sz.forEach(az => {
+                out.push(new THREE.Vector3(pos.x * ax, pos.y * ay, pos.z * az));
+            })));
+            return out;
+        }
+
+        if (sym.mode === Symmetry3DMode.Cubic) {
+            const rotations: THREE.Quaternion[] = [
+                new THREE.Quaternion(),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, 0)),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -Math.PI / 2, 0)),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI / 2, 0, 0)),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)),
+                new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0))
+            ];
+            return rotations.map(q => pos.clone().applyQuaternion(q));
+        }
+
+        if (
+            sym.mode === Symmetry3DMode.Tetrahedral ||
+            sym.mode === Symmetry3DMode.Octahedral ||
+            sym.mode === Symmetry3DMode.Dodecahedral ||
+            sym.mode === Symmetry3DMode.Icosahedral
+        ) {
+            const normals = this.getPolyhedronFaceNormals(sym.mode);
+            const zAxis = new THREE.Vector3(0, 0, 1);
+            return normals.map(n => {
+                const q = new THREE.Quaternion().setFromUnitVectors(zAxis, n);
+                return pos.clone().applyQuaternion(q);
+            });
+        }
+
+        if (sym.mode === Symmetry3DMode.Vortex) {
+            const segments = Math.max(2, sym.segments || 2);
+            const step = (Math.PI * 2) / segments;
+            const out: THREE.Vector3[] = [];
+            const heightStep = sym.heightStep ?? 10;
+            const scaleDecay = sym.scaleDecay ?? 0.95;
+            const twistPer = (sym.twistPerStep ?? 0) * Math.PI / 180;
+            for (let i = 0; i < segments; i++) {
+                const angle = i * step + i * twistPer;
+                const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), angle);
+                const p = pos.clone().applyQuaternion(q);
+                const s = Math.pow(scaleDecay, i);
+                p.multiplyScalar(s);
+                p.z += i * heightStep;
+                out.push(p);
+            }
+            return out;
+        }
+
+        return [pos.clone()];
+    }
+
+    private getPolyhedronFaceNormals(mode: Symmetry3DMode): THREE.Vector3[] {
+        // 使用“面法向集合”实现将基础生成空间复制到多面体各面方向。
+        // 说明：这里的 normals 采用“对偶多面体顶点”作为面法向（数量分别为 4/8/12/20）。
+        const out: THREE.Vector3[] = [];
+        const push = (x: number, y: number, z: number) => out.push(new THREE.Vector3(x, y, z).normalize());
+
+        if (mode === Symmetry3DMode.Tetrahedral) {
+            // 4 面：使用 (±1,±1,±1) 的 4 组中“奇数个负号”的组合（等价于四面体对称）
+            push(1, 1, 1);
+            push(-1, -1, 1);
+            push(-1, 1, -1);
+            push(1, -1, -1);
+            return out;
+        }
+
+        if (mode === Symmetry3DMode.Octahedral) {
+            // 8 面：所有 (±1,±1,±1)
+            const signs = [-1, 1];
+            signs.forEach(x => signs.forEach(y => signs.forEach(z => push(x, y, z))));
+            return out;
+        }
+
+        const phi = (1 + Math.sqrt(5)) / 2;
+        const invPhi = 1 / phi;
+
+        if (mode === Symmetry3DMode.Dodecahedral) {
+            // 12 面：使用 icosahedron 的 12 顶点作为 dodecahedron 的 12 面法向
+            // (0, ±1, ±φ), (±1, ±φ, 0), (±φ, 0, ±1)
+            const s = [-1, 1];
+            s.forEach(y => s.forEach(z => push(0, y, z * phi)));
+            s.forEach(x => s.forEach(y => push(x, y * phi, 0)));
+            s.forEach(x => s.forEach(z => push(x * phi, 0, z)));
+            return out;
+        }
+
+        // Icosahedral: 20 面：使用 dodecahedron 的 20 顶点作为 icosahedron 的 20 面法向
+        // (±1,±1,±1) (8)
+        // (0, ±1/φ, ±φ) (4)
+        // (±1/φ, ±φ, 0) (4)
+        // (±φ, 0, ±1/φ) (4)
+        if (mode === Symmetry3DMode.Icosahedral) {
+            const s = [-1, 1];
+            s.forEach(x => s.forEach(y => s.forEach(z => push(x, y, z))));
+            s.forEach(y => s.forEach(z => push(0, y * invPhi, z * phi)));
+            s.forEach(x => s.forEach(y => push(x * invPhi, y * phi, 0)));
+            s.forEach(x => s.forEach(z => push(x * phi, 0, z * invPhi)));
+            return out;
+        }
+
+        return out;
     }
 }

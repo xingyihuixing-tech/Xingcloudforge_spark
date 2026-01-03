@@ -10,13 +10,12 @@ import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
 import DrawControlPanel from './components/DrawControlPanel';
-import HoloPad from './components/draw/HoloPad';
 import GestureHandler from './components/GestureHandler';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { UserMenu } from './components/UserMenu';
 import { UserLogin } from './components/UserLogin';
 import AIAssistantPanel from './components/AIAssistantPanel';
-import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, DrawSettings, DrawMode } from './types';
+import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, DrawSettings, BrushType, Symmetry2DMode, RadialReflectionMode, Symmetry3DMode } from './types';
 import {
   DEFAULT_SETTINGS,
   SAMPLE_IMAGES,
@@ -29,8 +28,7 @@ import {
   DEFAULT_COLOR_SCHEMES,
   DEFAULT_MATERIAL_SETTINGS,
   BUILT_IN_MATERIAL_PRESETS,
-  createDefaultMaterialConfig,
-  DEFAULT_DRAW_SETTINGS
+  createDefaultMaterialConfig
 } from './constants';
 import { generateMaterialStyle } from './utils/materialStyle';
 import { processImage, ProcessedData, extractDominantColors } from './services/imageProcessing';
@@ -320,7 +318,41 @@ const App: React.FC = () => {
   const [overlayMode, setOverlayMode] = useState(false); // 叠加模式：同时显示星云和星球
 
   // 绘图模式设置
-  const [drawSettings, setDrawSettings] = useState<DrawSettings>(() => ({ ...DEFAULT_DRAW_SETTINGS }));
+  const [drawSettings, setDrawSettings] = useState<DrawSettings>({
+    enabled: false,
+    brush: {
+      type: BrushType.Stardust,
+      size: 10,
+      opacity: 0.8,
+      color: '#ffffff',
+      usePressure: true,
+      pressureInfluence: { size: true, opacity: true, flow: false }
+    },
+    symmetry2D: {
+      mode: Symmetry2DMode.None,
+      mirrorAxisAngle: 90,
+      segments: 8,
+      radialReflectionMode: RadialReflectionMode.None,
+      rotationOffset: 0
+    },
+    symmetry3D: {
+      mode: Symmetry3DMode.None,
+      segments: 8,
+      octantAxes: { x: true, y: true, z: true },
+      heightStep: 10,
+      scaleDecay: 0.95,
+      twistPerStep: 20,
+      depthFromRadius: 0
+    },
+    drawings: [],
+    activeDrawingId: null,
+    placements: [],
+    canvasOpacity: 0.7,
+    hideCanvasWhilePainting: false,
+    hidePlanetWhileDrawing: true,
+    previewPlanetId: null,
+    canvasSize: 300
+  });
 
   const [data, setData] = useState<ProcessedData | null>(null);
 
@@ -1092,7 +1124,7 @@ const App: React.FC = () => {
             background: 'linear-gradient(135deg, rgba(20,20,30,0.08) 0%, rgba(40,40,60,0.08) 100%)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.2)',
             border: '1px solid rgba(255,255,255,0.15)',
             borderTop: 'none'
           }}
@@ -1235,7 +1267,9 @@ const App: React.FC = () => {
               setDrawSettings(prev => ({
                 ...prev,
                 enabled: newEnabled,
-                mode: newEnabled ? DrawMode.Kaleidoscope : DrawMode.Off
+                previewPlanetId: newEnabled
+                  ? (prev.previewPlanetId || planetSettings.planets?.[0]?.id || null)
+                  : prev.previewPlanetId
               }));
               // 进入绘图模式时强制打开侧边栏
               if (newEnabled) {
@@ -1385,14 +1419,6 @@ const App: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* 2D 绘图画布 (HoloPad) - 绘图模式下显示 */}
-      {appMode === 'planet' && (
-        <HoloPad
-          settings={drawSettings}
-          setSettings={setDrawSettings}
-        />
-      )}
 
       {/* AI 助手按钮 */}
 

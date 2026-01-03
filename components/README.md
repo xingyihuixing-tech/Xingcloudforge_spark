@@ -30,6 +30,22 @@
   - 地位: 星球与互通模式渲染核心
   - 功能: 渲染星球场景；互通模式下接管星云实例渲染并同步 uniforms
 
+- InkManager.ts
+  - 地位: 绘图 Workbench 的 3D 渲染器（PlanetScene 子系统）
+  - 功能: 读取 DrawSettings.drawings + placements，生成/更新墨迹特效（Points/InstancedMesh），支持 layer/placement 变换与 2D/3D 对称
+
+- HoloCanvas.tsx
+  - 地位: 绘图 Workbench 的 2D 输入层（Overlay）
+  - 功能: 采样指针输入（压感/倾角/防抖），写入 strokes；并在画布上进行 2D 预览重绘
+
+- DrawControlPanel.tsx
+  - 地位: 绘图控制面板（Dimension Crafter）
+  - 功能: 管理 drawings/layers/placements；笔刷与能量束参数；2D/3D 对称；图层与 placement 的变换调参
+
+- InkCanvas.tsx
+  - 地位: 旧版绘图组件占位（已废弃）
+  - 功能: 保留文件以兼容历史引用；当前绘图由 HoloCanvas + InkManager 接管
+
 - GestureHandler.tsx
   - 地位: 输入/手势采集与转发
   - 功能: 将手势/交互数据传递给上层状态与渲染组件

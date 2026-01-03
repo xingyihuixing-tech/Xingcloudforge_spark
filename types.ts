@@ -1672,249 +1672,82 @@ export interface MaterialPreset {
   isBuiltIn?: boolean;
 }
 
-// ==================== 绘图系统 (Dimension Crafter) V2 ====================
+// ==================== 绘图系统（Workbench / Planet Ink） ====================
 
-// 1. 墨迹笔刷类型 - 复用星球模式渲染效果
-export enum BrushType {
-  Stardust = 'stardust',       // 星尘笔 - 复用粒子核心 shader
-  GasCloud = 'gasCloud',       // 气云笔 - 复用实体核心 FBM 噪声
-  EnergyBeam = 'energyBeam',   // 能量束笔 - 复用能量体边缘效果
-  SpiralRing = 'spiralRing',   // 螺旋环笔 - 复用螺旋火焰 shader
-  Firefly = 'firefly',         // 流萤笔 - 复用流萤拖尾效果
-  Fracture = 'fracture'        // 裂痕笔 - 复用裂纹 Ridged Noise
+export interface DrawVec3 {
+  x: number;
+  y: number;
+  z: number;
 }
 
-// 2. 笔刷设置
+// 1. 笔刷系统
+export enum BrushType {
+  Stardust = 'stardust',     // 星尘 (粒子)
+  GasCloud = 'gasCloud',     // 气云 (体积光)
+  EnergyBeam = 'energyBeam', // 能量束 (发光线条)
+  Crystal = 'crystal'        // 晶体 (几何体)
+}
+
 export interface BrushSettings {
   type: BrushType;
 
-  // 基础参数
-  size: number;              // 1-100
-  opacity: number;           // 0-1
-  color: string;             // 主颜色
-  color2?: string;           // 渐变色2
+  // Base
+  size: number;           // 1-100
+  opacity: number;        // 0-1
+  color: string;
 
-  // 压感动态
-  usePressure: boolean;
+  // Dynamics
+  usePressure: boolean;   // 压感开关
   pressureInfluence: {
-    size: boolean;           // 压感影响尺寸
-    opacity: boolean;        // 压感影响透明度
-    flow: boolean;           // 压感影响流量/密度
+    size: boolean;
+    opacity: boolean;
+    flow: boolean;        // 流量/密度 control
   };
 
-  // 星尘笔参数
-  stardust?: {
-    density: number;         // 粒子密度 1-100
-    scatter: number;         // 散射范围 1-50
-    twinkle: boolean;        // 闪烁
-    twinkleSpeed: number;    // 闪烁速度 0.5-5
-    glowIntensity: number;   // 发光强度 0.5-3
-  };
+  // Specific Parameters (Union type or just optional bags)
+  // Stardust
+  density?: number;       // 粒子密度
+  scatter?: number;       // 散射范围
 
-  // 气云笔参数
-  gasCloud?: {
-    noiseScale: number;      // 纹理尺度 0.5-5
-    flowSpeed: number;       // 流动速度 0-2
-    softness: number;        // 边缘柔和度 0.1-1
-    turbulence: number;      // 湍流强度 0-1
-  };
+  // Gas
+  noiseScale?: number;    // 云絮纹理大小
+  flowSpeed?: number;     // 流动速度
 
-  // 能量束笔参数
-  energyBeam?: {
-    coreWidth: number;       // 核心线宽 0.1-1
-    glowRadius: number;      // 辉光半径 1-50
-    glowIntensity: number;   // 辉光强度 0.5-3
-    stabilization: number;   // 防抖等级 0-1
-    electricArc: boolean;    // 电弧模式
-    arcFrequency: number;    // 电弧频率 1-10
-    taperEnabled: boolean;   // 尾部渐细
-  };
-
-  // 螺旋环笔参数
-  spiralRing?: {
-    spiralDensity: number;   // 螺旋密度 1-10
-    pitch: number;           // 螺距 0.1-2
-    thickness: number;       // 环带粗细 1-30
-    rotationSpeed: number;   // 旋转速度 -2~2
-    riseSpeed: number;       // 上升速度 0-1
-    direction: 'cw' | 'ccw' | 'both'; // 方向
-    emissive: number;        // 自发光强度 0.5-3
-  };
-
-  // 流萤笔参数
-  firefly?: {
-    headStyle: 'plain' | 'flare' | 'spark'; // 头部样式
-    headSize: number;        // 头部大小 1-30
-    headBrightness: number;  // 头部亮度 0.5-5
-    trailEnabled: boolean;   // 拖尾开关
-    trailLength: number;     // 拖尾长度 10-200
-    trailTaper: number;      // 拖尾渐细 0.3-3
-    trailOpacity: number;    // 拖尾透明度 0.1-1
-    flareLeaves: number;     // 星芒叶片数 4-8 (flare样式)
-    pulseSpeed: number;      // 脉冲速度 0-3
-  };
-
-  // 裂痕笔参数
-  fracture?: {
-    crackScale: number;      // 裂纹尺度 0.5-5
-    crackThreshold: number;  // 裂纹阈值 0.3-0.8
-    crackFeather: number;    // 边缘羽化 0.05-0.3
-    crackWarp: number;       // 扭曲强度 0-1
-    flowSpeed: number;       // 流动速度 0-1
-    emission: number;        // 自发光 0-2
-  };
+  // Energy
+  coreWidth?: number;     // 核心宽度 (0-1 relative to size)
+  glowIntensity?: number; // 辉光强度
+  stabilization?: number; // 防抖等级 0-1 (StreamLine)
 }
 
-// 3. 2D 对称模式
+// 2. 2D 对称（Procreate 风格）
 export enum Symmetry2DMode {
   None = 'none',
-  MirrorX = 'mirrorX',           // 垂直轴对称（左右镜像）
-  MirrorY = 'mirrorY',           // 水平轴对称（上下镜像）
-  MirrorQuad = 'mirrorQuad',     // 四象限对称
-  MirrorDiagonal = 'mirrorDiagonal', // 对角线对称
-  MirrorFreeAngle = 'mirrorFreeAngle', // 自由角度轴对称
-  Radial = 'radial',             // 径向对称（N等分旋转）
-  Kaleidoscope = 'kaleidoscope'  // 万花筒（旋转+扇区内镜像）
+  Mirror = 'mirror',
+  Radial = 'radial'
 }
 
-// 4. 3D 对称模式
+export enum RadialReflectionMode {
+  None = 'none',
+  Mirror = 'mirror',
+  Kaleidoscope = 'kaleidoscope'
+}
+
+export interface Symmetry2DSettings {
+  mode: Symmetry2DMode;
+
+  // Mirror
+  mirrorAxisAngle: number; // 0..180，0=水平轴，90=垂直轴（绕画布中心）
+
+  // Radial
+  segments: number; // 2..64
+  radialReflectionMode: RadialReflectionMode;
+  rotationOffset: number; // 0..360
+}
+
+// 3. 3D 对称生长（在 3D Growth Space 中复制）
 export enum Symmetry3DMode {
   None = 'none',
-  // 球面映射
-  PlanetSpin = 'planetSpin',     // 经度复制（行星自转）
-  Antipodal = 'antipodal',       // 对极对称（南北半球镜像）
-  LatitudeRings = 'latitudeRings', // 纬度环带
-  // 正多面体
-  Tetrahedral = 'tetrahedral',   // 四面体 (4面)
-  Cubic = 'cubic',               // 立方体 (6面)
-  Octahedral = 'octahedral',     // 八面体 (8面)
-  Dodecahedral = 'dodecahedral', // 十二面体 (12面)
-  Icosahedral = 'icosahedral',   // 二十面体 (20面)
-  // 空间分割
-  Octant = 'octant',             // 八分空间
-  Vortex = 'vortex'              // 涡旋生长
-}
-
-// 5. 对称设置
-export interface SymmetrySettings {
-  // 2D 设置
-  mode2D: Symmetry2DMode;
-  mirrorAxisAngle: number;       // 自由轴角度 (0-180)
-  radialSegments: number;        // 径向分割数 (2-64)
-  radialReflection: boolean;     // 内部镜像（万花筒）
-  centerOffset: { x: number; y: number }; // 中心偏移
-
-  // 3D 设置
-  mode3D: Symmetry3DMode;
-  spinSegments: number;          // 经度分割数 (2-36)
-  polyhedronMirror: boolean;     // 面内镜像
-  vortexTwist: number;           // 涡旋扭曲度
-  vortexHeightOffset: number;    // 涡旋高度偏移
-  vortexScaleDecay: number;      // 涡旋缩放衰减
-}
-
-// 6. 2D -> 3D 映射模式
-export enum ProjectionMode {
-  Sphere = 'sphere',   // 极坐标映射 (球体包裹)
-  Ring = 'ring',       // 经纬映射 (光环/圆盘)
-  Screen = 'screen'    // 屏幕空间映射
-}
-
-// 7. 笔触数据
-export interface Stroke {
-  id: string;
-  points: Float32Array;          // [x, y, pressure, timestamp, ...]
-  symmetrySnapshot: SymmetrySettings; // 创建时的对称设置快照
-}
-
-// 8. 图层
-export interface DrawingLayer {
-  id: string;
-  name: string;
-  visible: boolean;
-  locked: boolean;
-
-  // 图层变换（相对于实例）
-  transform: {
-    scale: number;               // 0.1-5.0
-    tilt: { x: number; y: number; z: number }; // 倾角
-    altitude: number;            // 高度偏移
-    rotationSpeed: number;       // 独立旋转速度
-  };
-
-  // 渲染设置（创建时的笔刷快照）
-  brushType: BrushType;
-  color: string;
-  blending: 'normal' | 'additive';
-  params: Record<string, number>; // 笔刷特定参数
-
-  // 投影模式
-  projection: ProjectionMode;
-
-  // 笔触数据
-  strokes: Stroke[];
-}
-
-// 9. 绘图实例 - 可应用到多个星球
-export interface Drawing {
-  id: string;
-  name: string;
-  visible: boolean;
-  layers: DrawingLayer[];
-  activeLayerId: string | null;
-
-  // 整体变换
-  transform: {
-    scale: number;               // 0.1-5.0
-    tilt: { x: number; y: number; z: number }; // 倾角
-    rotationSpeed: number;       // 整体自转速度
-  };
-}
-
-// Legacy alias for compatibility
-export type DrawingInstance = Drawing;
-
-// 10. 绘图-星球绑定关系
-export interface DrawingPlanetBinding {
-  drawingId: string;
-  planetIds: string[];           // 可绑定多个星球
-}
-
-// 11. 全局绘图设置
-export interface DrawSettings {
-  enabled: boolean;
-
-  // 工具设置
-  brush: BrushSettings;
-  symmetry: SymmetrySettings;
-  projection: ProjectionMode;    // 当前选中的投影模式
-
-  // 数据
-  drawings: Drawing[];           // 所有绘图实例
-  activeDrawingId: string | null;
-  planetBindings: DrawingPlanetBinding[];
-
-  // UI 状态
-  padOpacity: number;            // 2D 画布透明度 (0-1)
-  showSymmetryGuides: boolean;   // 显示对称辅助线
-  ghostCursorEnabled: boolean;   // 显示对称光标
-  hideCanvasWhilePainting: boolean;
-}
-
-// 12. 旧版兼容 - DrawMode 枚举 (映射到新的对称系统)
-export enum DrawMode {
-  Off = 'off',
-  Normal = 'normal',
-  // 2D
-  MirrorX = 'mirrorX',
-  MirrorY = 'mirrorY',
-  Quad = 'quad',
-  Diagonal = 'diagonal',
-  Radial = 'radial',
-  Kaleidoscope = 'kaleidoscope',
-  // 3D
-  PlanetSpin = 'planetSpin',
-  Antipodal = 'antipodal',
+  Octant = 'octant',
   Tetrahedral = 'tetrahedral',
   Cubic = 'cubic',
   Octahedral = 'octahedral',
@@ -1923,11 +1756,107 @@ export enum DrawMode {
   Vortex = 'vortex'
 }
 
-// 13. 旧版兼容 - SymmetryMode 枚举
-export enum SymmetryMode {
-  None = 'none',
-  Mirror = 'mirror',
-  Radial = 'radial',
-  Spiral = 'spiral'
+export interface Symmetry3DSettings {
+  mode: Symmetry3DMode;
+
+  // Shared
+  segments: number; // 2..64，Radial/Vortex 使用
+
+  // Octant
+  octantAxes: { x: boolean; y: boolean; z: boolean };
+
+  // Vortex
+  heightStep: number;
+  scaleDecay: number;
+  twistPerStep: number;
+
+  // Depth growth (for non-surface 3D feeling)
+  depthFromRadius: number; // 0..1，r 越大 z 越深
+}
+
+// 4. 数据结构（资产一致；多星球差异只在 Placement）
+export interface DrawPoint2D {
+  u: number; // 0..1
+  v: number; // 0..1
+  pressure: number;
+  t: number;
+  tiltX?: number;
+  tiltY?: number;
+}
+
+export interface DrawStroke {
+  id: string;
+  points: DrawPoint2D[];
+  brush: BrushSettings; // Snapshot
+  symmetry2D: Symmetry2DSettings; // Snapshot
+  symmetry3D: Symmetry3DSettings; // Snapshot
+  canvasSize: number; // Snapshot
+  createdAt: number;
+}
+
+export interface DrawingLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked?: boolean;
+
+  // Transform (3D Space Layer)
+  tilt: DrawVec3;       // degrees
+  scale: number;
+  altitude: number;     // local +Z offset
+  rotationSpeed: number;
+
+  // Visual
+  opacity: number;
+  blending: 'normal' | 'additive';
+
+  // Default style for new strokes in this layer
+  brushType: BrushType;
+  color: string;
+
+  strokes: DrawStroke[];
+}
+
+export interface Drawing {
+  id: string;
+  name: string;
+  layers: DrawingLayer[];
+  activeLayerId: string | null;
+  visible: boolean;
+}
+
+export interface DrawingPlacement {
+  id: string;
+  drawingId: string;
+  planetId: string;
+  visible: boolean;
+
+  scale: number;
+  tilt: DrawVec3;
+  offset: DrawVec3;
+  followPlanetRotation: number; // 0..1
+}
+
+export interface DrawSettings {
+  enabled: boolean;
+
+  // Global tools
+  brush: BrushSettings;
+  symmetry2D: Symmetry2DSettings;
+  symmetry3D: Symmetry3DSettings;
+
+  // Data
+  drawings: Drawing[];
+  activeDrawingId: string | null;
+  placements: DrawingPlacement[];
+
+  // Workbench UI
+  canvasOpacity: number;
+  hideCanvasWhilePainting: boolean;
+  hidePlanetWhileDrawing: boolean;
+  previewPlanetId: string | null;
+
+  // Geometry scale
+  canvasSize: number; // Growth space size (world units)
 }
 

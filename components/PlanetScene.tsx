@@ -14,8 +14,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js'; // Assuming this exists or revert to what was there
-// HoloCanvas 已移至 App.tsx 中的 HoloPad 组件
-import { InkRenderer } from './draw/InkRenderer';
+import HoloCanvas from './HoloCanvas';
 import {
   PlanetSceneSettings,
   PlanetSettings,
@@ -39,10 +38,10 @@ import {
   ParticleShape,
   GlowMode,
   NebulaBlendMode,
-  DrawSettings,
-  DrawMode
+  DrawSettings
 } from '../types';
-// InkManager 已被 InkRenderer 替代，导入已在上方处理
+import OldNebulaScene from '../OldNebulaScene';
+import { InkManager } from './InkManager';
 import { ProcessedData } from '../services/imageProcessing';
 import { createDefaultEnergyBody } from '../constants';
 import { nebulaCanvasVertexShader, nebulaCanvasFragmentShader } from '../shaders/nebulaCanvasShaders';
@@ -5827,8 +5826,44 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   // �箸艶�嘥��硋��鞉�敹?
   const [sceneReady, setSceneReady] = useState(false);
 
-  // Ink Renderer for symmetry drawing (V2)
-  const inkRendererRef = useRef<InkRenderer | null>(null);
+  // Ink Manager for symmetry drawing
+  const inkManagerRef = useRef<InkManager | null>(null);
+
+  // 绘图模式：确保预览绑定存在（默认绑定到 previewPlanetId）
+  useEffect(() => {
+    if (!drawSettings?.enabled || !setDrawSettings) return;
+    const drawingId = drawSettings.activeDrawingId;
+    const planetId = drawSettings.previewPlanetId;
+    if (!drawingId || !planetId) return;
+
+    const exists = (drawSettings.placements || []).some(p => p.drawingId === drawingId && p.planetId === planetId);
+    if (exists) return;
+
+    setDrawSettings(prev => {
+      const stillEnabled = prev.enabled;
+      const dId = prev.activeDrawingId;
+      const pId = prev.previewPlanetId;
+      if (!stillEnabled || !dId || !pId) return prev;
+      const already = (prev.placements || []).some(p => p.drawingId === dId && p.planetId === pId);
+      if (already) return prev;
+      return {
+        ...prev,
+        placements: [
+          ...(prev.placements || []),
+          {
+            id: `placement-${dId}-${pId}`,
+            drawingId: dId,
+            planetId: pId,
+            visible: true,
+            scale: 1,
+            tilt: { x: 0, y: 0, z: 0 },
+            offset: { x: 0, y: 0, z: 0 },
+            followPlanetRotation: 1
+          }
+        ]
+      };
+    });
+  }, [drawSettings?.enabled, drawSettings?.activeDrawingId, drawSettings?.previewPlanetId, setDrawSettings]);
 
   // ===== 銝𠰴���� Refs =====
   // ���冽��剁�撣衣�摰墧�撠橘�
@@ -5953,10 +5988,10 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     scene.add(bgSphere);
     backgroundSphereRef.current = bgSphere;
 
-    // Ink Renderer Initialization
-    // Initialize InkRenderer after scene is ready
-    if (!inkRendererRef.current) {
-      inkRendererRef.current = new InkRenderer(scene);
+    // Ink Manager Initialization
+    // Initialize InkManager after scene and renderer are ready
+    if (!inkManagerRef.current && renderer.domElement) {
+      inkManagerRef.current = new InkManager(scene, camera, renderer.domElement);
     }
 
     // �𥕦遣�批��?
@@ -9205,13 +9240,14 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         }
       }
 
-      // Ink Renderer Update - 渲染绘图笔触
-      if (inkRendererRef.current && drawSettings?.enabled) {
-        // 同步绘图数据（仅在数据变化时更新几何体）
-        inkRendererRef.current.sync(drawSettings);
-
-        // 更新动画效果
-        inkRendererRef.current.update(drawSettings.brush);
+      // Ink Manager Update
+      if (inkManagerRef.current) {
+        const ds = drawSettingsRef.current;
+        if (ds) {
+          inkManagerRef.current.setSettings(ds);
+          inkManagerRef.current.setPlanets(planetMeshesRef.current);
+        }
+        inkManagerRef.current.update(time);
       }
 
       // 渲染
@@ -9252,6 +9288,28 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       controlsRef.current.enabled = !drawSettings?.enabled;
     }
   }, [drawSettings?.enabled]);
+
+  // 通过 ref 避免动画循环闭包拿到陈旧的 drawSettings
+  const drawSettingsRef = useRef(drawSettings);
+  useEffect(() => {
+    drawSettingsRef.current = drawSettings;
+  }, [drawSettings]);
+
+  // 绘图工作台模式下允许隐藏星球（但保留星球对象用于定位）
+  useEffect(() => {
+    const hide = !!(drawSettings?.enabled && drawSettings.hidePlanetWhileDrawing);
+    planetMeshesRef.current.forEach(p => {
+      if (p?.core) {
+        p.core.visible = !hide;
+      }
+      if (p?.rings) p.rings.visible = !hide;
+      if (p?.flames) p.flames.visible = !hide;
+      if (p?.radiation) p.radiation.visible = !hide;
+      if (p?.fireflies) p.fireflies.visible = !hide;
+      if (p?.magicCircles) p.magicCircles.visible = !hide;
+      if (p?.energyBodies) p.energyBodies.visible = !hide;
+    });
+  }, [drawSettings?.enabled, drawSettings?.hidePlanetWhileDrawing]);
 
   // 摮睃噼?ref嚗滚𢆡餃儐臭韏吔
   const onCameraChangeRef = useRef(onCameraChange);
@@ -11373,7 +11431,13 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         touchAction: 'manipulation'  // 隡睃閫行綉嚗屸漤鵭匧辣餈?
       }}
     >
-      {/* HoloPad 已移至 App.tsx 的顶层渲染，无需在此处渲染 */}
+      {/* 2D Holo-Pad Overlay */}
+      {drawSettings?.enabled && setDrawSettings && (
+        <HoloCanvas
+          settings={drawSettings}
+          setSettings={setDrawSettings}
+        />
+      )}
     </div>
   );
 };
