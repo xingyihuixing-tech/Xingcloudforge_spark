@@ -130,19 +130,24 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
     config,
     setConfig
 }) => {
+    // 安全获取配置 (防止云端旧配置缺少新字段)
+    const theme = config.theme ?? DEFAULT_XING_CONFIG.theme;
+    const inputGlow = config.inputGlow ?? DEFAULT_XING_CONFIG.inputGlow;
+    const gradient = config.gradient ?? DEFAULT_XING_CONFIG.gradient;
+
     // 更新渐变配置
     const updateGradient = useCallback((updates: Partial<LogoGradientConfig>) => {
-        setConfig(prev => ({ ...prev, gradient: { ...prev.gradient, ...updates } }));
+        setConfig(prev => ({ ...prev, gradient: { ...DEFAULT_XING_CONFIG.gradient, ...prev.gradient, ...updates } }));
     }, [setConfig]);
 
     // 更新输入框光晕配置
     const updateInputGlow = useCallback((updates: Partial<InputGlowConfig>) => {
-        setConfig(prev => ({ ...prev, inputGlow: { ...prev.inputGlow, ...updates } }));
+        setConfig(prev => ({ ...prev, inputGlow: { ...DEFAULT_XING_CONFIG.inputGlow, ...prev.inputGlow, ...updates } }));
     }, [setConfig]);
 
     // 更新主题配置
     const updateTheme = useCallback((updates: Partial<ThemeConfig>) => {
-        setConfig(prev => ({ ...prev, theme: { ...prev.theme, ...updates } }));
+        setConfig(prev => ({ ...prev, theme: { ...DEFAULT_XING_CONFIG.theme, ...prev.theme, ...updates } }));
     }, [setConfig]);
 
     return (
@@ -158,8 +163,8 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
                                 onClick={() => setConfig(prev => ({ ...prev, font: font.name }))}
                                 className={`p-2 rounded-lg transition-all hover:scale-[1.02] bg-white/5 hover:bg-white/10`}
                                 style={{
-                                    border: isSelected ? `2px solid ${config.gradient.colors[0]}` : '1px solid rgba(100,116,139,0.2)',
-                                    boxShadow: isSelected ? `0 0 12px ${config.gradient.colors[0]}40` : 'none'
+                                    border: isSelected ? `2px solid ${gradient.colors[0]}` : '1px solid rgba(100,116,139,0.2)',
+                                    boxShadow: isSelected ? `0 0 12px ${gradient.colors[0]}40` : 'none'
                                 }}
                             >
                                 <div
@@ -167,7 +172,7 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
                                     style={{
                                         fontFamily: `'${font.name}', cursive`,
                                         fontSize: '1rem',
-                                        background: `conic-gradient(from 0deg at 50% 50%, ${[...config.gradient.colors, config.gradient.colors[0]].join(', ')})`,
+                                        background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
                                         WebkitBackgroundClip: 'text',
                                         backgroundClip: 'text',
                                         WebkitTextFillColor: 'transparent',
@@ -207,13 +212,13 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
                     {/* 颜色选择器 */}
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-white/50">颜色:</span>
-                        {config.gradient.colors.map((color, i) => (
+                        {gradient.colors.map((color, i) => (
                             <input
                                 key={i}
                                 type="color"
                                 value={color}
                                 onChange={e => {
-                                    const colors = [...config.gradient.colors];
+                                    const colors = [...gradient.colors];
                                     colors[i] = e.target.value;
                                     updateGradient({ colors });
                                 }}
@@ -225,19 +230,19 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
                     {/* 饱和度 & 亮度 */}
                     <div className="grid grid-cols-2 gap-2">
                         <div>
-                            <label className="text-[10px] text-white/50">饱和度: {config.gradient.saturation}%</label>
+                            <label className="text-[10px] text-white/50">饱和度: {gradient.saturation}%</label>
                             <input
                                 type="range" min="0" max="200"
-                                value={config.gradient.saturation}
+                                value={gradient.saturation}
                                 onChange={e => updateGradient({ saturation: parseInt(e.target.value) })}
                                 className="w-full h-1"
                             />
                         </div>
                         <div>
-                            <label className="text-[10px] text-white/50">亮度: {config.gradient.brightness}%</label>
+                            <label className="text-[10px] text-white/50">亮度: {gradient.brightness}%</label>
                             <input
                                 type="range" min="50" max="150"
-                                value={config.gradient.brightness}
+                                value={gradient.brightness}
                                 onChange={e => updateGradient({ brightness: parseInt(e.target.value) })}
                                 className="w-full h-1"
                             />
@@ -257,9 +262,9 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
                                 <button
                                     key={font.id}
                                     onClick={() => updateTheme({ chatFont: font.id })}
-                                    className={`px-3 py-1.5 text-xs rounded-lg transition-all ${config.theme.chatFont === font.id
-                                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                            : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
+                                    className={`px-3 py-1.5 text-xs rounded-lg transition-all ${theme.chatFont === font.id
+                                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                        : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
                                         }`}
                                     style={{ fontFamily: font.family }}
                                 >
@@ -271,10 +276,10 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
 
                     {/* 字体大小 */}
                     <div>
-                        <label className="text-xs text-white/60">字体大小: {config.theme.chatFontSize}px</label>
+                        <label className="text-xs text-white/60">字体大小: {theme.chatFontSize}px</label>
                         <input
                             type="range" min="12" max="20"
-                            value={config.theme.chatFontSize}
+                            value={theme.chatFontSize}
                             onChange={e => updateTheme({ chatFontSize: parseInt(e.target.value) })}
                             className="w-full h-1 mt-1"
                         />
@@ -285,13 +290,13 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
                         <label className="text-xs text-white/60 mb-2 block">输入框边框光晕</label>
                         <div className="flex items-center gap-2">
                             <span className="text-[10px] text-white/40">颜色:</span>
-                            {config.inputGlow.colors.map((color, i) => (
+                            {inputGlow.colors.map((color, i) => (
                                 <input
                                     key={i}
                                     type="color"
                                     value={color}
                                     onChange={e => {
-                                        const newColors = [...config.inputGlow.colors];
+                                        const newColors = [...inputGlow.colors];
                                         newColors[i] = e.target.value;
                                         updateInputGlow({ colors: newColors });
                                     }}
@@ -304,19 +309,19 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
                     {/* 光晕参数 */}
                     <div className="grid grid-cols-2 gap-2">
                         <div>
-                            <label className="text-[10px] text-white/50">速度: {config.inputGlow.speed}s</label>
+                            <label className="text-[10px] text-white/50">速度: {inputGlow.speed}s</label>
                             <input
                                 type="range" min="2" max="12"
-                                value={config.inputGlow.speed}
+                                value={inputGlow.speed}
                                 onChange={e => updateInputGlow({ speed: parseInt(e.target.value) })}
                                 className="w-full h-1"
                             />
                         </div>
                         <div>
-                            <label className="text-[10px] text-white/50">模糊: {config.inputGlow.thickBlur}px</label>
+                            <label className="text-[10px] text-white/50">模糊: {inputGlow.thickBlur}px</label>
                             <input
                                 type="range" min="4" max="24"
-                                value={config.inputGlow.thickBlur}
+                                value={inputGlow.thickBlur}
                                 onChange={e => updateInputGlow({ thickBlur: parseInt(e.target.value) })}
                                 className="w-full h-1"
                             />

@@ -175,7 +175,15 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 .then(res => res.json())
                 .then(data => {
                     if (data.config?.xingSparkConfig) {
-                        setXingConfig(data.config.xingSparkConfig);
+                        const loaded = data.config.xingSparkConfig;
+                        // 深度合并默认值，确保旧配置缺少的新字段有默认值
+                        setXingConfig({
+                            ...DEFAULT_XING_CONFIG,
+                            ...loaded,
+                            gradient: { ...DEFAULT_XING_CONFIG.gradient, ...loaded.gradient },
+                            inputGlow: { ...DEFAULT_XING_CONFIG.inputGlow, ...loaded.inputGlow },
+                            theme: { ...DEFAULT_XING_CONFIG.theme, ...loaded.theme },
+                        });
                     }
                 })
                 .catch(err => console.error('加载 XingSpark 配置失败:', err));
@@ -514,11 +522,32 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">✕</button>
                     </div>
 
-                    {/* XingSpark 设置 - 内嵌展开 */}
+                    {/* XingSpark 设置 - 内嵌展开 (玻璃拟态样式) */}
                     {showXingSettings && (
-                        <div className="border-b border-white/10 p-4 bg-black/20">
-                            {/* Tab 切换 */}
-                            <div className="flex gap-2 mb-4">
+                        <div
+                            className="relative overflow-hidden"
+                            style={{
+                                background: 'rgba(15, 23, 42, 0.95)',
+                                backdropFilter: 'blur(24px)',
+                                WebkitBackdropFilter: 'blur(24px)',
+                            }}
+                        >
+                            {/* 四边渐变边框 */}
+                            <div className="absolute top-0 left-0 right-0 h-[2px] pointer-events-none"
+                                style={{
+                                    background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient?.colors?.[0] || '#71b0ff'} 20%, ${xingConfig.gradient?.colors?.[1] || '#FFB6C1'} 50%, ${xingConfig.gradient?.colors?.[2] || '#2bf6a5'} 80%, transparent 100%)`,
+                                    animation: 'breathe 3.5s ease-in-out infinite'
+                                }}
+                            />
+                            <div className="absolute bottom-0 left-0 right-0 h-[2px] pointer-events-none"
+                                style={{
+                                    background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient?.colors?.[2] || '#2bf6a5'} 20%, ${xingConfig.gradient?.colors?.[1] || '#FFB6C1'} 50%, ${xingConfig.gradient?.colors?.[0] || '#71b0ff'} 80%, transparent 100%)`,
+                                    animation: 'breathe 3.5s ease-in-out infinite'
+                                }}
+                            />
+
+                            {/* Tab 头部 */}
+                            <div className="flex border-b border-white/10">
                                 {[
                                     { id: 'style' as const, label: 'Logo 风格' },
                                     { id: 'color' as const, label: 'Logo 颜色' },
@@ -527,9 +556,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     <button
                                         key={tab.id}
                                         onClick={() => setSettingsTab(tab.id)}
-                                        className={`px-3 py-1.5 text-xs rounded-lg transition-all ${settingsTab === tab.id
-                                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                            : 'text-white/50 hover:text-white/80 border border-transparent'
+                                        className={`flex-1 py-2.5 px-4 text-xs font-medium transition-all ${settingsTab === tab.id
+                                            ? 'text-cyan-400 border-b-2 border-cyan-400'
+                                            : 'text-white/50 hover:text-white/80'
                                             }`}
                                     >
                                         {tab.label}
@@ -537,8 +566,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 ))}
                             </div>
 
-                            {/* Tab 内容 - 紧凑高度 */}
-                            <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                            {/* Tab 内容 */}
+                            <div className="p-4 max-h-[280px] overflow-y-auto custom-scrollbar">
                                 <XingSparkSettingsContent
                                     activeTab={settingsTab}
                                     config={xingConfig}
