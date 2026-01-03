@@ -1,13 +1,13 @@
 /**
- * XingSpark Settings Components
+ * XingSpark Settings Components (完整参考项目实现)
  * 
- * input: config, setConfig, activeTab
+ * input: config, setConfig, activeTab, onBack
  * output: XingSpark 设置内容 UI (Logo风格/颜色/对话栏设置)
  * pos: AI 系统的品牌设置组件
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 
 // ============================================
 // XingSpark 配置类型
@@ -116,20 +116,22 @@ const GRADIENT_PRESETS = [
 export { CHAT_FONT_OPTIONS };
 
 // ============================================
-// 内嵌设置内容组件
+// 完整设置面板组件 (内嵌在 AI 面板中)
 // ============================================
 
-interface XingSparkSettingsContentProps {
-    activeTab: 'style' | 'color' | 'chat';
+interface XingSparkSettingsPanelProps {
     config: XingSparkConfig;
     setConfig: React.Dispatch<React.SetStateAction<XingSparkConfig>>;
+    onBack: () => void;
 }
 
-export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> = ({
-    activeTab,
+export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     config,
-    setConfig
+    setConfig,
+    onBack
 }) => {
+    const [activeTab, setActiveTab] = useState<'style' | 'color' | 'chat'>('style');
+
     // 安全获取配置 (防止云端旧配置缺少新字段)
     const theme = config.theme ?? DEFAULT_XING_CONFIG.theme;
     const inputGlow = config.inputGlow ?? DEFAULT_XING_CONFIG.inputGlow;
@@ -151,186 +153,443 @@ export const XingSparkSettingsContent: React.FC<XingSparkSettingsContentProps> =
     }, [setConfig]);
 
     return (
-        <div className="space-y-4">
-            {/* Logo 风格 Tab */}
-            {activeTab === 'style' && (
-                <div className="grid grid-cols-5 gap-2">
-                    {FONT_OPTIONS.map(font => {
-                        const isSelected = config.font === font.name;
-                        return (
-                            <button
-                                key={font.name}
-                                onClick={() => setConfig(prev => ({ ...prev, font: font.name }))}
-                                className={`p-2 rounded-lg transition-all hover:scale-[1.02] bg-white/5 hover:bg-white/10`}
+        <div className="flex flex-col h-full">
+            {/* Tab 头部 + 返回按钮 */}
+            <div className="flex items-center border-b border-white/10">
+                {/* 返回按钮 */}
+                <button
+                    onClick={onBack}
+                    className="flex items-center gap-1 px-3 py-2.5 text-white/40 hover:text-white/80 transition-colors"
+                    title="返回对话"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7" />
+                    </svg>
+                </button>
+
+                {/* Tab 按钮 */}
+                {[
+                    { id: 'style' as const, label: 'Logo 风格' },
+                    { id: 'color' as const, label: 'Logo 颜色' },
+                    { id: 'chat' as const, label: '对话栏设置' },
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`flex-1 py-2.5 px-4 text-xs font-medium transition-all ${activeTab === tab.id
+                                ? 'text-cyan-400 border-b-2 border-cyan-400'
+                                : 'text-white/50 hover:text-white/80'
+                            }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab 内容 */}
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+                {/* ========== Logo 风格 Tab ========== */}
+                {activeTab === 'style' && (
+                    <div className="space-y-4">
+                        {/* 实时预览 */}
+                        <div className="flex justify-center py-4">
+                            <span
                                 style={{
-                                    border: isSelected ? `2px solid ${gradient.colors[0]}` : '1px solid rgba(100,116,139,0.2)',
-                                    boxShadow: isSelected ? `0 0 12px ${gradient.colors[0]}40` : 'none'
+                                    fontFamily: `'${config.font}', cursive`,
+                                    fontSize: '2rem',
+                                    background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
+                                    WebkitBackgroundClip: 'text',
+                                    backgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    color: 'transparent',
+                                    filter: `saturate(${gradient.saturation}%) brightness(${gradient.brightness}%)`,
+                                    textShadow: gradient.glow.enabled ? `0 0 ${gradient.glow.intensity}px ${gradient.colors[0]}` : 'none',
                                 }}
                             >
-                                <div
-                                    className="text-center"
-                                    style={{
-                                        fontFamily: `'${font.name}', cursive`,
-                                        fontSize: '1rem',
-                                        background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
-                                        WebkitBackgroundClip: 'text',
-                                        backgroundClip: 'text',
-                                        WebkitTextFillColor: 'transparent',
-                                        color: 'transparent',
-                                        lineHeight: '1.5',
-                                    }}
-                                >
-                                    XS
-                                </div>
-                                <div className="text-[8px] text-center text-white/40 mt-1 truncate">{font.label}</div>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
+                                <span style={{ fontSize: '1em' }}>X</span>
+                                <span style={{ fontSize: '0.9em' }}>ing</span>
+                                <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
+                                <span style={{ fontSize: '0.9em' }}>park</span>
+                            </span>
+                        </div>
 
-            {/* Logo 颜色 Tab */}
-            {activeTab === 'color' && (
-                <div className="space-y-3">
-                    {/* 渐变预设 */}
-                    <div className="grid grid-cols-8 gap-1">
-                        {GRADIENT_PRESETS.map(preset => (
-                            <button
-                                key={preset.id}
-                                onClick={() => updateGradient({ colors: [...preset.colors] })}
-                                className="p-1 rounded transition-all hover:scale-105"
-                                title={preset.name}
-                            >
-                                <div
-                                    className="w-full h-4 rounded"
-                                    style={{ background: `linear-gradient(90deg, ${preset.colors.join(', ')})` }}
-                                />
-                            </button>
-                        ))}
+                        {/* 10种字体 - 2x5 网格 */}
+                        <div className="grid grid-cols-5 gap-2">
+                            {FONT_OPTIONS.map(font => {
+                                const isSelected = config.font === font.name;
+                                return (
+                                    <button
+                                        key={font.name}
+                                        onClick={() => setConfig(prev => ({ ...prev, font: font.name }))}
+                                        className="p-3 rounded-xl transition-all hover:scale-[1.02] bg-white/5 hover:bg-white/10"
+                                        style={{
+                                            border: isSelected ? `2px solid ${gradient.colors[0]}` : '1px solid rgba(100,116,139,0.2)',
+                                            boxShadow: isSelected ? `0 0 16px ${gradient.colors[0]}40` : 'none'
+                                        }}
+                                    >
+                                        <div
+                                            className="text-center"
+                                            style={{
+                                                fontFamily: `'${font.name}', cursive`,
+                                                fontSize: '1.2rem',
+                                                background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
+                                                WebkitBackgroundClip: 'text',
+                                                backgroundClip: 'text',
+                                                WebkitTextFillColor: 'transparent',
+                                                color: 'transparent',
+                                                lineHeight: '1.8',
+                                            }}
+                                        >
+                                            XS
+                                        </div>
+                                        <div className="text-[9px] text-center text-white/40 mt-1">{font.label}</div>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
+                )}
 
-                    {/* 颜色选择器 */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-xs text-white/50">颜色:</span>
-                        {gradient.colors.map((color, i) => (
+                {/* ========== Logo 颜色 Tab ========== */}
+                {activeTab === 'color' && (
+                    <div className="space-y-4">
+                        {/* 实时预览 */}
+                        <div className="flex justify-center py-3 rounded-xl bg-white/5">
+                            <span
+                                style={{
+                                    fontFamily: `'${config.font}', cursive`,
+                                    fontSize: '2rem',
+                                    background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
+                                    WebkitBackgroundClip: 'text',
+                                    backgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    color: 'transparent',
+                                    filter: `saturate(${gradient.saturation}%) brightness(${gradient.brightness}%)`,
+                                }}
+                            >
+                                XingSpark
+                            </span>
+                        </div>
+
+                        {/* 渐变预设 */}
+                        <div>
+                            <label className="text-xs text-white/60 mb-2 block">渐变预设</label>
+                            <div className="grid grid-cols-4 gap-2">
+                                {GRADIENT_PRESETS.map(preset => (
+                                    <button
+                                        key={preset.id}
+                                        onClick={() => updateGradient({ colors: [...preset.colors] })}
+                                        className="p-2 rounded-lg transition-all hover:scale-105 bg-white/5 hover:bg-white/10"
+                                        title={preset.name}
+                                    >
+                                        <div
+                                            className="w-full h-5 rounded-md mb-1"
+                                            style={{ background: `linear-gradient(90deg, ${preset.colors.join(', ')})` }}
+                                        />
+                                        <span className="text-[10px] text-white/50">{preset.name}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 颜色数量 */}
+                        <div>
+                            <label className="text-xs text-white/60">颜色数量: {gradient.colors.length}</label>
                             <input
-                                key={i}
-                                type="color"
-                                value={color}
+                                type="range" min="2" max="5"
+                                value={gradient.colors.length}
                                 onChange={e => {
+                                    const count = parseInt(e.target.value);
                                     const colors = [...gradient.colors];
-                                    colors[i] = e.target.value;
+                                    while (colors.length < count) colors.push('#71b0ff');
+                                    while (colors.length > count) colors.pop();
                                     updateGradient({ colors });
                                 }}
-                                className="w-6 h-6 rounded cursor-pointer border-0"
-                            />
-                        ))}
-                    </div>
-
-                    {/* 饱和度 & 亮度 */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <div>
-                            <label className="text-[10px] text-white/50">饱和度: {gradient.saturation}%</label>
-                            <input
-                                type="range" min="0" max="200"
-                                value={gradient.saturation}
-                                onChange={e => updateGradient({ saturation: parseInt(e.target.value) })}
-                                className="w-full h-1"
+                                className="w-full h-1 mt-1"
                             />
                         </div>
-                        <div>
-                            <label className="text-[10px] text-white/50">亮度: {gradient.brightness}%</label>
-                            <input
-                                type="range" min="50" max="150"
-                                value={gradient.brightness}
-                                onChange={e => updateGradient({ brightness: parseInt(e.target.value) })}
-                                className="w-full h-1"
-                            />
-                        </div>
-                    </div>
-                </div>
-            )}
 
-            {/* 对话栏设置 Tab */}
-            {activeTab === 'chat' && (
-                <div className="space-y-4">
-                    {/* 对话字体 */}
-                    <div>
-                        <label className="text-xs text-white/60 mb-2 block">消息气泡字体</label>
-                        <div className="flex gap-2">
-                            {CHAT_FONT_OPTIONS.map(font => (
-                                <button
-                                    key={font.id}
-                                    onClick={() => updateTheme({ chatFont: font.id })}
-                                    className={`px-3 py-1.5 text-xs rounded-lg transition-all ${theme.chatFont === font.id
-                                        ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                        : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
-                                        }`}
-                                    style={{ fontFamily: font.family }}
-                                >
-                                    {font.name}
-                                </button>
+                        {/* 颜色选择器 */}
+                        <div className="flex flex-wrap gap-2">
+                            {gradient.colors.map((color, i) => (
+                                <div key={i} className="flex flex-col items-center gap-1">
+                                    <input
+                                        type="color"
+                                        value={color}
+                                        onChange={e => {
+                                            const colors = [...gradient.colors];
+                                            colors[i] = e.target.value;
+                                            updateGradient({ colors });
+                                        }}
+                                        className="w-10 h-10 rounded-lg cursor-pointer border-0"
+                                    />
+                                    <span className="text-[10px] text-white/40">#{i + 1}</span>
+                                </div>
                             ))}
                         </div>
-                    </div>
 
-                    {/* 字体大小 */}
-                    <div>
-                        <label className="text-xs text-white/60">字体大小: {theme.chatFontSize}px</label>
-                        <input
-                            type="range" min="12" max="20"
-                            value={theme.chatFontSize}
-                            onChange={e => updateTheme({ chatFontSize: parseInt(e.target.value) })}
-                            className="w-full h-1 mt-1"
-                        />
-                    </div>
+                        {/* 渐变类型 */}
+                        <div>
+                            <label className="text-xs text-white/60 mb-2 block">渐变类型</label>
+                            <div className="flex gap-2">
+                                {(['conic', 'linear', 'radial'] as const).map(type => (
+                                    <button
+                                        key={type}
+                                        onClick={() => updateGradient({ type })}
+                                        className={`flex-1 py-1.5 text-xs rounded-lg transition-all ${gradient.type === type
+                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                                : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
+                                            }`}
+                                    >
+                                        {type === 'conic' ? '漩涡' : type === 'linear' ? '线性' : '放射'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
 
-                    {/* 输入框光晕 */}
-                    <div>
-                        <label className="text-xs text-white/60 mb-2 block">输入框边框光晕</label>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-white/40">颜色:</span>
-                            {inputGlow.colors.map((color, i) => (
+                        {/* 流动类型 & 方向 */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-white/60 mb-2 block">流动类型</label>
+                                <div className="flex gap-1">
+                                    {(['vortex', 'wave'] as const).map(flowType => (
+                                        <button
+                                            key={flowType}
+                                            onClick={() => updateGradient({ flowType })}
+                                            className={`flex-1 py-1.5 text-xs rounded-lg transition-all ${gradient.flowType === flowType
+                                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                                    : 'text-white/50 bg-white/5 border border-transparent'
+                                                }`}
+                                        >
+                                            {flowType === 'vortex' ? '漩涡' : '波浪'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-xs text-white/60 mb-2 block">流动方向</label>
+                                <div className="flex gap-1">
+                                    {(['cw', 'ccw'] as const).map(dir => (
+                                        <button
+                                            key={dir}
+                                            onClick={() => updateGradient({ flowDirection: dir })}
+                                            className={`flex-1 py-1.5 text-xs rounded-lg transition-all ${gradient.flowDirection === dir
+                                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                                    : 'text-white/50 bg-white/5 border border-transparent'
+                                                }`}
+                                        >
+                                            {dir === 'cw' ? '顺时针' : '逆时针'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 速度、轨道范围 */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-white/60">流动速度: {gradient.flowSpeed}</label>
                                 <input
-                                    key={i}
-                                    type="color"
-                                    value={color}
-                                    onChange={e => {
-                                        const newColors = [...inputGlow.colors];
-                                        newColors[i] = e.target.value;
-                                        updateInputGlow({ colors: newColors });
-                                    }}
-                                    className="w-5 h-5 rounded cursor-pointer border-0"
+                                    type="range" min="1" max="10"
+                                    value={gradient.flowSpeed}
+                                    onChange={e => updateGradient({ flowSpeed: parseInt(e.target.value) })}
+                                    className="w-full h-1 mt-1"
                                 />
-                            ))}
+                            </div>
+                            <div>
+                                <label className="text-xs text-white/60">轨道范围: {gradient.orbitRange}%</label>
+                                <input
+                                    type="range" min="0" max="100"
+                                    value={gradient.orbitRange}
+                                    onChange={e => updateGradient({ orbitRange: parseInt(e.target.value) })}
+                                    className="w-full h-1 mt-1"
+                                />
+                            </div>
                         </div>
-                    </div>
 
-                    {/* 光晕参数 */}
-                    <div className="grid grid-cols-2 gap-2">
-                        <div>
-                            <label className="text-[10px] text-white/50">速度: {inputGlow.speed}s</label>
-                            <input
-                                type="range" min="2" max="12"
-                                value={inputGlow.speed}
-                                onChange={e => updateInputGlow({ speed: parseInt(e.target.value) })}
-                                className="w-full h-1"
-                            />
+                        {/* 饱和度 & 亮度 */}
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs text-white/60">饱和度: {gradient.saturation}%</label>
+                                <input
+                                    type="range" min="0" max="200"
+                                    value={gradient.saturation}
+                                    onChange={e => updateGradient({ saturation: parseInt(e.target.value) })}
+                                    className="w-full h-1 mt-1"
+                                />
+                            </div>
+                            <div>
+                                <label className="text-xs text-white/60">亮度: {gradient.brightness}%</label>
+                                <input
+                                    type="range" min="50" max="150"
+                                    value={gradient.brightness}
+                                    onChange={e => updateGradient({ brightness: parseInt(e.target.value) })}
+                                    className="w-full h-1 mt-1"
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="text-[10px] text-white/50">模糊: {inputGlow.thickBlur}px</label>
+
+                        {/* 发光效果 */}
+                        <div className="flex items-center justify-between">
+                            <label className="text-xs text-white/60">发光效果</label>
+                            <button
+                                onClick={() => updateGradient({ glow: { ...gradient.glow, enabled: !gradient.glow.enabled } })}
+                                className={`w-10 h-5 rounded-full transition-all ${!gradient.glow.enabled ? 'bg-white/20' : 'bg-cyan-500'}`}
+                            >
+                                <div className={`w-4 h-4 rounded-full bg-white shadow transition-transform ${gradient.glow.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                            </button>
+                        </div>
+                        {gradient.glow.enabled && (
+                            <div>
+                                <label className="text-xs text-white/40">发光强度: {gradient.glow.intensity}px</label>
+                                <input
+                                    type="range" min="0" max="20"
+                                    value={gradient.glow.intensity}
+                                    onChange={e => updateGradient({ glow: { ...gradient.glow, intensity: parseInt(e.target.value) } })}
+                                    className="w-full h-1 mt-1"
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ========== 对话栏设置 Tab ========== */}
+                {activeTab === 'chat' && (
+                    <div className="space-y-5">
+                        {/* 对话字体 */}
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                            <h3 className="text-sm font-medium text-white/80 mb-3">消息气泡字体</h3>
+                            <div className="grid grid-cols-2 gap-2">
+                                {CHAT_FONT_OPTIONS.map(font => (
+                                    <button
+                                        key={font.id}
+                                        onClick={() => updateTheme({ chatFont: font.id })}
+                                        className={`px-3 py-2.5 text-sm rounded-lg transition-all ${theme.chatFont === font.id
+                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                                : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
+                                            }`}
+                                        style={{ fontFamily: font.family }}
+                                    >
+                                        {font.name}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 字体大小 */}
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                            <h3 className="text-sm font-medium text-white/80 mb-3">字体大小: {theme.chatFontSize}px</h3>
                             <input
-                                type="range" min="4" max="24"
-                                value={inputGlow.thickBlur}
-                                onChange={e => updateInputGlow({ thickBlur: parseInt(e.target.value) })}
-                                className="w-full h-1"
+                                type="range" min="12" max="20"
+                                value={theme.chatFontSize}
+                                onChange={e => updateTheme({ chatFontSize: parseInt(e.target.value) })}
+                                className="w-full h-2"
                             />
+                            <div className="flex justify-between text-[10px] text-white/40 mt-1">
+                                <span>12px</span>
+                                <span>14px</span>
+                                <span>16px</span>
+                                <span>18px</span>
+                                <span>20px</span>
+                            </div>
+                        </div>
+
+                        {/* 输入框光晕 */}
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                            <h3 className="text-sm font-medium text-white/80 mb-3">输入框边框光晕</h3>
+                            <div className="space-y-3">
+                                {/* 光晕颜色 */}
+                                <div>
+                                    <label className="text-xs text-white/50 mb-2 block">光晕颜色</label>
+                                    <div className="flex gap-2">
+                                        {inputGlow.colors.map((color, i) => (
+                                            <input
+                                                key={i}
+                                                type="color"
+                                                value={color}
+                                                onChange={e => {
+                                                    const newColors = [...inputGlow.colors];
+                                                    newColors[i] = e.target.value;
+                                                    updateInputGlow({ colors: newColors });
+                                                }}
+                                                className="w-8 h-8 rounded cursor-pointer border-0"
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 动画速度 */}
+                                <div>
+                                    <label className="text-xs text-white/50">动画速度: {inputGlow.speed}s</label>
+                                    <input
+                                        type="range" min="2" max="12"
+                                        value={inputGlow.speed}
+                                        onChange={e => updateInputGlow({ speed: parseInt(e.target.value) })}
+                                        className="w-full h-1 mt-1"
+                                    />
+                                </div>
+
+                                {/* 模糊度 & 透明度 */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-white/50">粗光晕模糊: {inputGlow.thickBlur}px</label>
+                                        <input
+                                            type="range" min="4" max="24"
+                                            value={inputGlow.thickBlur}
+                                            onChange={e => updateInputGlow({ thickBlur: parseInt(e.target.value) })}
+                                            className="w-full h-1 mt-1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-white/50">粗光晕强度: {Math.round(inputGlow.thickOpacity * 100)}%</label>
+                                        <input
+                                            type="range" min="5" max="50"
+                                            value={inputGlow.thickOpacity * 100}
+                                            onChange={e => updateInputGlow({ thickOpacity: parseInt(e.target.value) / 100 })}
+                                            className="w-full h-1 mt-1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-white/50">细光晕模糊: {inputGlow.thinBlur}px</label>
+                                        <input
+                                            type="range" min="2" max="12"
+                                            value={inputGlow.thinBlur}
+                                            onChange={e => updateInputGlow({ thinBlur: parseInt(e.target.value) })}
+                                            className="w-full h-1 mt-1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-white/50">细光晕强度: {Math.round(inputGlow.thinOpacity * 100)}%</label>
+                                        <input
+                                            type="range" min="5" max="30"
+                                            value={inputGlow.thinOpacity * 100}
+                                            onChange={e => updateInputGlow({ thinOpacity: parseInt(e.target.value) / 100 })}
+                                            className="w-full h-1 mt-1"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 边框透明度 */}
+                                <div>
+                                    <label className="text-xs text-white/50">边框透明度: {Math.round(inputGlow.borderOpacity * 100)}%</label>
+                                    <input
+                                        type="range" min="10" max="100"
+                                        value={inputGlow.borderOpacity * 100}
+                                        onChange={e => updateInputGlow({ borderOpacity: parseInt(e.target.value) / 100 })}
+                                        className="w-full h-1 mt-1"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
         </div>
     );
 };
 
-export default XingSparkSettingsContent;
+// 保持向后兼容的默认导出
+export default XingSparkSettingsPanel;
+
+// 旧的 XingSparkSettingsContent 也保留 (用于其他地方引用)
+export const XingSparkSettingsContent = XingSparkSettingsPanel;

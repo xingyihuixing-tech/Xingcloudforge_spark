@@ -1379,8 +1379,6 @@ const App: React.FC = () => {
             materialSettings={materialSettings}
             nebulaPresets={nebulaPresets}
             setNebulaPresets={setNebulaPresets}
-            drawSettings={drawSettings}
-            setDrawSettings={setDrawSettings}
           />
         </div>
       </div>

@@ -53,9 +53,7 @@ import {
   AfterimageZoneSettings,
   AfterimageSystemSettings,
   NebulaPreset,
-  NebulaInstance,
-  DrawSettings,
-  DrawMode
+  NebulaInstance
 } from '../types';
 import {
   SAMPLE_IMAGES,
@@ -144,8 +142,6 @@ interface ControlPanelProps {
   setGestureEnabled: (enabled: boolean) => void;
   overlayMode?: boolean;  // 互通模式状态
   materialSettings?: import('../types').MaterialSettings;  // 从 App 传入的材质配置（用于样式生成）
-  drawSettings?: DrawSettings;  // 绘图模式设置
-  setDrawSettings?: React.Dispatch<React.SetStateAction<DrawSettings>>;  // 绘图模式设置更新函数
 }
 
 const DepthModeLabels: Record<DepthMode, string> = {
@@ -2496,9 +2492,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   overlayMode = false,  // 互通模式状态，默认false
   materialSettings: propMaterialSettings,  // 从 App 传入的材质配置
   nebulaPresets,
-  setNebulaPresets,
-  drawSettings,
-  setDrawSettings
+  setNebulaPresets
 }) => {
   // 获取当前用户信息用于上传图片
   const { currentUser } = useUser();
@@ -6069,116 +6063,6 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
       {/* ==================== 星球模式控制面板 ==================== */}
       {appMode === 'planet' && (
         <>
-          {/* ===== 绘图模式控制面板 ===== */}
-          {drawSettings?.enabled && setDrawSettings && (
-            <ControlGroup title="🎨 绘图模式">
-              {/* 模式选择 */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-16">模式</span>
-                  <div className="flex flex-1 gap-1">
-                    {[
-                      { mode: DrawMode.Kaleidoscope, label: '万花筒', icon: '🔮' },
-                      { mode: DrawMode.PlanetSpin, label: '行星旋转', icon: '🌍' }
-                    ].map(({ mode, label, icon }) => (
-                      <button
-                        key={mode}
-                        onClick={() => setDrawSettings(prev => ({ ...prev, mode }))}
-                        className="flex-1 px-2 py-1.5 text-xs rounded transition-all"
-                        style={{
-                          background: drawSettings.mode === mode
-                            ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.4), rgba(168, 85, 247, 0.4))'
-                            : 'rgba(255,255,255,0.05)',
-                          border: drawSettings.mode === mode
-                            ? '1px solid rgba(236, 72, 153, 0.6)'
-                            : '1px solid rgba(255,255,255,0.1)',
-                          color: drawSettings.mode === mode ? '#fff' : 'rgba(255,255,255,0.6)'
-                        }}
-                      >
-                        {icon} {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 对称份数 */}
-                <RangeControl
-                  label="对称份数"
-                  value={drawSettings.segments}
-                  min={2}
-                  max={32}
-                  step={1}
-                  onChange={(v) => setDrawSettings(prev => ({ ...prev, segments: v }))}
-                />
-
-                {/* 笔刷大小 */}
-                <RangeControl
-                  label="笔刷大小"
-                  value={drawSettings.brush.size}
-                  min={1}
-                  max={50}
-                  step={1}
-                  onChange={(v) => setDrawSettings(prev => ({
-                    ...prev,
-                    brush: { ...prev.brush, size: v }
-                  }))}
-                />
-
-                {/* 笔刷颜色 */}
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-16">颜色</span>
-                  <input
-                    type="color"
-                    value={drawSettings.brush.color}
-                    onChange={(e) => setDrawSettings(prev => ({
-                      ...prev,
-                      brush: { ...prev.brush, color: e.target.value }
-                    }))}
-                    className="w-8 h-6 rounded border-none cursor-pointer"
-                    style={{ background: 'transparent' }}
-                  />
-                  <span className="text-xs text-gray-300 flex-1">{drawSettings.brush.color}</span>
-                </div>
-
-                {/* 透明度 */}
-                <RangeControl
-                  label="透明度"
-                  value={drawSettings.brush.opacity}
-                  min={0.1}
-                  max={1}
-                  step={0.1}
-                  onChange={(v) => setDrawSettings(prev => ({
-                    ...prev,
-                    brush: { ...prev.brush, opacity: v }
-                  }))}
-                />
-
-                {/* 辉光强度 */}
-                <RangeControl
-                  label="辉光强度"
-                  value={drawSettings.inkBloom}
-                  min={0}
-                  max={3}
-                  step={0.1}
-                  onChange={(v) => setDrawSettings(prev => ({ ...prev, inkBloom: v }))}
-                />
-
-                {/* 关闭绘图按钮 */}
-                <button
-                  onClick={() => setDrawSettings(prev => ({ ...prev, enabled: false, mode: DrawMode.Off }))}
-                  className="w-full px-3 py-2 text-xs rounded-lg transition-all font-medium"
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid rgba(239, 68, 68, 0.4)',
-                    color: '#f87171'
-                  }}
-                >
-                  🚫 关闭绘图模式
-                </button>
-              </div>
-            </ControlGroup>
-          )}
-
           {/* 星球列表 */}
           <ControlGroup title="星球列表">
             {/* 顶部操作栏 */}
