@@ -1239,8 +1239,8 @@ const App: React.FC = () => {
           title="打开 AI 助手"
         />
 
-        {/* Draw Mode Button - 仅星球模式显示 */}
-        {appMode === 'planet' && (
+        {/* Draw Mode Button - 星球模式或互通模式下显示 */}
+        {(appMode === 'planet' || overlayMode) && (
           <button
             onClick={() => setDrawSettings(prev => ({
               ...prev,
@@ -1261,7 +1261,7 @@ const App: React.FC = () => {
                 ? '1px solid rgba(255,255,255,0.4)'
                 : '1px solid rgba(255,255,255,0.25)'
             }}
-            title={drawSettings.enabled ? "关闭绘图模式" : "开启绘图模式"}
+            title={drawSettings.enabled ? "关闭绘图模式" : "开启绘图模式 (🖌️ 对称绘制)"}
           >
             <span className="text-xl">{drawSettings.enabled ? '✨' : '🖌️'}</span>
           </button>
