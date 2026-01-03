@@ -35,7 +35,9 @@ import {
   NebulaInstance,
   ParticleShape,
   GlowMode,
-  NebulaBlendMode
+  NebulaBlendMode,
+  DrawSettings,
+  DrawMode
 } from '../types';
 import OldNebulaScene from '../OldNebulaScene';
 import { InkManager } from './InkManager';
@@ -5746,6 +5748,7 @@ interface PlanetSceneProps {
   nebulaSettings?: AppSettings;
   nebulaInstancesData?: Map<string, ProcessedData>;
   sidebarOpen?: boolean;  // 侧边栏是否展开
+  drawSettings?: DrawSettings;  // 绘图模式设置
 }
 
 // �嘥��豢㦤霈曄蔭
@@ -5756,7 +5759,7 @@ const INITIAL_CAMERA = {
 
 // ==================== 銝餌�隞?====================
 
-const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraChange, resetCameraRef, overlayMode = false, nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false }) => {
+const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraChange, resetCameraRef, overlayMode = false, nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false, drawSettings }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -5820,6 +5823,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 
   // �箸艶�嘥��硋��鞉�敹?
   const [sceneReady, setSceneReady] = useState(false);
+
+  // Ink Manager for symmetry drawing
+  const inkManagerRef = useRef<InkManager | null>(null);
 
   // ===== 銝𠰴���� Refs =====
   // ���冽��剁�撣衣�摰墧�撠橘�
@@ -5943,6 +5949,12 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     bgSphere.visible = false; // �嘥��鞱�
     scene.add(bgSphere);
     backgroundSphereRef.current = bgSphere;
+
+    // Ink Manager Initialization
+    // Initialize InkManager after scene and renderer are ready
+    if (!inkManagerRef.current && renderer.domElement) {
+      inkManagerRef.current = new InkManager(scene, camera, renderer.domElement);
+    }
 
     // �𥕦遣�批��?
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -9182,7 +9194,24 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         }
       }
 
-      // 皜脫�
+      // Ink Manager Update
+      if (inkManagerRef.current) {
+        // Wire drawSettings to InkManager
+        if (drawSettings) {
+          inkManagerRef.current.setSettings(drawSettings);
+
+          // Find and set planet mesh for raycasting
+          // Use first planet's core group as the target
+          const firstPlanetData = Array.from(planetMeshesRef.current.values())[0];
+          if (firstPlanetData?.core) {
+            inkManagerRef.current.setPlanet(firstPlanetData.core);
+          }
+        }
+
+        inkManagerRef.current.update(time);
+      }
+
+      // 渲染
       if (composerRef.current) {
         composerRef.current.render();
       }

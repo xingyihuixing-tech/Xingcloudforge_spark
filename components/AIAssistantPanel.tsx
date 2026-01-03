@@ -142,8 +142,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // === 窗口拖拽 ===
-    // 默认位置更靠下
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 250, y: window.innerHeight - 400 });
+    // 默认位置居中
+    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 300 });
     const [isDragging, setIsDragging] = useState(false);
     const dragStartPos = useRef({ x: 0, y: 0 });
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -479,7 +479,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 onMouseDown={handleDragStart}
             >
                 <div
-                    className={`w-[500px] ai-panel-container ${isRefining ? 'refining' : ''}`}
+                    className={`w-[600px] ai-panel-container ${isRefining ? 'refining' : ''}`}
                 // 样式由 CSS .ai-panel-container 控制 (4-segment breathe borders)
                 >
                     {/* 4-Segment Breathe Borders */}

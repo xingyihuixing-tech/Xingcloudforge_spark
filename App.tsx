@@ -14,7 +14,7 @@ import { UserProvider, useUser } from './contexts/UserContext';
 import { UserMenu } from './components/UserMenu';
 import { UserLogin } from './components/UserLogin';
 import AIAssistantPanel from './components/AIAssistantPanel';
-import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
+import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, DrawSettings, DrawMode } from './types';
 import {
   DEFAULT_SETTINGS,
   SAMPLE_IMAGES,
@@ -315,6 +315,25 @@ const App: React.FC = () => {
   const [planetSettings, setPlanetSettings] = useState<PlanetSceneSettings>(() => loadPlanetSceneSettings(null));
   const [appMode, setAppMode] = useState<AppMode>('nebula');
   const [overlayMode, setOverlayMode] = useState(false); // 叠加模式：同时显示星云和星球
+
+  // 绘图模式设置
+  const [drawSettings, setDrawSettings] = useState<DrawSettings>({
+    enabled: false,
+    mode: DrawMode.Off,
+    segments: 6,
+    altitude: 5,
+    bindPlanetId: null,
+    brush: {
+      size: 10,
+      opacity: 0.8,
+      color: '#ffffff',
+      hardness: 0.5,
+      usePressure: true,
+      pressureInfluence: { size: true, opacity: true, flow: false }
+    },
+    inkFlow: 0.2,
+    inkBloom: 1.0
+  });
 
   const [data, setData] = useState<ProcessedData | null>(null);
 
@@ -1193,6 +1212,7 @@ const App: React.FC = () => {
               nebulaSettings={overlayMode ? settings : undefined}
               nebulaInstancesData={overlayMode ? nebulaInstancesData : undefined}
               sidebarOpen={showControls}
+              drawSettings={drawSettings}
             />
           </div>
         )}
@@ -1218,6 +1238,34 @@ const App: React.FC = () => {
           className={`absolute top-24 z-[199] w-10 h-10 ai-star-container transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
           title="打开 AI 助手"
         />
+
+        {/* Draw Mode Button - 仅星球模式显示 */}
+        {appMode === 'planet' && (
+          <button
+            onClick={() => setDrawSettings(prev => ({
+              ...prev,
+              enabled: !prev.enabled,
+              mode: prev.enabled ? DrawMode.Off : DrawMode.Kaleidoscope
+            }))}
+            className={`absolute top-40 z-[199] w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
+            style={{
+              background: drawSettings.enabled
+                ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.8), rgba(168, 85, 247, 0.8))'
+                : 'rgba(30,30,40,0.25)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: drawSettings.enabled
+                ? '0 4px 20px rgba(236, 72, 153, 0.4), inset 0 1px 0 rgba(255,255,255,0.3)'
+                : '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
+              border: drawSettings.enabled
+                ? '1px solid rgba(255,255,255,0.4)'
+                : '1px solid rgba(255,255,255,0.25)'
+            }}
+            title={drawSettings.enabled ? "关闭绘图模式" : "开启绘图模式"}
+          >
+            <span className="text-xl">{drawSettings.enabled ? '✨' : '🖌️'}</span>
+          </button>
+        )}
 
         {/* 视角信息面板 - 仅星球模式显示 - 玻璃样式 */}
         {appMode === 'planet' && cameraInfo && (
