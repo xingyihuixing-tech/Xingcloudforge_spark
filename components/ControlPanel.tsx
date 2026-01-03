@@ -2550,7 +2550,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   const [afterimageSubTab, setAfterimageSubTab] = useState<'texture' | 'particles'>('texture');
 
   // 环系统选中状态
-  const [selectedSilkRingId, setSelectedSilkRingId] = useState<string | null>(null);
+
 
   // 设置面板状态
   const [showSettings, setShowSettings] = useState(false);
