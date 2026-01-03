@@ -8,7 +8,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
-import { Palette, ChevronDown } from 'lucide-react';
+import { Palette, ChevronDown, X } from 'lucide-react';
 
 // ============================================
 // XingSpark 配置类型
@@ -153,6 +153,9 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     const [activeTab, setActiveTab] = useState<'style' | 'color' | 'chat'>('style');
     // 渐变预设折叠状态
     const [gradientPresetsExpanded, setGradientPresetsExpanded] = useState(false);
+    // 预设保存弹窗状态
+    const [showPresetDialog, setShowPresetDialog] = useState<'save' | 'update' | null>(null);
+    const [presetEditName, setPresetEditName] = useState('');
 
     // 安全获取配置 (防止云端旧配置缺少新字段)
     const theme = config.theme ?? DEFAULT_XING_CONFIG.theme;
@@ -165,6 +168,16 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
         p.colors.length === gradient.colors.length &&
         p.colors.every((c, i) => c.toLowerCase() === gradient.colors[i].toLowerCase())
     );
+
+    // 颜色数组归一化 (确保至少 4 个颜色点)
+    const normalizeColors = (colors: string[]): string[] => {
+        if (colors.length >= 4) return colors;
+        const result = [...colors];
+        while (result.length < 4) {
+            result.push(result[result.length - 1]);
+        }
+        return result;
+    };
 
     // 更新渐变配置
     const updateGradient = useCallback((updates: Partial<LogoGradientConfig>) => {
@@ -344,9 +357,87 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                                             );
                                         })}
                                     </div>
+
+                                    {/* 操作按钮 */}
+                                    <div className="flex gap-2 pt-2">
+                                        {currentPreset && (
+                                            <button
+                                                onClick={() => setShowPresetDialog('update')}
+                                                className="flex-1 py-2 text-xs rounded-lg transition-colors bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                            >
+                                                保存到「{currentPreset.name}」
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => { setPresetEditName(''); setShowPresetDialog('save'); }}
+                                            className="flex-1 py-2 text-xs rounded-lg border-dashed border-2 transition-colors border-slate-600 text-slate-400 hover:border-slate-500 hover:text-slate-300"
+                                        >
+                                            + 保存为新预设
+                                        </button>
+                                    </div>
                                 </div>
                             )}
                         </div>
+
+                        {/* 预设保存弹窗 */}
+                        {showPresetDialog && (
+                            <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50" onClick={() => setShowPresetDialog(null)}>
+                                <div
+                                    className="rounded-2xl p-5 w-[320px]"
+                                    style={{
+                                        background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%)',
+                                        backdropFilter: 'blur(24px)',
+                                        WebkitBackdropFilter: 'blur(24px)',
+                                        border: '1px solid rgba(100, 116, 139, 0.3)',
+                                        boxShadow: '0 24px 48px rgba(0,0,0,0.25), 0 0 0 1px rgba(255,255,255,0.1) inset'
+                                    }}
+                                    onClick={e => e.stopPropagation()}
+                                >
+                                    <div className="flex items-center justify-between mb-4">
+                                        <h3 className="text-base font-semibold text-slate-200">
+                                            {showPresetDialog === 'save' ? '保存新预设' : `保存到「${currentPreset?.name}」`}
+                                        </h3>
+                                        <button onClick={() => setShowPresetDialog(null)} className="text-slate-400 hover:text-white">
+                                            <X size={16} />
+                                        </button>
+                                    </div>
+
+                                    {/* 预览 */}
+                                    <div className="w-full h-8 rounded-lg mb-4" style={{ background: `linear-gradient(90deg, ${gradient.colors.join(', ')})` }} />
+
+                                    {showPresetDialog === 'save' && (
+                                        <input
+                                            type="text"
+                                            value={presetEditName}
+                                            onChange={e => setPresetEditName(e.target.value)}
+                                            placeholder="请输入预设名称"
+                                            className="w-full px-3 py-2 rounded-lg text-sm mb-4 bg-slate-800 text-slate-200 border-slate-600 border focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                            autoFocus
+                                        />
+                                    )}
+
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => setShowPresetDialog(null)}
+                                            className="flex-1 py-2 text-sm rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600"
+                                        >
+                                            取消
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                // TODO: 保存到云端
+                                                console.log('保存预设:', showPresetDialog === 'save' ? presetEditName : currentPreset?.name, gradient.colors);
+                                                setShowPresetDialog(null);
+                                            }}
+                                            disabled={showPresetDialog === 'save' && !presetEditName.trim()}
+                                            className="flex-1 py-2 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            确认保存
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* 颜色数量 */}
                         <div>

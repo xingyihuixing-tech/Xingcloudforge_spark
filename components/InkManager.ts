@@ -134,6 +134,9 @@ export class InkManager {
     private _onMove: (e: PointerEvent) => void;
     private _onUp: (e: PointerEvent) => void;
 
+    private ghostMesh: THREE.Points | null = null;
+    private ghostPositions: Float32Array;
+
     /**
      * @param scene The THREE.Scene (or group) to add the ink mesh to.
      * @param camera The camera used for raycasting.
@@ -152,7 +155,11 @@ export class InkManager {
         this.sizes = new Float32Array(this.maxPoints);
         this.alphas = new Float32Array(this.maxPoints);
 
+        // Ghost cursor buffer (max 64 points)
+        this.ghostPositions = new Float32Array(64 * 3);
+
         this.initMesh();
+        this.initGhostMesh();
 
         // Bind events
         this._onDown = this.onPointerDown.bind(this);
@@ -181,7 +188,7 @@ export class InkManager {
                 uOpacity: { value: 1.0 },
                 uFlow: { value: 0.0 },
                 uBloom: { value: 1.0 },
-                size: { value: 1.0 } // Global size multiplier or similar if needed, else we use attribute
+                size: { value: 1.0 }
             },
             transparent: true,
             depthWrite: false,
@@ -195,11 +202,27 @@ export class InkManager {
         this.pointsMesh.frustumCulled = false; // Always render
         this.pointsMesh.renderOrder = 999; // Draw on top
 
-        // Add to scene
-        // Ideally we add it to the planet object so it rotates, but initially we might add to scene
-        // If we want it to rotate with planet, we must add it to the planet object.
-        // We handles this in setPlanet()
         this.scene.add(this.pointsMesh);
+    }
+
+    private initGhostMesh() {
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.BufferAttribute(this.ghostPositions, 3).setUsage(THREE.DynamicDrawUsage));
+
+        const material = new THREE.PointsMaterial({
+            color: 0xffffff,
+            size: 5,
+            sizeAttenuation: false, // Screen space size
+            transparent: true,
+            opacity: 0.5,
+            depthTest: false,
+            depthWrite: false
+        });
+
+        this.ghostMesh = new THREE.Points(geometry, material);
+        this.ghostMesh.renderOrder = 1000;
+        this.ghostMesh.visible = false;
+        this.scene.add(this.ghostMesh);
     }
 
     public setSettings(settings: DrawSettings) {
@@ -209,27 +232,33 @@ export class InkManager {
             this.material.uniforms.uOpacity.value = settings.brush.opacity;
             this.material.uniforms.uFlow.value = settings.inkFlow;
             this.material.uniforms.uBloom.value = settings.inkBloom;
-            // Map brush size 1-100 to shader size
-            // Default size in shader is mostly controlled by attribute aSize, but we can set a base
+        }
+
+        // Toggle ghost cursor visibility
+        if (this.ghostMesh) {
+            this.ghostMesh.visible = settings.ghostCursorEnabled;
+            if (this.ghostMesh.material instanceof THREE.PointsMaterial) {
+                this.ghostMesh.material.color.set(settings.brush.color);
+            }
         }
     }
 
     public setPlanet(planet: THREE.Object3D | null) {
         if (this.planetObj === planet) return;
 
-        // Reparent mesh if planet changes
         if (this.pointsMesh) {
             if (this.pointsMesh.parent) {
                 this.pointsMesh.parent.remove(this.pointsMesh);
             }
-
             if (planet) {
                 planet.add(this.pointsMesh);
+                // Also add ghost mesh to planet to follow rotaton
+                if (this.ghostMesh) planet.add(this.ghostMesh);
             } else {
                 this.scene.add(this.pointsMesh);
+                if (this.ghostMesh) this.scene.add(this.ghostMesh);
             }
         }
-
         this.planetObj = planet;
     }
 
@@ -245,6 +274,11 @@ export class InkManager {
             if (this.pointsMesh.parent) this.pointsMesh.parent.remove(this.pointsMesh);
             this.pointsMesh.geometry.dispose();
             (this.pointsMesh.material as THREE.Material).dispose();
+        }
+        if (this.ghostMesh) {
+            if (this.ghostMesh.parent) this.ghostMesh.parent.remove(this.ghostMesh);
+            this.ghostMesh.geometry.dispose();
+            (this.ghostMesh.material as THREE.Material).dispose();
         }
     }
 
@@ -272,7 +306,7 @@ export class InkManager {
     }
 
     private onPointerMove(e: PointerEvent) {
-        if (!this.isDrawing || !this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
+        if (!this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
         if (!this.planetObj) return;
 
         // Calculate Mouse Position normalized [-1, 1]
@@ -281,42 +315,50 @@ export class InkManager {
         const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
         this.mouse.set(x, y);
-        this.mouse.set(x, y);
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        // Raycast against the planet object recursively
         const intersects = this.raycaster.intersectObject(this.planetObj, true);
 
-        // Filter intersects to find the first one that is NOT our own pointsMesh
+        // Filter intersects
         let hit: THREE.Intersection | null = null;
         for (const intersect of intersects) {
-            // Check if the intersected object is our points mesh
-            if (intersect.object === this.pointsMesh) {
+            if (intersect.object === this.pointsMesh || intersect.object === this.ghostMesh) {
                 continue;
             }
-            // Check if the object is visible
-            if (!intersect.object.visible) {
-                continue;
-            }
-
+            if (!intersect.object.visible) continue;
             hit = intersect;
             break;
         }
 
         if (hit) {
-            const point = hit.point; // World intersection
+            const point = hit.point;
             const pressure = (e.pressure !== undefined && e.pressure > 0) ? e.pressure : 0.5;
             const effectivePressure = e.pointerType === 'pen' ? pressure : 1.0;
 
-            this.handleAddPoint(point, effectivePressure);
+            if (this.isDrawing) {
+                this.handleAddPoint(point, effectivePressure);
+            }
+
+            // Update Ghost Cursor
+            if (this.settings.ghostCursorEnabled) {
+                this.updateGhostCursor(point);
+            }
+        } else {
+            // Hide ghost cursor if not hitting planet
+            if (this.ghostMesh) {
+                this.ghostMesh.position.set(0, 0, 0); // Hack: move away or clear buffer
+                // Instead of setting visible=false which might flicker, we clear the buffer
+                const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
+                posAttr.setXYZ(0, 0, 0, 0); // Just set first one to 0
+                posAttr.count = 0;
+                posAttr.needsUpdate = true;
+            }
         }
     }
 
-    private handleAddPoint(worldPoint: THREE.Vector3, pressure: number) {
-        if (!this.settings || !this.planetObj) return;
-        if (this.pointCount >= this.maxPoints) return;
+    private updateGhostCursor(worldPoint: THREE.Vector3) {
+        if (!this.ghostMesh || !this.planetObj || !this.settings) return;
 
-        // Convert world to local (since ink is child of planet)
         const localPoint = worldPoint.clone();
         this.planetObj.worldToLocal(localPoint);
 
@@ -324,37 +366,32 @@ export class InkManager {
         const len = localPoint.length();
         localPoint.normalize().multiplyScalar(len + this.settings.altitude);
 
-        // Symmetry Engine
-        const pointsToAdd: THREE.Vector3[] = [];
-        const mode = this.settings.mode;
+        const points = this.generateSymmetryPoints(localPoint);
+        const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
 
-        if (mode === DrawMode.Kaleidoscope) {
-            // Radial Symmetry around Y (North Pole)
-            const segments = this.settings.segments;
-            const angleStep = (Math.PI * 2) / segments;
-            const spherical = new THREE.Spherical().setFromVector3(localPoint);
-
-            for (let i = 0; i < segments; i++) {
-                const theta = spherical.theta + angleStep * i;
-                const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
-                pointsToAdd.push(p);
+        points.forEach((p, i) => {
+            if (i < 64) {
+                posAttr.setXYZ(i, p.x, p.y, p.z);
             }
-        } else if (mode === DrawMode.PlanetSpin) {
-            // Planetary Spin (Longitude) - same as visual radial around Y
-            const segments = this.settings.segments;
-            const angleStep = (Math.PI * 2) / segments;
-            const spherical = new THREE.Spherical().setFromVector3(localPoint);
-            for (let i = 0; i < segments; i++) {
-                const theta = spherical.theta + angleStep * i;
-                const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
-                pointsToAdd.push(p);
-            }
-        } else {
-            // Normal draw
-            pointsToAdd.push(localPoint);
-        }
+        });
 
-        // Push to buffers
+        // Hide unused points
+        posAttr.setDrawRange(0, points.length);
+        posAttr.needsUpdate = true;
+    }
+
+    private handleAddPoint(worldPoint: THREE.Vector3, pressure: number) {
+        if (!this.settings || !this.planetObj) return;
+        if (this.pointCount >= this.maxPoints) return;
+
+        const localPoint = worldPoint.clone();
+        this.planetObj.worldToLocal(localPoint);
+
+        const len = localPoint.length();
+        localPoint.normalize().multiplyScalar(len + this.settings.altitude);
+
+        const pointsToAdd = this.generateSymmetryPoints(localPoint);
+
         pointsToAdd.forEach(p => {
             if (this.pointCount >= this.maxPoints) return;
 
@@ -363,23 +400,132 @@ export class InkManager {
             this.positions[i * 3 + 1] = p.y;
             this.positions[i * 3 + 2] = p.z;
 
-            // Size mapping based on brush size (1-100) and pressure
             const baseSize = this.settings!.brush.size || 10;
-            // Scale logic: brush size 50 -> size 5.0?
             const size = baseSize * 0.5 * (this.settings!.brush.usePressure ? pressure : 1.0);
             this.sizes[i] = size;
-
             this.alphas[i] = this.settings!.brush.usePressure ? pressure : 1.0;
 
             this.pointCount++;
         });
 
-        // Update Geometry
         if (this.geometry) {
             this.geometry.attributes.position.needsUpdate = true;
             this.geometry.attributes.aSize.needsUpdate = true;
             this.geometry.attributes.aAlpha.needsUpdate = true;
             this.geometry.setDrawRange(0, this.pointCount);
         }
+    }
+
+    private generateSymmetryPoints(localPoint: THREE.Vector3): THREE.Vector3[] {
+        if (!this.settings) return [localPoint];
+        const { mode, segments } = this.settings;
+        const points: THREE.Vector3[] = [];
+
+        // Helper to add unique points (simple dist check could be added if needed)
+        const add = (p: THREE.Vector3) => points.push(p);
+
+        if (mode === DrawMode.Normal) {
+            add(localPoint);
+        } else if (mode === DrawMode.MirrorX) {
+            add(localPoint);
+            add(new THREE.Vector3(-localPoint.x, localPoint.y, localPoint.z));
+        } else if (mode === DrawMode.MirrorY) {
+            add(localPoint);
+            add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
+        } else if (mode === DrawMode.Quad) {
+            add(localPoint);
+            add(new THREE.Vector3(-localPoint.x, localPoint.y, localPoint.z));
+            add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
+            add(new THREE.Vector3(-localPoint.x, -localPoint.y, localPoint.z));
+        } else if (mode === DrawMode.Diagonal) {
+            // Mirror across x=y plane (z unchanged), and x=-y
+            // Simple approach: swap x and y
+            add(localPoint);
+            add(new THREE.Vector3(localPoint.y, localPoint.x, localPoint.z)); // x=y mirroring?
+            // For full 4-way diagonal:
+            add(new THREE.Vector3(-localPoint.y, -localPoint.x, localPoint.z));
+        } else if (mode === DrawMode.Radial || mode === DrawMode.Kaleidoscope || mode === DrawMode.PlanetSpin) {
+            // Radial Symmetry around Y axis (North Pole)
+            const angleStep = (Math.PI * 2) / segments;
+            const spherical = new THREE.Spherical().setFromVector3(localPoint);
+
+            for (let i = 0; i < segments; i++) {
+                const theta = spherical.theta + angleStep * i;
+                const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
+                add(p);
+
+                if (mode === DrawMode.Kaleidoscope) {
+                    // Internal mirror within the sector
+                    // Mirror theta? 
+                    // Simple kaleidoscope: mirror across the sector bisector
+                    // Or mirror across X then rotate?
+                    // Approach: Mirror theta relative to current sector start
+                    // Actually, kaleidoscope usually means mirror neighbor.
+                    // Let's mirror the generated point across the plane defined by its angle
+                    // Simplified: just mirror across X plane first, then rotate all?
+                    // Proper implementation:
+                    // 1. Convert to spherical
+                    // 2. Modulo angle to get into first sector
+                    // 3. Mirror if in second half of sector
+                    // 4. Rotate back to all sectors
+                }
+            }
+        } else if (mode === DrawMode.Antipodal) {
+            add(localPoint);
+            add(localPoint.clone().negate());
+        } else if (mode === DrawMode.Tetrahedral) {
+            // 4 vertices of tetrahedron. Hard to map arbitrary point. 
+            // Usually this means applying the symmetry group of the tetrahedron.
+            // Tetrahedron group T has 12 rotational symmetries.
+            // For a drawing tool, we usually want to replicate the stroke on all faces.
+            // Simplified: Reference the vertices of a tetrahedron inscribed in sphere
+            // V1(1,1,1), V2(1,-1,-1), V3(-1,1,-1), V4(-1,-1,1)
+            // Implementing full point group symmetry requires matrix operations.
+            // Placeholder: just normal for now to avoid complexity spike without math library.
+            add(localPoint);
+        } else if (mode === DrawMode.Cubic) {
+            // Cube has octahedral symmetry (Oh). 48 symmetries.
+            // Simplified: 6 faces.
+            // Project point to nearest face, then replicate to other 6 faces?
+            // Or just rotate 90 deg on X, Y, Z?
+            // Let's implement basic 8 corners or 6 faces.
+            // "Play it safe": Simple 8-way octane symmetry
+            add(localPoint);
+            add(new THREE.Vector3(-localPoint.x, localPoint.y, localPoint.z));
+            add(new THREE.Vector3(localPoint.x, -localPoint.y, localPoint.z));
+            add(new THREE.Vector3(localPoint.x, localPoint.y, -localPoint.z));
+            add(new THREE.Vector3(-localPoint.x, -localPoint.y, localPoint.z));
+            add(new THREE.Vector3(localPoint.x, -localPoint.y, -localPoint.z));
+            add(new THREE.Vector3(-localPoint.x, localPoint.y, -localPoint.z));
+            add(new THREE.Vector3(-localPoint.x, -localPoint.y, -localPoint.z));
+        } else if (mode === DrawMode.Vortex) {
+            const { vortexHeight = 10, vortexScale = 0.95 } = this.settings;
+            const angleStep = (Math.PI * 2) / segments;
+            const spherical = new THREE.Spherical().setFromVector3(localPoint);
+
+            for (let i = 0; i < segments; i++) {
+                const theta = spherical.theta + angleStep * i;
+                // Add height offset (spiral up)
+                // Note: spherical.phi is 0 at top (Y+). 
+                // We can modify radius or just translate Y.
+                // Vortex usually moves UP.
+                const yOffset = i * (vortexHeight / segments);
+
+                // Calc position
+                const p = new THREE.Vector3().setFromSphericalCoords(spherical.radius, spherical.phi, theta);
+                p.y += yOffset;
+
+                // Scale down
+                const scale = Math.pow(vortexScale, i);
+                p.multiplyScalar(scale);
+
+                add(p);
+            }
+        }
+        else {
+            add(localPoint);
+        }
+
+        return points;
     }
 }

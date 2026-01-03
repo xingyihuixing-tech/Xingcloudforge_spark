@@ -9248,9 +9248,17 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     return () => {
       cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [handData]); // �芯�韏?handData
+  }, [handData]); // 优化：仅依赖 handData
 
-  // 摮睃��噼��?ref嚗���滚𢆡�餃儐�臭�韏吔�
+  // Toggle OrbitControls based on drawing mode
+  useEffect(() => {
+    if (controlsRef.current) {
+      // Disable controls when drawing is enabled to prevent camera movement intervention
+      controlsRef.current.enabled = !drawSettings?.enabled;
+    }
+  }, [drawSettings?.enabled]);
+
+  // 摮睃噼?ref嚗滚𢆡餃儐臭韏吔
   const onCameraChangeRef = useRef(onCameraChange);
   useEffect(() => {
     onCameraChangeRef.current = onCameraChange;

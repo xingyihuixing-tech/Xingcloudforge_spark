@@ -109,38 +109,153 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                 {/* 2. 对称模式 */}
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-300">
-                        <i className="fas fa-snowflake text-xs"></i> 对称模式
+                        <i className="fas fa-snowflake text-xs"></i> 对称系统
                     </div>
 
-                    <div className="bg-white/5 rounded-xl p-1 border border-white/5 flex text-xs">
-                        <button
-                            onClick={() => setSettings(prev => ({ ...prev, mode: DrawMode.Kaleidoscope }))}
-                            className={`flex-1 py-1.5 rounded-lg transition-all ${settings.mode === DrawMode.Kaleidoscope ? 'bg-purple-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            万花筒 (2D)
-                        </button>
-                        <button
-                            onClick={() => setSettings(prev => ({ ...prev, mode: DrawMode.PlanetSpin }))}
-                            className={`flex-1 py-1.5 rounded-lg transition-all ${settings.mode === DrawMode.PlanetSpin ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
-                        >
-                            自转 (3D)
-                        </button>
-                    </div>
+                    <div className="bg-white/5 rounded-xl p-3 space-y-4 border border-white/5">
 
+                        {/* 2D 平面模式 */}
+                        <div className="space-y-2">
+                            <div className="text-xs text-gray-500 font-bold uppercase tracking-wider">2D 屏幕对称</div>
+                            <div className="grid grid-cols-3 gap-1">
+                                {[
+                                    { id: DrawMode.MirrorX, label: '水平镜像' },
+                                    { id: DrawMode.MirrorY, label: '垂直镜像' },
+                                    { id: DrawMode.Quad, label: '四象限' },
+                                    { id: DrawMode.Diagonal, label: '对角线' },
+                                    { id: DrawMode.Kaleidoscope, label: '万花筒' },
+                                    { id: DrawMode.Normal, label: '普通' },
+                                ].map(m => (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => setSettings(prev => ({ ...prev, mode: m.id as DrawMode }))}
+                                        className={`py-1.5 rounded text-[10px] transition-all border border-transparent
+                                             ${settings.mode === m.id
+                                                ? 'bg-purple-600/30 text-purple-200 border-purple-500/50'
+                                                : 'bg-black/20 text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                                    >
+                                        {m.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 3D 空间模式 */}
+                        <div className="space-y-2">
+                            <div className="text-xs text-gray-500 font-bold uppercase tracking-wider flex items-center gap-2">
+                                3D 空间对称
+                                <span className="bg-blue-900/50 text-blue-300 text-[9px] px-1.5 py-0.5 rounded border border-blue-500/30">Raycast</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1">
+                                {[
+                                    { id: DrawMode.PlanetSpin, label: '行星自转' },
+                                    { id: DrawMode.Antipodal, label: '对极镜像' },
+                                    { id: DrawMode.Vortex, label: '能量涡旋' },
+                                    { id: DrawMode.Tetrahedral, label: '四面体' },
+                                    { id: DrawMode.Cubic, label: '立方体' },
+                                    // { id: DrawMode.Dodecahedral, label: '十二面体' },
+                                ].map(m => (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => setSettings(prev => ({ ...prev, mode: m.id as DrawMode }))}
+                                        className={`py-1.5 rounded text-[10px] transition-all border border-transparent
+                                             ${settings.mode === m.id
+                                                ? 'bg-blue-600/30 text-blue-200 border-blue-500/50'
+                                                : 'bg-black/20 text-gray-400 hover:bg-white/5 hover:text-gray-200'}`}
+                                    >
+                                        {m.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 分段控制 (仅对部分模式有效) */}
+                        {(settings.mode === DrawMode.Kaleidoscope || settings.mode === DrawMode.PlanetSpin || settings.mode === DrawMode.Vortex || settings.mode === DrawMode.Radial) && (
+                            <div className="space-y-1 bg-black/20 p-2 rounded-lg">
+                                <div className="flex justify-between text-xs text-gray-400">
+                                    <span>对称份数 (Segments)</span>
+                                    <span>{settings.segments}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="2" max="64" step="1"
+                                    value={settings.segments}
+                                    onChange={(e) => setSettings(prev => ({ ...prev, segments: parseInt(e.target.value) }))}
+                                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                />
+                            </div>
+                        )}
+
+                        {/* 涡旋控制 */}
+                        {settings.mode === DrawMode.Vortex && (
+                            <div className="space-y-3 bg-black/20 p-2 rounded-lg">
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs text-gray-400">
+                                        <span>上升高度</span>
+                                        <span>{settings.vortexHeight || 0}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="-50" max="50" step="1"
+                                        value={settings.vortexHeight || 0}
+                                        onChange={(e) => setSettings(prev => ({ ...prev, vortexHeight: parseFloat(e.target.value) }))}
+                                        className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-xs text-gray-400">
+                                        <span>缩放系数</span>
+                                        <span>{settings.vortexScale || 1}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0.5" max="1.5" step="0.01"
+                                        value={settings.vortexScale || 1}
+                                        onChange={(e) => setSettings(prev => ({ ...prev, vortexScale: parseFloat(e.target.value) }))}
+                                        className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
+                </div>
+
+                {/* 交互设置 (高度 & Ghost) */}
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-300">
+                        <i className="fas fa-arrows-alt-v text-xs"></i> 空间交互
+                    </div>
                     <div className="bg-white/5 rounded-xl p-3 space-y-3 border border-white/5">
+
+                        {/* 绘制高度 */}
                         <div className="space-y-1">
                             <div className="flex justify-between text-xs text-gray-400">
-                                <span>对称份数</span>
-                                <span>{settings.segments} 份</span>
+                                <span>绘制高度 (Altitude)</span>
+                                <span>{settings.altitude.toFixed(0)}</span>
                             </div>
                             <input
                                 type="range"
-                                min="2" max="32" step="1"
-                                value={settings.segments}
-                                onChange={(e) => setSettings(prev => ({ ...prev, segments: parseInt(e.target.value) }))}
+                                min="0" max="200" step="1"
+                                value={settings.altitude}
+                                onChange={(e) => setSettings(prev => ({ ...prev, altitude: parseFloat(e.target.value) }))}
                                 className="w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer"
                             />
+                            <div className="text-[9px] text-gray-600">
+                                提示: 按住 Alt + 滚轮 也可以快速调整
+                            </div>
                         </div>
+
+                        {/* 幽灵光标开关 */}
+                        <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer pt-2 border-t border-white/5">
+                            <input
+                                type="checkbox"
+                                checked={settings.ghostCursorEnabled}
+                                onChange={(e) => setSettings(prev => ({ ...prev, ghostCursorEnabled: e.target.checked }))}
+                                className="rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-green-500"
+                            />
+                            启用“幽灵光标”预览 (Ghost Cursor)
+                        </label>
                     </div>
                 </div>
 

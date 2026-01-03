@@ -1677,8 +1677,24 @@ export interface MaterialPreset {
 // 绘制模式
 export enum DrawMode {
   Off = 'off',
-  Kaleidoscope = 'kaleidoscope',  // 2D 万花筒
-  PlanetSpin = 'planetSpin'       // 3D 行星自转
+  // 2D Plane Symmetry
+  Normal = 'normal',          // 普通绘制
+  MirrorX = 'mirrorX',       // 左右镜像
+  MirrorY = 'mirrorY',       // 上下镜像
+  Quad = 'quad',             // 四象限镜像
+  Diagonal = 'diagonal',     // 对角线镜像
+  Radial = 'radial',         // 旋转对称
+  Kaleidoscope = 'kaleidoscope', // 万花筒 (旋转+内部镜像)
+
+  // 3D Spatial Symmetry
+  PlanetSpin = 'planetSpin', // 行星自转 (经度复制)
+  Antipodal = 'antipodal',   // 对极镜像 (北半球->南半球)
+  Tetrahedral = 'tetrahedral', // 四面体 (4点)
+  Cubic = 'cubic',           // 立方体 (6面)
+  Octahedral = 'octahedral', // 八面体 (8面)
+  Dodecahedral = 'dodecahedral', // 十二面体 (12面)
+  Icosahedral = 'icosahedral',   // 二十面体 (20面)
+  Vortex = 'vortex'          // 涡旋 (旋转+高度/缩放偏移)
 }
 
 // 笔刷设置
@@ -1701,7 +1717,11 @@ export interface DrawSettings {
   mode: DrawMode;
 
   // 对称参数
-  segments: number;       // 对称份数 2-32
+  segments: number;       // 对称份数 2-64 (用于 Radial/Kaleidoscope/PlanetSpin/Vortex)
+
+  // 涡旋参数 (Vortex Mode)
+  vortexHeight?: number;  // 涡旋高度偏移 per segment
+  vortexScale?: number;   // 涡旋缩放 per segment (e.g. 0.95 = shrinking)
 
   // 3D 空间参数
   altitude: number;       // 绘制高度 (Offset from surface)
@@ -1710,8 +1730,11 @@ export interface DrawSettings {
   // 笔刷
   brush: BrushSettings;
 
-  // 墨迹效果参数 (复用部分星云参数)
+  // 墨迹效果参数
   inkFlow: number;        // 墨迹流动感 (Turbulence)
   inkBloom: number;       // 墨迹辉光
+
+  // 交互
+  ghostCursorEnabled: boolean; // 是否启用幽灵光标预览
 }
 

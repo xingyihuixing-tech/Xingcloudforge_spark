@@ -516,7 +516,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 style={{
                                     fontFamily: `'${xingConfig.font}', cursive`,
                                     fontSize: '1.4rem',
-                                    background: `conic-gradient(from 0deg at 50% 50%, ${[...xingConfig.gradient.colors, xingConfig.gradient.colors[0]].join(', ')})`,
+                                    // 归一化颜色数组确保至少 4 个颜色点
+                                    background: `conic-gradient(from 0deg at 50% 50%, ${(() => {
+                                        const colors = xingConfig.gradient.colors;
+                                        const normalized = colors.length >= 4 ? colors : [...colors, ...Array(4 - colors.length).fill(colors[colors.length - 1])];
+                                        return [...normalized, normalized[0]].join(', ');
+                                    })()})`,
                                     WebkitBackgroundClip: 'text',
                                     backgroundClip: 'text',
                                     WebkitTextFillColor: 'transparent',
@@ -584,15 +589,20 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                             </div>
                                         ) : (
                                             <div
-                                                className={`inline-block px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
-                                                style={msg.role === 'user' ? {
-                                                    background: `linear-gradient(${xingConfig.userMsg?.angle ?? 135}deg, ${(xingConfig.userMsg?.colors ?? ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2']).map((c, i, arr) => {
-                                                        const opacity = i === 0 ? (xingConfig.userMsg?.lightOpacity ?? 0.15) : (xingConfig.userMsg?.darkOpacity ?? 0.25);
-                                                        return `${c}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
-                                                    }).join(', ')})`,
-                                                    border: `1px solid ${xingConfig.userMsg?.borderColor ?? '#71b0ff'}40`,
-                                                    color: 'rgba(255,255,255,0.9)',
-                                                } : undefined}
+                                                className={`inline-block px-3 py-2 rounded-xl whitespace-pre-wrap ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
+                                                style={{
+                                                    // 应用对话字体和字号
+                                                    fontFamily: CHAT_FONT_OPTIONS.find(f => f.id === xingConfig.theme?.chatFont)?.family || CHAT_FONT_OPTIONS[0].family,
+                                                    fontSize: `${xingConfig.theme?.chatFontSize ?? 14}px`,
+                                                    ...(msg.role === 'user' ? {
+                                                        background: `linear-gradient(${xingConfig.userMsg?.angle ?? 135}deg, ${(xingConfig.userMsg?.colors ?? ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2']).map((c, i, arr) => {
+                                                            const opacity = i === 0 ? (xingConfig.userMsg?.lightOpacity ?? 0.15) : (xingConfig.userMsg?.darkOpacity ?? 0.25);
+                                                            return `${c}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
+                                                        }).join(', ')})`,
+                                                        border: `1px solid ${xingConfig.userMsg?.borderColor ?? '#71b0ff'}40`,
+                                                        color: 'rgba(255,255,255,0.9)',
+                                                    } : {})
+                                                }}
                                             >
                                                 {msg.content}
                                             </div>

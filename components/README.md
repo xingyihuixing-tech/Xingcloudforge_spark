@@ -38,6 +38,7 @@
   - 地位: AI 品牌 XingSpark 的完整设置组件
   - 功能: 管理 Logo 风格/颜色/渐变预设、对话字体、输入框光晕、用户消息气泡样式
   - 导出: XingSparkConfig, DEFAULT_XING_CONFIG, UserMsgConfig, CHAT_FONT_OPTIONS
+  - 依赖: lucide-react (Palette, ChevronDown 图标)
 
 - AIAssistantPanel.tsx
   - 地位: AI 交互面板主入口
