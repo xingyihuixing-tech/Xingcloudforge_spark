@@ -2,14 +2,15 @@
  * HoloPad - 2D 绘图画布组件
  * 
  * input: DrawSettings 状态、setSettings 回调
- * output: 渲染 2D 画布、捕获用户输入、显示对称辅助线、持久化笔触
- * pos: 绘图系统的用户交互入口
+ * output: 渲染 2D 画布，显示真实的墨迹效果和对称预览
+ * pos: 绘图系统的用户交互核心
  * update: 一旦我被更新，请更新 components/draw 目录的 _README.md
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { DrawSettings, Symmetry2DMode, BrushType } from '../../types';
 import { apply2DSymmetry, Point2D } from './SymmetryEngine';
+import { renderBrushEffect } from './Ink2DRenderer';
 import {
     ensureActiveDrawingAndLayer,
     createStroke,
@@ -21,32 +22,20 @@ import {
 interface HoloPadProps {
     settings: DrawSettings;
     setSettings: React.Dispatch<React.SetStateAction<DrawSettings>>;
-    containerRef?: React.RefObject<HTMLDivElement>; // 用于获取3D场景容器位置
 }
 
-// 笔刷颜色映射
-const BRUSH_COLORS: Record<BrushType, string> = {
-    [BrushType.Stardust]: '#88ccff',
-    [BrushType.GasCloud]: '#aaddff',
-    [BrushType.EnergyBeam]: '#ffcc00',
-    [BrushType.SpiralRing]: '#ff88cc',
-    [BrushType.Firefly]: '#88ff88',
-    [BrushType.Fracture]: '#ff6644'
-};
-
-const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }) => {
+const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [currentStroke, setCurrentStroke] = useState<Point2D[]>([]);
     const lastPointRef = useRef<Point2D | null>(null);
     const animationFrameRef = useRef<number>(0);
+    const timeRef = useRef<number>(0);
 
-    // 画布尺寸 - 正方形，适应场景
-    const canvasSize = useMemo(() => {
-        return Math.min(500, window.innerHeight * 0.6);
-    }, []);
+    // 画布尺寸
+    const canvasSize = useMemo(() => Math.min(500, window.innerHeight * 0.6), []);
 
-    // 获取归一化坐标（-1 到 1）
+    // 坐标转换：PointerEvent -> 归一化坐标 (-1 到 1)
     const getNormalizedCoords = useCallback((e: React.PointerEvent): Point2D => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0, pressure: 0.5 };
@@ -59,11 +48,12 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
         return { x, y, pressure };
     }, []);
 
-    // 画布坐标转换（归一化 -> 画布像素）
-    const toCanvasCoords = useCallback((p: Point2D, canvas: HTMLCanvasElement) => {
+    // 归一化坐标 -> 画布像素坐标
+    const toCanvasCoords = useCallback((p: Point2D, canvas: HTMLCanvasElement): Point2D => {
         return {
             x: (p.x + 1) / 2 * canvas.width,
-            y: (p.y + 1) / 2 * canvas.height
+            y: (p.y + 1) / 2 * canvas.height,
+            pressure: p.pressure
         };
     }, []);
 
@@ -72,12 +62,11 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
         if (!settings.showSymmetryGuides) return;
 
         const { width, height } = ctx.canvas;
-        // 中心偏移：centerOffset 是归一化坐标 (-1 到 1)
         const centerX = width / 2 * (1 + settings.symmetry.centerOffset.x);
         const centerY = height / 2 * (1 + settings.symmetry.centerOffset.y);
 
         ctx.save();
-        ctx.strokeStyle = 'rgba(100, 200, 255, 0.5)';
+        ctx.strokeStyle = 'rgba(100, 200, 255, 0.4)';
         ctx.lineWidth = 1;
         ctx.setLineDash([8, 4]);
 
@@ -90,14 +79,12 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                 ctx.lineTo(centerX, height);
                 ctx.stroke();
                 break;
-
             case Symmetry2DMode.MirrorY:
                 ctx.beginPath();
                 ctx.moveTo(0, centerY);
                 ctx.lineTo(width, centerY);
                 ctx.stroke();
                 break;
-
             case Symmetry2DMode.MirrorQuad:
                 ctx.beginPath();
                 ctx.moveTo(centerX, 0);
@@ -106,23 +93,6 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                 ctx.lineTo(width, centerY);
                 ctx.stroke();
                 break;
-
-            case Symmetry2DMode.MirrorDiagonal:
-                ctx.beginPath();
-                ctx.moveTo(0, 0);
-                ctx.lineTo(width, height);
-                ctx.stroke();
-                break;
-
-            case Symmetry2DMode.MirrorFreeAngle:
-                const angle = (mirrorAxisAngle - 90) * Math.PI / 180;
-                const len = Math.max(width, height);
-                ctx.beginPath();
-                ctx.moveTo(centerX - Math.cos(angle) * len, centerY - Math.sin(angle) * len);
-                ctx.lineTo(centerX + Math.cos(angle) * len, centerY + Math.sin(angle) * len);
-                ctx.stroke();
-                break;
-
             case Symmetry2DMode.Radial:
             case Symmetry2DMode.Kaleidoscope:
                 for (let i = 0; i < radialSegments; i++) {
@@ -135,93 +105,87 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                 break;
         }
 
-        // 绘制中心点
+        // 中心点
         ctx.setLineDash([]);
         ctx.beginPath();
-        ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+        ctx.arc(centerX, centerY, 5, 0, Math.PI * 2);
         ctx.strokeStyle = 'rgba(255, 180, 100, 0.8)';
         ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.fillStyle = 'rgba(255, 180, 100, 0.3)';
-        ctx.fill();
 
         ctx.restore();
     }, [settings.showSymmetryGuides, settings.symmetry]);
 
-    // 绘制单个笔触的对称预览
-    const drawStrokeWithSymmetry = useCallback((
+    // 渲染单条笔触（应用对称 + 使用墨迹效果）
+    const renderStrokeWithSymmetry = useCallback((
         ctx: CanvasRenderingContext2D,
         points: Point2D[],
+        brushType: BrushType,
         color: string,
-        lineWidth: number,
-        opacity: number
+        size: number,
+        opacity: number,
+        symmetry: typeof settings.symmetry,
+        time: number
     ) => {
-        if (points.length < 2) return;
+        if (points.length < 1) return;
 
-        // 应用对称获取所有点集
-        const allSymmetricStrokes: Point2D[][] = [];
-        const numSymmetries = apply2DSymmetry(points[0], settings.symmetry).length;
+        // 获取所有对称点组
+        const numSymmetries = apply2DSymmetry(points[0], symmetry).length;
 
-        // 为每个对称索引创建一条完整的线
         for (let symIdx = 0; symIdx < numSymmetries; symIdx++) {
-            const symmetricLine: Point2D[] = [];
+            const symmetricPoints: Point2D[] = [];
+
             for (const p of points) {
-                const symmetricPoints = apply2DSymmetry(p, settings.symmetry);
-                if (symmetricPoints[symIdx]) {
-                    symmetricLine.push(symmetricPoints[symIdx]);
+                const allSymmetric = apply2DSymmetry(p, symmetry);
+                if (allSymmetric[symIdx]) {
+                    // 转换为画布坐标
+                    symmetricPoints.push(toCanvasCoords(allSymmetric[symIdx], ctx.canvas));
                 }
             }
-            allSymmetricStrokes.push(symmetricLine);
-        }
 
-        // 绘制每条对称线
-        allSymmetricStrokes.forEach((stroke, idx) => {
-            if (stroke.length < 2) return;
-
-            ctx.beginPath();
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lineWidth;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.globalAlpha = opacity * (idx === 0 ? 1 : 0.7);
-
-            const first = toCanvasCoords(stroke[0], ctx.canvas);
-            ctx.moveTo(first.x, first.y);
-
-            for (let i = 1; i < stroke.length; i++) {
-                const pt = toCanvasCoords(stroke[i], ctx.canvas);
-                ctx.lineTo(pt.x, pt.y);
+            if (symmetricPoints.length > 0) {
+                // 非主笔触降低透明度
+                const alphaMultiplier = symIdx === 0 ? 1 : 0.7;
+                renderBrushEffect(
+                    ctx,
+                    symmetricPoints,
+                    brushType,
+                    color,
+                    size,
+                    opacity * alphaMultiplier,
+                    time
+                );
             }
-            ctx.stroke();
-        });
+        }
+    }, [toCanvasCoords]);
 
-        ctx.globalAlpha = 1;
-    }, [settings.symmetry, toCanvasCoords]);
-
-    // 重绘整个画布（包括已保存的笔触和当前笔触）
+    // 主渲染函数
     const redrawCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        // 清空画布
+        // 清空
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 绘制对称辅助线
+        // 背景
+        ctx.fillStyle = `rgba(10, 15, 30, ${settings.padOpacity})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 对称辅助线
         drawSymmetryGuides(ctx);
 
-        // 获取当前激活的绘图和图层
+        const time = timeRef.current;
+
+        // 渲染已保存的笔触
         const activeDrawing = getActiveDrawing(settings);
         if (activeDrawing) {
-            // 绘制所有可见图层的已保存笔触
             for (const layer of activeDrawing.layers) {
                 if (!layer.visible) continue;
 
-                const layerColor = layer.color || settings.brush.color;
-
                 for (const stroke of layer.strokes) {
-                    // 从 Float32Array 还原点数据
+                    // 还原点数据
                     const points: Point2D[] = [];
                     const numPoints = stroke.points.length / 4;
                     for (let i = 0; i < numPoints; i++) {
@@ -232,64 +196,57 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                         });
                     }
 
-                    // 使用笔触创建时的对称设置绘制
-                    const savedSymmetry = stroke.symmetrySnapshot;
-                    const originalSymmetry = settings.symmetry;
-
-                    // 临时应用保存的对称设置
-                    const tempSettings = { ...settings, symmetry: savedSymmetry };
-
-                    // 计算对称点并绘制
-                    const numSymmetries = apply2DSymmetry(points[0], savedSymmetry).length;
-                    for (let symIdx = 0; symIdx < numSymmetries; symIdx++) {
-                        const symmetricLine: Point2D[] = [];
-                        for (const p of points) {
-                            const symmetricPoints = apply2DSymmetry(p, savedSymmetry);
-                            if (symmetricPoints[symIdx]) {
-                                symmetricLine.push(symmetricPoints[symIdx]);
-                            }
-                        }
-
-                        if (symmetricLine.length >= 2) {
-                            ctx.beginPath();
-                            ctx.strokeStyle = layerColor;
-                            ctx.lineWidth = settings.brush.size * 0.5;
-                            ctx.lineCap = 'round';
-                            ctx.lineJoin = 'round';
-                            ctx.globalAlpha = settings.brush.opacity * (symIdx === 0 ? 1 : 0.7);
-
-                            const first = toCanvasCoords(symmetricLine[0], canvas);
-                            ctx.moveTo(first.x, first.y);
-                            for (let i = 1; i < symmetricLine.length; i++) {
-                                const pt = toCanvasCoords(symmetricLine[i], canvas);
-                                ctx.lineTo(pt.x, pt.y);
-                            }
-                            ctx.stroke();
-                        }
-                    }
+                    renderStrokeWithSymmetry(
+                        ctx,
+                        points,
+                        layer.brushType,
+                        layer.color,
+                        settings.brush.size,
+                        settings.brush.opacity,
+                        stroke.symmetrySnapshot,
+                        time
+                    );
                 }
             }
         }
 
-        // 绘制当前正在绘制的笔触
+        // 渲染当前正在绘制的笔触
         if (currentStroke.length > 0) {
-            const brushColor = settings.brush.color || BRUSH_COLORS[settings.brush.type];
-            drawStrokeWithSymmetry(
+            renderStrokeWithSymmetry(
                 ctx,
                 currentStroke,
-                brushColor,
-                settings.brush.size * 0.5,
-                settings.brush.opacity
+                settings.brush.type,
+                settings.brush.color,
+                settings.brush.size,
+                settings.brush.opacity,
+                settings.symmetry,
+                time
             );
         }
+    }, [settings, currentStroke, drawSymmetryGuides, renderStrokeWithSymmetry]);
 
-        ctx.globalAlpha = 1;
-    }, [settings, currentStroke, drawSymmetryGuides, drawStrokeWithSymmetry, toCanvasCoords]);
-
-    // 监听设置变化，重绘画布
+    // 动画循环
     useEffect(() => {
-        redrawCanvas();
-    }, [redrawCanvas]);
+        if (!settings.enabled) return;
+
+        let running = true;
+
+        const animate = () => {
+            if (!running) return;
+            timeRef.current = performance.now() / 1000;
+            redrawCanvas();
+            animationFrameRef.current = requestAnimationFrame(animate);
+        };
+
+        animate();
+
+        return () => {
+            running = false;
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
+    }, [settings.enabled, redrawCanvas]);
 
     // 开始绘制
     const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -313,25 +270,18 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
         if (!isDrawing) return;
 
         const point = getNormalizedCoords(e);
-
-        // 距离阈值检查
         const lastPoint = lastPointRef.current;
+
+        // 距离阈值
         if (lastPoint) {
             const dx = point.x - lastPoint.x;
             const dy = point.y - lastPoint.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-            if (dist < 0.008) return; // 太近则跳过
+            if (Math.sqrt(dx * dx + dy * dy) < 0.005) return;
         }
 
         setCurrentStroke(prev => [...prev, point]);
         lastPointRef.current = point;
-
-        // 使用 requestAnimationFrame 节流重绘
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-        }
-        animationFrameRef.current = requestAnimationFrame(redrawCanvas);
-    }, [isDrawing, getNormalizedCoords, redrawCanvas]);
+    }, [isDrawing, getNormalizedCoords]);
 
     // 结束绘制
     const handlePointerUp = useCallback((e: React.PointerEvent) => {
@@ -345,16 +295,15 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
             return;
         }
 
-        // 将笔触数据转换为 Float32Array
+        // 保存笔触
         const strokeData = new Float32Array(currentStroke.length * 4);
         currentStroke.forEach((p, i) => {
             strokeData[i * 4] = p.x;
             strokeData[i * 4 + 1] = p.y;
             strokeData[i * 4 + 2] = p.pressure;
-            strokeData[i * 4 + 3] = 0; // 保留位
+            strokeData[i * 4 + 3] = 0;
         });
 
-        // 保存笔触到当前图层
         setSettings(prev => {
             const drawing = getActiveDrawing(prev);
             const layer = getActiveLayer(prev);
@@ -364,14 +313,10 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
             return addStroke(prev, drawing.id, layer.id, stroke);
         });
 
-        // 清除当前笔触，触发重绘
         setCurrentStroke([]);
     }, [isDrawing, currentStroke, setSettings]);
 
-    // 如果绘图模式未启用，不渲染
-    if (!settings.enabled) {
-        return null;
-    }
+    if (!settings.enabled) return null;
 
     return (
         <div
@@ -392,7 +337,6 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                     width: canvasSize,
                     height: canvasSize,
                     borderRadius: '16px',
-                    background: `rgba(10, 15, 30, ${settings.padOpacity})`,
                     border: '2px solid rgba(100, 200, 255, 0.3)',
                     boxShadow: '0 0 40px rgba(100, 200, 255, 0.2), inset 0 0 60px rgba(0, 0, 0, 0.5)',
                     cursor: 'crosshair',
@@ -405,7 +349,7 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                 onContextMenu={(e) => e.preventDefault()}
             />
 
-            {/* 底部状态栏 */}
+            {/* 状态栏 */}
             <div style={{
                 position: 'absolute',
                 bottom: -40,
@@ -413,7 +357,7 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                 transform: 'translateX(-50%)',
                 display: 'flex',
                 gap: '12px',
-                background: 'rgba(0, 0, 0, 0.8)',
+                background: 'rgba(0, 0, 0, 0.85)',
                 padding: '6px 16px',
                 borderRadius: '20px',
                 fontSize: '11px',
@@ -424,7 +368,7 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                     <i className="fas fa-paint-brush" style={{ marginRight: 4 }} />
                     {settings.brush.type}
                 </span>
-                <span>|</span>
+                <span style={{ opacity: 0.5 }}>|</span>
                 <span>
                     <i className="fas fa-expand-arrows-alt" style={{ marginRight: 4 }} />
                     {settings.symmetry.mode2D}
@@ -432,10 +376,8 @@ const HoloPad: React.FC<HoloPadProps> = ({ settings, setSettings, containerRef }
                         settings.symmetry.mode2D === Symmetry2DMode.Kaleidoscope) &&
                         ` (${settings.symmetry.radialSegments})`}
                 </span>
-                <span>|</span>
-                <span>
-                    {getActiveDrawing(settings)?.name || '无'} / {getActiveLayer(settings)?.name || '无'}
-                </span>
+                <span style={{ opacity: 0.5 }}>|</span>
+                <span style={{ color: settings.brush.color }}>●</span>
             </div>
         </div>
     );
