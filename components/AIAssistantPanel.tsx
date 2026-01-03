@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
-import XingSparkSettings, { XingSparkConfig, DEFAULT_XING_CONFIG } from './XingSparkSettings';
+import { XingSparkSettingsContent, XingSparkConfig, DEFAULT_XING_CONFIG, CHAT_FONT_OPTIONS } from './XingSparkSettings';
 
 // ============================================
 // 类型定义
@@ -137,6 +137,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === XingSpark 设置 ===
     const [xingConfig, setXingConfig] = useState<XingSparkConfig>(DEFAULT_XING_CONFIG);
     const [showXingSettings, setShowXingSettings] = useState(false);
+    const [settingsTab, setSettingsTab] = useState<'style' | 'color' | 'chat'>('style');
     const [logoState, setLogoState] = useState<'idle' | 'blinking'>('idle');
     const lastDoubleClickRef = useRef(0);
     const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -465,13 +466,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     return createPortal(
         <>
             <ImageModal imageUrl={previewImage} onClose={() => setPreviewImage(null)} />
-            <XingSparkSettings
-                isOpen={showXingSettings}
-                onClose={() => setShowXingSettings(false)}
-                config={xingConfig}
-                setConfig={setXingConfig}
-                userId={userId}
-            />
 
             <div
                 className="fixed z-[9999]"
@@ -493,7 +487,17 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         <div className="flex items-center gap-2 relative">
                             {/* XingSpark Logo with Dynamic Gradient (Reference Style) */}
                             <span
-                                className={`xingspark-logo ${logoState === 'blinking' ? 'blinking' : ''}`}
+                                className={`cursor-pointer select-none ${logoState === 'blinking' ? 'animate-pulse' : ''}`}
+                                style={{
+                                    fontFamily: `'${xingConfig.font}', cursive`,
+                                    fontSize: '1.4rem',
+                                    background: `conic-gradient(from 0deg at 50% 50%, ${[...xingConfig.gradient.colors, xingConfig.gradient.colors[0]].join(', ')})`,
+                                    WebkitBackgroundClip: 'text',
+                                    backgroundClip: 'text',
+                                    WebkitTextFillColor: 'transparent',
+                                    color: 'transparent',
+                                    filter: `saturate(${xingConfig.gradient.saturation}%) brightness(${xingConfig.gradient.brightness}%)`,
+                                }}
                                 onDoubleClick={handleLogoDoubleClick}
                                 title="双击打开设置"
                             >
@@ -502,9 +506,47 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
                                 <span style={{ fontSize: '0.9em' }}>park</span>
                             </span>
+                            {/* 展开/收起指示 */}
+                            {showXingSettings && (
+                                <span className="text-xs text-white/30 ml-2">▼</span>
+                            )}
                         </div>
                         <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">✕</button>
                     </div>
+
+                    {/* XingSpark 设置 - 内嵌展开 */}
+                    {showXingSettings && (
+                        <div className="border-b border-white/10 p-4 bg-black/20">
+                            {/* Tab 切换 */}
+                            <div className="flex gap-2 mb-4">
+                                {[
+                                    { id: 'style' as const, label: 'Logo 风格' },
+                                    { id: 'color' as const, label: 'Logo 颜色' },
+                                    { id: 'chat' as const, label: '对话栏设置' },
+                                ].map(tab => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setSettingsTab(tab.id)}
+                                        className={`px-3 py-1.5 text-xs rounded-lg transition-all ${settingsTab === tab.id
+                                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                            : 'text-white/50 hover:text-white/80 border border-transparent'
+                                            }`}
+                                    >
+                                        {tab.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Tab 内容 - 紧凑高度 */}
+                            <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
+                                <XingSparkSettingsContent
+                                    activeTab={settingsTab}
+                                    config={xingConfig}
+                                    setConfig={setXingConfig}
+                                />
+                            </div>
+                        </div>
+                    )}
 
                     {/* 消息列表 - 自适应高度填满剩余空间 */}
                     <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
