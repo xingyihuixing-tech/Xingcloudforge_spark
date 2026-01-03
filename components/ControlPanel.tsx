@@ -3974,9 +3974,9 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
       {/* 标题栏 - 星云模式 */}
       {appMode === 'nebula' && (
-        <div className="mb-4">
+        <div className="mb-4 pt-1">
           <h1 className="text-4xl font-bold mb-2 text-center" style={{
-            fontFamily: "'Great Vibes', cursive",
+            fontFamily: "var(--xing-font, 'Great Vibes'), cursive",
             background: 'linear-gradient(90deg, var(--xing-c1, #60a5fa), var(--xing-c2, #e879f9), var(--xing-c3, #2bf6a5), var(--xing-c4, #37f1d2))',
             backgroundSize: '200% 200%',
             animation: 'xing-gradient-flow 6s ease infinite',
@@ -3994,9 +3994,9 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
       {/* 标题栏 - 星球模式 */}
       {appMode === 'planet' && (
-        <div className="mb-4">
+        <div className="mb-4 pt-1">
           <h1 className="text-4xl font-bold mb-2 text-center" style={{
-            fontFamily: "'Great Vibes', cursive",
+            fontFamily: "var(--xing-font, 'Great Vibes'), cursive",
             background: 'linear-gradient(90deg, var(--xing-c1, #60a5fa), var(--xing-c2, #e879f9), var(--xing-c3, #2bf6a5), var(--xing-c4, #37f1d2))',
             backgroundSize: '200% 200%',
             animation: 'xing-gradient-flow 6s ease infinite',

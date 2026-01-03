@@ -9,7 +9,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Sparkles, Send, X } from 'lucide-react';
+import { Sparkles, Send, X, Save } from 'lucide-react';
 
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
@@ -47,6 +47,7 @@ interface ChatMessage {
     content: string;
     type?: 'text' | 'image' | 'error';
     imageUrl?: string;
+    attachedImage?: string; // 用户发送时附带的图片
     subMode?: InspirationSubMode;
     suggestedName?: string;
 }
@@ -116,6 +117,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const [chatModel, setChatModel] = useState(DEFAULT_CHAT_MODEL);
     const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
     const [showModelSelector, setShowModelSelector] = useState(false);
+    // 自由对话模式下，当前选中的模型类型 ('chat' 或 'image')
+    const [freeChatModelType, setFreeChatModelType] = useState<'chat' | 'image'>('chat');
 
     // === 输入状态 ===
     const [inputValue, setInputValue] = useState('');
@@ -327,20 +330,23 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [inputValue, inspirationSubMode, uploadedImage, isRefining, chatModel]);
 
-    // === 发送 (生成图像) ===
+    // === 发送 ===
     const handleSend = useCallback(async () => {
         if (!inputValue.trim() || isGenerating) return;
 
         const prompt = inputValue.trim();
+        const currentAttachedImage = uploadedImage; // 保存当前附图
 
         // 添加用户消息
         const userMsg: ChatMessage = {
             id: generateId(),
             role: 'user',
-            content: uploadedImage ? `[附图] ${prompt}` : prompt
+            content: prompt,
+            attachedImage: currentAttachedImage || undefined
         };
         setMessages(prev => [...prev, userMsg]);
         setInputValue('');
+        setUploadedImage(null); // 清空附图
         setIsGenerating(true);
 
         try {
@@ -634,7 +640,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                             disabled={savingId === msg.id || !userId}
                                                             className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/90 text-xs rounded transition-colors backdrop-blur-sm"
                                                         >
-                                                            {savingId === msg.id ? 'Saving...' : `💾 ${saveButtonText[msg.subMode]}`}
+                                                            {savingId === msg.id ? 'Saving...' : (
+                                                                <><Save size={12} className="inline mr-1" />{saveButtonText[msg.subMode]}</>
+                                                            )}
                                                         </button>
                                                     </div>
                                                 )}
@@ -660,6 +668,15 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                     } : {})
                                                 }}
                                             >
+                                                {/* 附图显示 */}
+                                                {msg.attachedImage && (
+                                                    <img
+                                                        src={msg.attachedImage}
+                                                        alt="附图"
+                                                        className="max-h-[80px] rounded mb-2 cursor-pointer hover:opacity-80"
+                                                        onClick={() => setPreviewImage(msg.attachedImage!)}
+                                                    />
+                                                )}
                                                 {msg.content}
                                             </div>
                                         )}
@@ -750,15 +767,18 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         />
                                         {/* 右侧按钮 - 固定正方形，上下居中 */}
                                         <div className="flex-shrink-0 flex flex-col gap-1 self-center pr-1">
-                                            <button
-                                                onClick={handleRefine}
-                                                disabled={!inputValue.trim() || isRefining}
-                                                className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${isRefining ? 'bg-white/20 text-white animate-pulse' : 'bg-transparent text-white/80 hover:text-white hover:bg-white/10'}`}
-                                                title="润色"
-                                                style={{ filter: `drop-shadow(0 0 5px ${xingConfig.gradient.colors[0]})` }}
-                                            >
-                                                <Sparkles size={18} strokeWidth={1.5} />
-                                            </button>
+                                            {/* 自由对话模式下隐藏润色按钮 */}
+                                            {inspirationSubMode !== 'freeChat' && (
+                                                <button
+                                                    onClick={handleRefine}
+                                                    disabled={!inputValue.trim() || isRefining}
+                                                    className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all ${isRefining ? 'bg-white/20 text-white animate-pulse' : 'bg-transparent text-white/80 hover:text-white hover:bg-white/10'}`}
+                                                    title="润色"
+                                                    style={{ filter: `drop-shadow(0 0 5px ${xingConfig.gradient.colors[0]})` }}
+                                                >
+                                                    <Sparkles size={18} strokeWidth={1.5} />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={handleSend}
                                                 disabled={isGenerating || !inputValue.trim()}
