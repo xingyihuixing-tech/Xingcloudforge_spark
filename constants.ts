@@ -57,6 +57,8 @@ import {
   FlameJetSettings,
   SpiralFlameSettings,
   FlameSystemSettings,
+  // 丝线环
+  SilkRingSettings,
   // 残影系统
   AfterimageZoneSettings,
   AfterimageParticleSettings,
@@ -725,8 +727,131 @@ export const createDefaultParticleRing = (id: string, name: string = '粒子环'
     noiseFrequency: 1.0,
     ringCount: 5,        // 细环数量
     ringSharpness: 0.7   // 环边缘锐度
+  },
+  ornament: {
+    enabled: false,
+    // 样式
+    style: 'flare',
+    customTexture: '',
+    // 数量与分布
+    count: 20,
+    distribution: 'uniform',
+    clusterCount: 3,
+    clusterSpread: 0.5,
+    // 大小
+    baseSize: 15,
+    sizeRandomness: 0.3,
+    // 颜色
+    colorMode: 'inherit',
+    color: '#ffffff',
+    colorPalette: ['#ff6b6b', '#4ecdc4', '#ffe66d'],
+    // 透明度与发光
+    opacity: 1.0,
+    brightness: 1.5,
+    glowIntensity: 0.8,
+    // 脉冲
+    pulseEnabled: false,
+    pulseSpeed: 1.0,
+    pulseIntensity: 0.3,
+    pulseSync: false,
+    // 公转
+    orbitSpeedMultiplier: 1.0,
+    orbitPhaseRandomness: 0.8,
+    // 星芒
+    flareLeaves: 4,
+    flareWidth: 0.5
+  },
+  galaxy: {
+    enabled: false,
+    preset: 'milkyWay',
+    // 螺旋臂参数
+    branches: 4,
+    spin: 0.8,
+    randomness: 0.25,
+    randomnessPower: 3,
+    // 核心参数
+    coreSize: 0.2,
+    coreBrightness: 1.5,
+    // 颜色
+    useRadialGradient: true,
+    insideColor: '#f8d090',
+    outsideColor: '#2b1d42'
   }
 });
+
+// 银河系预设配置
+export const GALAXY_PRESETS: Record<string, Partial<import('./types').GalaxySettings>> = {
+  milkyWay: {
+    branches: 4,
+    spin: 0.8,
+    randomness: 0.25,
+    randomnessPower: 3,
+    coreSize: 0.2,
+    coreBrightness: 1.5,
+    insideColor: '#f8d090',
+    outsideColor: '#2b1d42'
+  },
+  andromeda: {
+    branches: 2,
+    spin: 1.5,
+    randomness: 0.4,
+    randomnessPower: 3,
+    coreSize: 0.4,
+    coreBrightness: 1.8,
+    insideColor: '#ffebd4',
+    outsideColor: '#6e8cc7'
+  },
+  sombrero: {
+    branches: 20,
+    spin: 4,
+    randomness: 0.2,
+    randomnessPower: 5,
+    coreSize: 2.0,
+    coreBrightness: 2.0,
+    insideColor: '#fff6d9',
+    outsideColor: '#2c1b18'
+  },
+  whirlpool: {
+    branches: 2,
+    spin: 1.2,
+    randomness: 0.3,
+    randomnessPower: 3,
+    coreSize: 0.15,
+    coreBrightness: 1.5,
+    insideColor: '#ffffff',
+    outsideColor: '#5599ff'
+  },
+  flower: {
+    branches: 6,
+    spin: 0.4,
+    randomness: 1.5,
+    randomnessPower: 2.5,
+    coreSize: 0.1,
+    coreBrightness: 1.3,
+    insideColor: '#ffd700',
+    outsideColor: '#ffb7c5'
+  },
+  aurora: {
+    branches: 3,
+    spin: 0.1,
+    randomness: 2.5,
+    randomnessPower: 1.5,
+    coreSize: 0.5,
+    coreBrightness: 1.2,
+    insideColor: '#00ffaa',
+    outsideColor: '#a020f0'
+  },
+  oceanVortex: {
+    branches: 5,
+    spin: 3.5,
+    randomness: 0.3,
+    randomnessPower: 4,
+    coreSize: 0,
+    coreBrightness: 1.0,
+    insideColor: '#000080',
+    outsideColor: '#00ffff'
+  }
+};
 
 // 默认连续环带配置
 export const createDefaultContinuousRing = (id: string, name: string = '环带'): ContinuousRingSettings => ({
@@ -1638,6 +1763,35 @@ export const SURFACE_FLAME_PRESETS: Record<string, Omit<SurfaceFlameSettings, 'e
     pulseSpeed: 1.2,
     pulseIntensity: 0.15
   },
+  // 水波纹能量罩 (Water Ripple) - 同心圆波纹扩散
+  waterRipple: {
+    preset: 'waterRipple',
+    radius: 108,
+    thickness: 0.06,
+    color: { mode: 'twoColor', baseColor: '#00aaff', colors: ['#0066ff', '#00ffff'], colorMidPosition: 0.5, direction: 'radial', directionCustom: { x: 0, y: 1, z: 0 }, spiralDensity: 3, proceduralIntensity: 1.0 },
+    flameScale: 0.8,
+    density: 0.5,
+    flowSpeed: 1.0,
+    turbulence: 0.1,
+    noiseType: 'ripple',
+    fractalLayers: 1,
+    opacity: 0.7,
+    emissive: 1.8,
+    bloomBoost: 1.2,
+    direction: 'up',
+    pulseEnabled: false,
+    pulseSpeed: 0,
+    pulseIntensity: 0,
+    rippleSettings: {
+      waveCount: 15,
+      waveSpeed: 1.5,
+      damping: 0.3,
+      multiSourceEnabled: false,
+      sourceCount: 1,
+      sourceSpread: 0.5,
+      interference: 0.5
+    }
+  },
   custom: {
     preset: 'custom',
     radius: 105,
@@ -1966,6 +2120,162 @@ export const SPIRAL_FLAME_PRESETS: Record<string, Partial<SpiralFlameSettings>> 
   }
 };
 
+// ========== 丝线环预设 ==========
+// 默认颜色配置
+const createDefaultSilkColor = (baseColor: string): SolidCoreColorSettings => ({
+  mode: 'twoColor',
+  baseColor,
+  colors: [baseColor, '#ffffff'],
+  colorMidPosition: 0.5,
+  colorMidWidth: 1,
+  direction: 'radial',
+  directionCustom: { x: 0, y: 1, z: 0 },
+  spiralDensity: 3,
+  proceduralIntensity: 1.0
+});
+
+// 丝线环预设
+export const SILK_RING_PRESETS: Record<string, Partial<SilkRingSettings>> = {
+  // 数据流 (Data Stream) - 科技感
+  dataStream: {
+    preset: 'dataStream',
+    orbitRadius: 1.3,
+    thickness: 0.05,
+    wobbleFrequency: 6,
+    wobbleAmplitude: 0.4,
+    zDriftScale: 0.5,
+    flowSpeed: 2.5,
+    strandDensity: 30,
+    sparkleEnabled: true,
+    sparkleThreshold: 0.95,
+    fresnelPower: 2.5,
+    opacity: 0.8,
+    emissive: 1.5,
+    bloomBoost: 1.0,
+    color: createDefaultSilkColor('#00ffff')
+  },
+  // 丝绸飘带 (Silk Ribbon) - 柔和飘逸
+  silkRibbon: {
+    preset: 'silkRibbon',
+    orbitRadius: 1.5,
+    thickness: 0.08,
+    wobbleFrequency: 4,
+    wobbleAmplitude: 0.6,
+    zDriftScale: 0.7,
+    flowSpeed: 1.2,
+    strandDensity: 20,
+    sparkleEnabled: false,
+    sparkleThreshold: 0.95,
+    fresnelPower: 3.0,
+    opacity: 0.7,
+    emissive: 1.0,
+    bloomBoost: 0.5,
+    color: { mode: 'twoColor', baseColor: '#ff88ff', colors: ['#ff88ff', '#ffccff'], colorMidPosition: 0.5, direction: 'radial', directionCustom: { x: 0, y: 1, z: 0 }, spiralDensity: 3, proceduralIntensity: 1.0 }
+  },
+  // 能量纤维 (Energy Fiber) - 强烈流动
+  energyFiber: {
+    preset: 'energyFiber',
+    orbitRadius: 1.2,
+    thickness: 0.03,
+    wobbleFrequency: 8,
+    wobbleAmplitude: 0.3,
+    zDriftScale: 0.4,
+    flowSpeed: 4.0,
+    strandDensity: 40,
+    sparkleEnabled: true,
+    sparkleThreshold: 0.92,
+    fresnelPower: 2.0,
+    opacity: 0.9,
+    emissive: 2.0,
+    bloomBoost: 1.5,
+    color: { mode: 'twoColor', baseColor: '#44ff00', colors: ['#44ff00', '#88ff44'], colorMidPosition: 0.5, direction: 'radial', directionCustom: { x: 0, y: 1, z: 0 }, spiralDensity: 3, proceduralIntensity: 1.0 }
+  },
+  // 星云丝带 (Nebula Silk) - 柔和混色
+  nebulaSilk: {
+    preset: 'nebulaSilk',
+    orbitRadius: 1.6,
+    thickness: 0.1,
+    wobbleFrequency: 3,
+    wobbleAmplitude: 0.8,
+    zDriftScale: 0.9,
+    flowSpeed: 0.8,
+    strandDensity: 15,
+    sparkleEnabled: true,
+    sparkleThreshold: 0.97,
+    fresnelPower: 4.0,
+    opacity: 0.6,
+    emissive: 0.8,
+    bloomBoost: 0.3,
+    color: { mode: 'procedural', baseColor: '#8844ff', colors: ['#ff44aa', '#44aaff', '#aa88ff'], colorMidPosition: 0.5, direction: 'spiral', directionCustom: { x: 0, y: 1, z: 0 }, spiralDensity: 4, proceduralIntensity: 1.5 }
+  },
+  // 烈焰丝绸 (Fire Silk) - 炽热流动
+  fireSilk: {
+    preset: 'fireSilk',
+    orbitRadius: 1.25,
+    thickness: 0.06,
+    wobbleFrequency: 5,
+    wobbleAmplitude: 0.5,
+    zDriftScale: 0.6,
+    flowSpeed: 3.0,
+    strandDensity: 35,
+    sparkleEnabled: true,
+    sparkleThreshold: 0.9,
+    fresnelPower: 2.0,
+    opacity: 0.85,
+    emissive: 2.5,
+    bloomBoost: 1.8,
+    color: { mode: 'threeColor', baseColor: '#ff6600', colors: ['#ffff00', '#ff6600', '#ff0000'], colorMidPosition: 0.4, direction: 'radial', directionCustom: { x: 0, y: 1, z: 0 }, spiralDensity: 3, proceduralIntensity: 1.0 }
+  },
+  // 自定义
+  custom: {
+    preset: 'custom',
+    orbitRadius: 1.4,
+    thickness: 0.05,
+    wobbleFrequency: 6,
+    wobbleAmplitude: 0.4,
+    zDriftScale: 0.5,
+    flowSpeed: 2.0,
+    strandDensity: 25,
+    sparkleEnabled: true,
+    sparkleThreshold: 0.95,
+    fresnelPower: 2.5,
+    opacity: 0.8,
+    emissive: 1.5,
+    bloomBoost: 1.0,
+    color: createDefaultSilkColor('#00aaff')
+  }
+};
+
+// 创建默认丝线环
+export const createDefaultSilkRing = (id: string, name: string = '丝线环'): SilkRingSettings => ({
+  id,
+  name,
+  enabled: true,
+  preset: 'dataStream',
+  orbitRadius: 1.3,
+  thickness: 0.05,
+  tubeSegments: 100,
+  radialSegments: 6,
+  wobbleFrequency: 6,
+  wobbleAmplitude: 0.4,
+  zDriftScale: 0.5,
+  seed: Math.random() * 1000,
+  orbitAxis: { x: 0, y: 1, z: 0 },
+  tilt: { preset: 'none', x: 0, y: 0 },
+  flowSpeed: 2.5,
+  wobbleEnabled: true,
+  wobbleIntensity: 0.05,
+  rotationSpeed: 0.1,
+  color: createDefaultSilkColor('#00ffff'),
+  strandDensity: 30,
+  sparkleEnabled: true,
+  sparkleThreshold: 0.95,
+  fresnelPower: 2.5,
+  opacity: 0.8,
+  emissive: 1.5,
+  bloomBoost: 1.0
+});
+
 // 创建默认表面火焰
 export const createDefaultSurfaceFlame = (id: string, name: string = '表面火焰'): SurfaceFlameSettings => ({
   id,
@@ -2190,9 +2500,13 @@ export const createDefaultPlanet = (id: string, name: string = '新星球'): Pla
   afterimageSystem: { ...DEFAULT_AFTERIMAGE_SYSTEM },
   rings: {
     particleRingsEnabled: true,
+    silkRingsEnabled: true,
     continuousRingsEnabled: true,
     particleRings: [
       { ...createDefaultParticleRing('default-particle-ring', '默认粒子环'), enabled: false }
+    ],
+    silkRings: [
+      { ...createDefaultSilkRing('default-silk-ring', '默认线环'), enabled: false }
     ],
     continuousRings: [
       { ...createDefaultContinuousRing('default-continuous-ring', '默认环带'), enabled: false }

@@ -665,6 +665,18 @@ export interface SavedSolidCorePreset {
 // 火焰颜色设置（复用实体核心颜色结构）
 export type FlameColorSettings = SolidCoreColorSettings;
 
+// 水波纹效果设置
+export interface RippleSettings {
+  waveCount: number;          // 波纹环数 5-30
+  waveSpeed: number;          // 传播速度 0.5-3
+  damping: number;            // 边缘衰减 0-1
+  // 多波源干涉
+  multiSourceEnabled: boolean; // 是否启用多波源
+  sourceCount: number;        // 波源数量 1-5
+  sourceSpread: number;       // 波源分散程度 0-1
+  interference: number;       // 干涉强度 0-1
+}
+
 // 表面火焰设置
 export interface SurfaceFlameSettings {
   id: string;
@@ -686,8 +698,11 @@ export interface SurfaceFlameSettings {
   // 质感参数
   flowSpeed: number;          // 流动速度 0-3
   turbulence: number;         // 扰动强度 0-2
-  noiseType: 'perlin' | 'simplex' | 'voronoi';
+  noiseType: 'perlin' | 'simplex' | 'voronoi' | 'ripple';
   fractalLayers: number;      // 分形层级 1-5
+
+  // 水波纹专有参数（仅在 noiseType === 'ripple' 时生效）
+  rippleSettings?: RippleSettings;
 
   // 视觉效果
   opacity: number;            // 透明度 0-1
@@ -912,6 +927,8 @@ export interface ParticleRingSettings {
   particleSize?: number;      // 粒子大小 0.5-5
   vortex?: VortexSettings;    // 漩涡渐变设置
   silkEffect?: SilkEffectSettings;       // 丝绸效果（仅在特定渲染模式下有效）
+  ornament?: OrnamentSettings;           // 点缀装饰效果
+  galaxy?: GalaxySettings;               // 银河系螺旋臂效果
 }
 
 // 丝绸效果配置
@@ -923,6 +940,85 @@ export interface SilkEffectSettings {
   noiseFrequency: number;     // 噪声频率 0.1-5
   ringCount: number;          // 细环数量 1-10
   ringSharpness: number;      // 环边缘锐度 0-1
+}
+
+// ==================== 粒子环点缀装饰 ====================
+
+// 点缀样式类型
+export type OrnamentStyle =
+  // 流萤样式
+  | 'plain'        // 普通圆点
+  | 'flare'        // N叶星芒
+  | 'spark'        // 尖锐火花
+  | 'texture'      // 自定义贴图
+  // 星云粒子形状
+  | 'star'         // 星形
+  | 'snowflake'    // 雪花
+  | 'heart'        // 爱心
+  | 'crescent'     // 月牙
+  | 'crossGlow'    // 十字光芒
+  | 'sakura'       // 樱花
+  | 'sun'          // 太阳
+  | 'sun2'         // 太阳2
+  | 'plum'         // 梅花
+  | 'lily'         // 百合
+  | 'lotus'        // 莲花
+  | 'prism';       // 棱镜晶体
+
+// 点缀颜色模式
+export type OrnamentColorMode =
+  | 'inherit'      // 继承粒子环颜色
+  | 'solid'        // 纯色
+  | 'random'       // 随机色（从调色板）
+  | 'gradient';    // 渐变（沿轨道）
+
+// 点缀分布模式
+export type OrnamentDistribution =
+  | 'uniform'      // 均匀分布
+  | 'cluster';     // 聚簇分布
+
+// 点缀装饰配置
+export interface OrnamentSettings {
+  enabled: boolean;              // 点缀开关
+
+  // ===== 贴图样式 =====
+  style: OrnamentStyle;          // 样式类型
+  customTexture?: string;        // 自定义贴图路径（style='texture' 时使用）
+
+  // ===== 数量与分布 =====
+  count: number;                 // 点缀数量 5-100
+  distribution: OrnamentDistribution;  // 分布模式
+  clusterCount?: number;         // 聚簇数量 2-8（cluster模式）
+  clusterSpread?: number;        // 聚簇分散度 0-1（cluster模式）
+
+  // ===== 大小 =====
+  baseSize: number;              // 基准大小 5-50
+  sizeRandomness: number;        // 大小随机缩放范围 0-1
+
+  // ===== 颜色 =====
+  colorMode: OrnamentColorMode;  // 颜色模式
+  color: string;                 // 纯色模式下的颜色
+  colorPalette?: string[];       // 随机模式下的调色板（2-5色）
+
+  // ===== 透明度与发光 =====
+  opacity: number;               // 不透明度 0-1
+  brightness: number;            // 亮度 0.5-3
+  glowIntensity: number;         // 发光强度 0-2
+
+  // ===== 动画效果 =====
+  // 脉冲
+  pulseEnabled: boolean;         // 脉冲开关
+  pulseSpeed: number;            // 脉冲速度 0.5-3
+  pulseIntensity: number;        // 脉冲幅度 0-1
+  pulseSync: boolean;            // 同步脉冲
+
+  // 公转
+  orbitSpeedMultiplier: number;  // 公转速度倍率 0-2
+  orbitPhaseRandomness: number;  // 相位随机性 0-1
+
+  // ===== 星芒参数（style='flare'时生效）=====
+  flareLeaves: number;           // 星芒叶片数 4-8
+  flareWidth: number;            // 星芒宽度 0.1-1
 }
 
 // 连续环带透明度渐变模式
@@ -943,6 +1039,40 @@ export interface VortexSettings {
   radialSpeed: number;        // 收缩速度 0-2
   hardness: number;           // 硬边程度 0-1
   colors: string[];           // 旋臂颜色数组 2-7
+}
+
+// ==================== 粒子环银河系效果 ====================
+
+// 银河系预设类型
+export type GalaxyPreset =
+  | 'milkyWay'      // 银河系
+  | 'andromeda'     // 仙女座
+  | 'sombrero'      // 草帽星系
+  | 'whirlpool'     // 漩涡星系
+  | 'flower'        // 花形
+  | 'aurora'        // 极光  
+  | 'oceanVortex'   // 海洋漩涡
+  | 'custom';       // 自定义
+
+// 银河系效果配置
+export interface GalaxySettings {
+  enabled: boolean;              // 银河效果开关
+  preset: GalaxyPreset;          // 预设类型
+
+  // ===== 螺旋臂参数 =====
+  branches: number;              // 螺旋臂数量 1-12
+  spin: number;                  // 扭曲程度 0-6
+  randomness: number;            // 粒子分散度 0-2
+  randomnessPower: number;       // 分散指数曲线 1-5
+
+  // ===== 核心参数 =====
+  coreSize: number;              // 核心膨胀程度 0-2
+  coreBrightness: number;        // 核心亮度增强 1-3
+
+  // ===== 颜色 =====
+  useRadialGradient: boolean;    // 使用径向渐变（否则使用粒子环原色）
+  insideColor: string;           // 内部颜色（靠近中心）
+  outsideColor: string;          // 外部颜色（远离中心）
 }
 
 // 角度显隐区域
@@ -1016,7 +1146,9 @@ export type PolyhedronType =
   | 'truncatedDodecahedron'  // 截角十二面体
   | 'truncatedIcosahedron'   // 截角二十面体（足球形）
   | 'cuboctahedron'          // 截半立方体
-  | 'icosidodecahedron';     // 截半二十面体
+  | 'icosidodecahedron'      // 截半二十面体
+  // 星形多面体（Kepler-Poinsot）
+  | 'smallStellatedDodecahedron';  // 小星形十二面体（星形体）
 
 // 渲染模式
 export type EnergyBodyRenderMode = 'wireframe' | 'shell' | 'both';
@@ -1199,14 +1331,59 @@ export interface EnergyBodySettings {
   globalOpacity: number;     // 整体透明度 0-1
 }
 
+// 丝线环设置
+export interface SilkRingSettings {
+  id: string;
+  name: string;
+  enabled: boolean;
+  preset: string;
+
+  // 几何参数
+  orbitRadius: number;        // 轨道半径（相对核心）1.0-3.0
+  thickness: number;          // 线环粗细 0.01-0.2
+  tubeSegments: number;       // 管道分段数 50-200
+  radialSegments: number;     // 径向分段数 3-8
+
+  // 形态变化
+  wobbleFrequency: number;    // 波动频率 2-12
+  wobbleAmplitude: number;    // 波动幅度 0.1-1.0
+  zDriftScale: number;        // Z轴飘移 0-1（使曲线立体化）
+  seed: number;               // 随机种子
+
+  // 轨道轴向
+  orbitAxis: { x: number; y: number; z: number };
+  tilt: TiltSettings;
+
+  // 动画参数
+  flowSpeed: number;          // 流动速度 0.5-5
+  wobbleEnabled: boolean;     // 网格抖动开关
+  wobbleIntensity: number;    // 抖动强度 0-0.1
+  rotationSpeed: number;      // 整体自转速度 0-1
+
+  // 颜色系统（支持单色/双色/三色/混色）
+  color: SolidCoreColorSettings;
+
+  // 视觉效果
+  strandDensity: number;      // 丝线密度 10-50
+  sparkleEnabled: boolean;    // 闪点开关
+  sparkleThreshold: number;   // 闪点阈值 0.9-0.99
+  fresnelPower: number;       // 菲涅尔指数 1-5
+  opacity: number;            // 透明度 0.3-1
+  emissive: number;           // 发光强度 0.5-3
+  bloomBoost: number;         // Bloom增强 0-2
+}
+
 // 光环系统配置
 export interface RingSystemSettings {
   enabled?: boolean;                  // 光环系统总开关
   particleRingsEnabled: boolean;     // 粒子环总开关
+  silkRingsEnabled: boolean;         // 线环总开关
   continuousRingsEnabled: boolean;   // 环带总开关
   particleRingsSoloId?: string | null;  // 粒子环 Solo ID
+  silkRingsSoloId?: string | null;      // 线环 Solo ID
   continuousRingsSoloId?: string | null; // 环带 Solo ID
   particleRings: ParticleRingSettings[];
+  silkRings: SilkRingSettings[];
   continuousRings: ContinuousRingSettings[];
 }
 
@@ -1436,7 +1613,6 @@ export interface PlanetSettings {
   radiation: RadiationSystemSettings;
   fireflies: FireflySystemSettings;
   magicCircles: MagicCircleSystemSettings;  // 法阵系统
-  drawSettings?: DrawSettings; // 绘制系统
   energyBodySystem: EnergyBodySystemSettings;  // 能量体系统
 }
 
@@ -1671,192 +1847,3 @@ export interface MaterialPreset {
   data: MaterialSettings;
   isBuiltIn?: boolean;
 }
-
-// ==================== 绘图系统（Workbench / Planet Ink） ====================
-
-export interface DrawVec3 {
-  x: number;
-  y: number;
-  z: number;
-}
-
-// 1. 笔刷系统
-export enum BrushType {
-  Stardust = 'stardust',     // 星尘 (粒子)
-  GasCloud = 'gasCloud',     // 气云 (体积光)
-  EnergyBeam = 'energyBeam', // 能量束 (发光线条)
-  Crystal = 'crystal'        // 晶体 (几何体)
-}
-
-export interface BrushSettings {
-  type: BrushType;
-
-  // Base
-  size: number;           // 1-100
-  opacity: number;        // 0-1
-  color: string;
-
-  // Dynamics
-  usePressure: boolean;   // 压感开关
-  pressureInfluence: {
-    size: boolean;
-    opacity: boolean;
-    flow: boolean;        // 流量/密度 control
-  };
-
-  // Specific Parameters (Union type or just optional bags)
-  // Stardust
-  density?: number;       // 粒子密度
-  scatter?: number;       // 散射范围
-
-  // Gas
-  noiseScale?: number;    // 云絮纹理大小
-  flowSpeed?: number;     // 流动速度
-
-  // Energy
-  coreWidth?: number;     // 核心宽度 (0-1 relative to size)
-  glowIntensity?: number; // 辉光强度
-  stabilization?: number; // 防抖等级 0-1 (StreamLine)
-}
-
-// 2. 2D 对称（Procreate 风格）
-export enum Symmetry2DMode {
-  None = 'none',
-  Mirror = 'mirror',
-  Radial = 'radial'
-}
-
-export enum RadialReflectionMode {
-  None = 'none',
-  Mirror = 'mirror',
-  Kaleidoscope = 'kaleidoscope'
-}
-
-export interface Symmetry2DSettings {
-  mode: Symmetry2DMode;
-
-  // Mirror
-  mirrorAxisAngle: number; // 0..180，0=水平轴，90=垂直轴（绕画布中心）
-
-  // Radial
-  segments: number; // 2..64
-  radialReflectionMode: RadialReflectionMode;
-  rotationOffset: number; // 0..360
-}
-
-// 3. 3D 对称生长（在 3D Growth Space 中复制）
-export enum Symmetry3DMode {
-  None = 'none',
-  Octant = 'octant',
-  Tetrahedral = 'tetrahedral',
-  Cubic = 'cubic',
-  Octahedral = 'octahedral',
-  Dodecahedral = 'dodecahedral',
-  Icosahedral = 'icosahedral',
-  Vortex = 'vortex'
-}
-
-export interface Symmetry3DSettings {
-  mode: Symmetry3DMode;
-
-  // Shared
-  segments: number; // 2..64，Radial/Vortex 使用
-
-  // Octant
-  octantAxes: { x: boolean; y: boolean; z: boolean };
-
-  // Vortex
-  heightStep: number;
-  scaleDecay: number;
-  twistPerStep: number;
-
-  // Depth growth (for non-surface 3D feeling)
-  depthFromRadius: number; // 0..1，r 越大 z 越深
-}
-
-// 4. 数据结构（资产一致；多星球差异只在 Placement）
-export interface DrawPoint2D {
-  u: number; // 0..1
-  v: number; // 0..1
-  pressure: number;
-  t: number;
-  tiltX?: number;
-  tiltY?: number;
-}
-
-export interface DrawStroke {
-  id: string;
-  points: DrawPoint2D[];
-  brush: BrushSettings; // Snapshot
-  symmetry2D: Symmetry2DSettings; // Snapshot
-  symmetry3D: Symmetry3DSettings; // Snapshot
-  canvasSize: number; // Snapshot
-  createdAt: number;
-}
-
-export interface DrawingLayer {
-  id: string;
-  name: string;
-  visible: boolean;
-  locked?: boolean;
-
-  // Transform (3D Space Layer)
-  tilt: DrawVec3;       // degrees
-  scale: number;
-  altitude: number;     // local +Z offset
-  rotationSpeed: number;
-
-  // Visual
-  opacity: number;
-  blending: 'normal' | 'additive';
-
-  // Default style for new strokes in this layer
-  brushType: BrushType;
-  color: string;
-
-  strokes: DrawStroke[];
-}
-
-export interface Drawing {
-  id: string;
-  name: string;
-  layers: DrawingLayer[];
-  activeLayerId: string | null;
-  visible: boolean;
-}
-
-export interface DrawingPlacement {
-  id: string;
-  drawingId: string;
-  planetId: string;
-  visible: boolean;
-
-  scale: number;
-  tilt: DrawVec3;
-  offset: DrawVec3;
-  followPlanetRotation: number; // 0..1
-}
-
-export interface DrawSettings {
-  enabled: boolean;
-
-  // Global tools
-  brush: BrushSettings;
-  symmetry2D: Symmetry2DSettings;
-  symmetry3D: Symmetry3DSettings;
-
-  // Data
-  drawings: Drawing[];
-  activeDrawingId: string | null;
-  placements: DrawingPlacement[];
-
-  // Workbench UI
-  canvasOpacity: number;
-  hideCanvasWhilePainting: boolean;
-  hidePlanetWhileDrawing: boolean;
-  previewPlanetId: string | null;
-
-  // Geometry scale
-  canvasSize: number; // Growth space size (world units)
-}
-

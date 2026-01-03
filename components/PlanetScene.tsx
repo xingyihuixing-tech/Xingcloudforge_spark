@@ -14,7 +14,6 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js'; // Assuming this exists or revert to what was there
-import HoloCanvas from './HoloCanvas';
 import {
   PlanetSceneSettings,
   PlanetSettings,
@@ -37,11 +36,9 @@ import {
   NebulaInstance,
   ParticleShape,
   GlowMode,
-  NebulaBlendMode,
-  DrawSettings
+  NebulaBlendMode
 } from '../types';
 import OldNebulaScene from '../OldNebulaScene';
-import { InkManager } from './InkManager';
 import { ProcessedData } from '../services/imageProcessing';
 import { createDefaultEnergyBody } from '../constants';
 import { nebulaCanvasVertexShader, nebulaCanvasFragmentShader } from '../shaders/nebulaCanvasShaders';
@@ -959,8 +956,17 @@ uniform float uDensity;
 // 韐冽���㺭
 uniform float uFlowSpeed;
 uniform float uTurbulence;
-uniform float uNoiseType; // 0=simplex, 1=voronoi
+uniform float uNoiseType; // 0=simplex, 1=voronoi, 2=ripple
 uniform float uFractalLayers;
+
+// 水波纹参数
+uniform float uRippleWaveCount;
+uniform float uRippleWaveSpeed;
+uniform float uRippleDamping;
+uniform float uRippleMultiSource;
+uniform float uRippleSourceCount;
+uniform float uRippleSourceSpread;
+uniform float uRippleInterference;
 
 // 閫����㺭
 uniform float uOpacity;
@@ -1061,8 +1067,64 @@ float voronoi(vec3 p) {
   return minDist;
 }
 
-// FBM ��耦�芸ㄟ
+// 水波纹噪声 - 球面同心圆效果（支持多波源干涉）
+float rippleNoise(vec3 pos, float time) {
+  vec3 normPos = normalize(pos);
+  
+  // 主波源（球心）
+  float dist = length(normPos.xy);  // 使用xy平面距离产生从中心向外的波纹
+  
+  // 向外传播的同心圆波纹
+  float wave = sin(dist * uRippleWaveCount * 6.28318 - time * uRippleWaveSpeed * 3.0);
+  wave = wave * 0.5 + 0.5;  // 归一化到 [0, 1]
+  
+  // 边缘衰减
+  float fade = 1.0 - dist * uRippleDamping;
+  fade = clamp(fade, 0.0, 1.0);
+  
+  float result = wave * fade;
+  
+  // 多波源干涉
+  if (uRippleMultiSource > 0.5) {
+    for (int i = 1; i < 5; i++) {
+      if (float(i) >= uRippleSourceCount) break;
+      
+      // 计算波源位置（均匀分布在球面上）
+      float phi = float(i) * 2.39996;  // 黄金角
+      float theta = acos(1.0 - 2.0 * (float(i) + 0.5) / max(uRippleSourceCount, 1.0));
+      vec3 source = vec3(
+        sin(theta) * cos(phi),
+        cos(theta),
+        sin(theta) * sin(phi)
+      );
+      source = mix(vec3(0.0, 0.0, 1.0), source, uRippleSourceSpread);
+      
+      // 计算从当前波源到点的球面距离
+      float d = acos(clamp(dot(normPos, normalize(source)), -1.0, 1.0));
+      
+      // 叠加波纹
+      float w = sin(d * uRippleWaveCount * 2.0 - time * uRippleWaveSpeed * 3.0 + float(i) * 1.5);
+      w = w * 0.5 + 0.5;
+      
+      // 衰减
+      float f = 1.0 - d * uRippleDamping * 0.5;
+      f = clamp(f, 0.0, 1.0);
+      
+      result += w * f * uRippleInterference;
+    }
+    result = clamp(result, 0.0, 1.0);
+  }
+  
+  return result;
+}
+
+// FBM 多层噪声
 float fbm(vec3 p, int layers) {
+  // 水波纹模式 - 直接返回波纹结果
+  if (uNoiseType > 1.5 && uNoiseType < 2.5) {
+    return rippleNoise(p, uTime);
+  }
+  
   float value = 0.0;
   float amplitude = 0.5;
   float frequency = 1.0;
@@ -1594,7 +1656,125 @@ float flicker(float time, float dist, float speed, float intensity) {
 
 // ==================== 畾见蔣蝟餌����脣膥 ====================
 
-// 畾见蔣蝥寧�撅�▲�寧��脣膥
+// ==================== 丝线环着色器 ====================
+
+const silkRingVertexShader = `
+precision highp float;
+
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+uniform float uTime;
+uniform float uWobbleEnabled;
+uniform float uWobbleIntensity;
+
+void main() {
+  vUv = uv;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vViewPosition = -mvPosition.xyz;
+  vNormal = normalize(normalMatrix * normal);
+  
+  // 网格抖动产生"活感"
+  float wobble = 0.0;
+  if (uWobbleEnabled > 0.5) {
+    wobble = sin(position.x * 2.0 + uTime) * cos(position.z * 2.0 + uTime) * uWobbleIntensity;
+  }
+  vec3 pos = position + normal * wobble;
+  
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+}
+`;
+
+const silkRingFragmentShader = `
+precision highp float;
+
+uniform float uTime;
+uniform float uFlowSpeed;
+uniform float uStrandDensity;
+uniform float uSparkleEnabled;
+uniform float uSparkleThreshold;
+uniform float uFresnelPower;
+uniform float uOpacity;
+uniform float uEmissive;
+uniform float uBloomBoost;
+
+// 颜色系统 uniforms
+uniform float uColorMode;
+uniform vec3 uBaseColor;
+uniform vec3 uColor1;
+uniform vec3 uColor2;
+uniform vec3 uColor3;
+uniform float uColorMidPos;
+uniform float uProceduralIntensity;
+
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+// 颜色混合函数
+vec3 getColor(float t) {
+  int mode = int(uColorMode);
+  if (mode == 0) {
+    return uBaseColor;
+  } else if (mode == 1) {
+    return mix(uColor1, uColor2, t);
+  } else if (mode == 2) {
+    if (t < uColorMidPos) {
+      return mix(uColor1, uColor2, t / uColorMidPos);
+    } else {
+      return mix(uColor2, uColor3, (t - uColorMidPos) / (1.0 - uColorMidPos));
+    }
+  } else {
+    float noise = sin(t * uProceduralIntensity * 10.0 + uTime) * 0.5 + 0.5;
+    vec3 c1 = mix(uColor1, uColor2, t);
+    vec3 c2 = mix(uColor2, uColor3, t);
+    return mix(c1, c2, noise);
+  }
+}
+
+void main() {
+  float xRepeat = 20.0;
+  float flowOffset = uTime * uFlowSpeed * 2.0;
+  float x = vUv.x * xRepeat + flowOffset;
+  float y = vUv.y;
+
+  // 1. 丝线纹理
+  float strands = sin(y * uStrandDensity + x * 0.5) * 0.5 + 0.5;
+  strands = pow(strands, 4.0);
+
+  // 2. 能量脉冲
+  float energy = sin(x) * 0.5 + 0.5;
+  energy *= sin(x * 0.3 + 2.0) * 0.5 + 0.5;
+
+  // 3. 闪点效果
+  float sparkle = 0.0;
+  if (uSparkleEnabled > 0.5) {
+    sparkle = step(uSparkleThreshold, fract(sin(dot(vec2(x, y), vec2(12.9898, 78.233))) * 43758.5453));
+  }
+
+  float brightness = strands * (energy * 1.5 + sparkle);
+
+  // 4. 菲涅尔边缘
+  vec3 normal = normalize(vNormal);
+  vec3 viewDir = normalize(vViewPosition);
+  float fresnel = pow(1.0 - abs(dot(normal, viewDir)), uFresnelPower);
+  brightness *= fresnel;
+
+  float colorT = fract(vUv.x + sin(uTime * 0.5) * 0.1);
+  vec3 baseColor = getColor(colorT);
+  
+  vec3 finalColor = baseColor * (1.0 + brightness * uEmissive);
+  finalColor *= (1.0 + uBloomBoost * brightness * 0.5);
+  
+  float alpha = brightness * uOpacity;
+  alpha = smoothstep(0.05, 0.8, alpha);
+
+  gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+
+// 残影蒙版顶点着色器
 const afterimageTextureVertexShader = `
 precision highp float;
 
@@ -4343,11 +4523,101 @@ const TRUNCATED_CUBE_INDICES = [
 // 30憿嗥�32�?20銝㕑�+12鈭磰器)嚗䔶蝙�?IcosahedronGeometry(radius, 1) 餈睲撮
 // TODO: 憒��蝎曄＆摰䂿緵嚗屸�摰峕㟲�?0憿嗥�+168銝㕑�蝝Ｗ�銵?
 
+// ===== 小星形十二面体 (Small Stellated Dodecahedron) - 星形体 =====
+// 这是一个开普勒-庞索立体，由12个五角星面组成
+// 顶点结构：12个外尖端 + 20个内部基点 = 32个顶点
+// 面结构：12个五角星面，每个由5个三角形组成 = 60个三角面
+
+// 黄金比例计算
+const PHI_STAR = (1 + Math.sqrt(5)) / 2;  // ≈ 1.618
+const PHI_STAR_SQ = PHI_STAR * PHI_STAR;  // ≈ 2.618
+const INV_PHI_STAR = 1 / PHI_STAR;        // ≈ 0.618
+
+// 小星形十二面体顶点坐标
+// 索引 0-11: 12个外尖端（五角星的尖角），位于五边形面法向量方向
+// 索引 12-31: 20个内部基点（正二十面体的顶点位置）
+const SMALL_STELLATED_DODECAHEDRON_VERTICES = [
+  // ===== 12个外尖端（沿正十二面体各面法向量方向延伸）=====
+  // 这些是五角星的尖角，位于正二十面体对偶（正十二面体）各面中心向外延伸 φ² 距离
+  // 顶点 0-3: 沿 (±1, ±φ, 0) 方向
+  PHI_STAR_SQ, 0, PHI_STAR,    // 0
+  -PHI_STAR_SQ, 0, PHI_STAR,   // 1
+  PHI_STAR_SQ, 0, -PHI_STAR,   // 2
+  -PHI_STAR_SQ, 0, -PHI_STAR,  // 3
+  // 顶点 4-7: 沿 (0, ±1, ±φ) 方向
+  PHI_STAR, PHI_STAR_SQ, 0,    // 4
+  PHI_STAR, -PHI_STAR_SQ, 0,   // 5
+  -PHI_STAR, PHI_STAR_SQ, 0,   // 6
+  -PHI_STAR, -PHI_STAR_SQ, 0,  // 7
+  // 顶点 8-11: 沿 (±φ, 0, ±1) 方向
+  0, PHI_STAR, PHI_STAR_SQ,    // 8
+  0, -PHI_STAR, PHI_STAR_SQ,   // 9
+  0, PHI_STAR, -PHI_STAR_SQ,   // 10
+  0, -PHI_STAR, -PHI_STAR_SQ,  // 11
+
+  // ===== 20个内部基点（正二十面体的顶点）=====
+  // 这些点是五角星面相交形成的内部顶点
+  // 顶点 12-15: (±1, ±1, ±1)
+  1, 1, 1,     // 12
+  1, 1, -1,    // 13
+  1, -1, 1,    // 14
+  1, -1, -1,   // 15
+  -1, 1, 1,    // 16
+  -1, 1, -1,   // 17
+  -1, -1, 1,   // 18
+  -1, -1, -1,  // 19
+  // 顶点 20-23: (0, ±1/φ, ±φ)
+  0, INV_PHI_STAR, PHI_STAR,   // 20
+  0, INV_PHI_STAR, -PHI_STAR,  // 21
+  0, -INV_PHI_STAR, PHI_STAR,  // 22
+  0, -INV_PHI_STAR, -PHI_STAR, // 23
+  // 顶点 24-27: (±1/φ, ±φ, 0)
+  INV_PHI_STAR, PHI_STAR, 0,   // 24
+  INV_PHI_STAR, -PHI_STAR, 0,  // 25
+  -INV_PHI_STAR, PHI_STAR, 0,  // 26
+  -INV_PHI_STAR, -PHI_STAR, 0, // 27
+  // 顶点 28-31: (±φ, 0, ±1/φ)
+  PHI_STAR, 0, INV_PHI_STAR,   // 28
+  PHI_STAR, 0, -INV_PHI_STAR,  // 29
+  -PHI_STAR, 0, INV_PHI_STAR,  // 30
+  -PHI_STAR, 0, -INV_PHI_STAR  // 31
+];
+
+// 小星形十二面体面索引
+// 12个五角星面，每个由5个三角形组成（中心尖端连接5个内部基点）
+// 每个三角形格式：[外尖端, 内部基点A, 内部基点B]（逆时针绕序）
+const SMALL_STELLATED_DODECAHEDRON_INDICES = [
+  // 五角星面 1: 尖端 0 连接周围基点
+  0, 12, 28, 0, 28, 14, 0, 14, 22, 0, 22, 20, 0, 20, 12,
+  // 五角星面 2: 尖端 1 连接周围基点
+  1, 16, 20, 1, 20, 22, 1, 22, 18, 1, 18, 30, 1, 30, 16,
+  // 五角星面 3: 尖端 2 连接周围基点
+  2, 13, 29, 2, 29, 15, 2, 15, 23, 2, 23, 21, 2, 21, 13,
+  // 五角星面 4: 尖端 3 连接周围基点
+  3, 17, 21, 3, 21, 23, 3, 23, 19, 3, 19, 31, 3, 31, 17,
+  // 五角星面 5: 尖端 4 连接周围基点
+  4, 12, 24, 4, 24, 13, 4, 13, 29, 4, 29, 28, 4, 28, 12,
+  // 五角星面 6: 尖端 5 连接周围基点
+  5, 14, 28, 5, 28, 29, 5, 29, 15, 5, 15, 25, 5, 25, 14,
+  // 五角星面 7: 尖端 6 连接周围基点
+  6, 16, 30, 6, 30, 31, 6, 31, 17, 6, 17, 26, 6, 26, 16,
+  // 五角星面 8: 尖端 7 连接周围基点
+  7, 18, 27, 7, 27, 19, 7, 19, 31, 7, 31, 30, 7, 30, 18,
+  // 五角星面 9: 尖端 8 连接周围基点
+  8, 12, 20, 8, 20, 16, 8, 16, 26, 8, 26, 24, 8, 24, 12,
+  // 五角星面 10: 尖端 9 连接周围基点  
+  9, 14, 25, 9, 25, 27, 9, 27, 18, 9, 18, 22, 9, 22, 14,
+  // 五角星面 11: 尖端 10 连接周围基点
+  10, 13, 24, 10, 24, 26, 10, 26, 17, 10, 17, 21, 10, 21, 13,
+  // 五角星面 12: 尖端 11 连接周围基点
+  11, 15, 23, 11, 23, 19, 11, 19, 27, 11, 27, 25, 11, 25, 15
+];
+
 // �𥕦遣憭𡁻𢒰雿枏�雿蓥�
 // 瘜冽�嚗𡁏⏛閫?�芸�憭𡁻𢒰雿枏撩�?detail=0 隞乩���像�Ｘ��𡢅��踹� EdgesGeometry �𣂼��箏��其�閫垍瑪
 function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivisionLevel: number): THREE.BufferGeometry {
   // �斗鱏�臬炏銝箸⏛閫?�芸�蝐餃�
-  const isTruncatedType = type.startsWith('truncated') || type === 'cuboctahedron' || type === 'icosidodecahedron';
+  const isTruncatedType = type.startsWith('truncated') || type === 'cuboctahedron' || type === 'icosidodecahedron' || type === 'smallStellatedDodecahedron';
   // 撖寞⏛閫垍掩�见撩�?detail=0
   const effectiveDetail = isTruncatedType ? 0 : subdivisionLevel;
 
@@ -4389,6 +4659,11 @@ function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivis
       // 30憿嗥�颲������函������𢒰雿栞�隡潘�閫���訾撮嚗?
       // TODO: �𣂷�蝎曄＆摰䂿緵��閬���渡�30憿嗥�+32�Ｙ揣撘?
       return new THREE.IcosahedronGeometry(radius, 1);
+
+    // ===== 星形多面体（Kepler-Poinsot） =====
+    case 'smallStellatedDodecahedron':
+      // 小星形十二面体（星形体）：32顶点，60个三角面（12个五角星面×5）
+      return new THREE.PolyhedronGeometry(SMALL_STELLATED_DODECAHEDRON_VERTICES, SMALL_STELLATED_DODECAHEDRON_INDICES, radius, 0);
 
     default:
       return new THREE.IcosahedronGeometry(radius, subdivisionLevel);
@@ -4967,7 +5242,135 @@ function generateRingParticles(
   return new Float32Array(positions);
 }
 
-// ==================== 摰硺��詨��𥕦遣�賣㺭 ====================
+// 生成银河系螺旋臂粒子分布 - 复制自银河系文件夹的Galaxy.tsx算法
+function generateGalaxyParticles(
+  radius: number,
+  density: number,
+  bandwidth: number,
+  thickness: number,
+  galaxy: {
+    branches: number;
+    spin: number;
+    randomness: number;
+    randomnessPower: number;
+    coreSize: number;
+  }
+): Float32Array {
+  // 计算粒子数量（基于密度和周长）
+  const perimeter = 2 * Math.PI * radius;
+  const count = Math.floor(density * perimeter);
+  const positions: number[] = [];
+
+  const { branches, spin, randomness, randomnessPower, coreSize } = galaxy;
+
+  for (let i = 0; i < count; i++) {
+    // 随机半径分布（从中心到边缘）
+    const r = Math.random() * radius;
+
+    // 螺旋臂角度 = 基础分支角度 + 扭曲角度
+    const branchAngle = ((i % branches) / branches) * Math.PI * 2;
+    const spinAngle = r * spin / radius * Math.PI;
+
+    // 粒子分散度（使用幂函数实现中心密集、边缘稀疏）
+    const randomX = Math.pow(Math.random(), randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * randomness * r;
+    const randomZ = Math.pow(Math.random(), randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * randomness * r;
+
+    // 核心膨胀（Y方向厚度，中心更厚）
+    const coreFactor = Math.exp(-r / radius * 3) * coreSize * 2;
+    const randomY = Math.pow(Math.random(), randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * randomness * r
+      + (Math.random() - 0.5) * coreFactor * thickness;
+
+    // 最终位置（XZ平面为银河盘面，Y为厚度方向）
+    const x = Math.cos(branchAngle + spinAngle) * r + randomX;
+    const z = Math.sin(branchAngle + spinAngle) * r + randomZ;
+    const y = randomY;
+
+    // 限制在bandwidth范围内
+    const clampedX = Math.max(-bandwidth, Math.min(bandwidth, x));
+    const clampedZ = Math.max(-bandwidth, Math.min(bandwidth, z));
+    const clampedY = Math.max(-thickness / 2, Math.min(thickness / 2, y));
+
+    positions.push(clampedX, clampedY, clampedZ);
+  }
+
+  return new Float32Array(positions);
+}
+
+// 生成点缀粒子数据 - 在粒子环范围内随机分布装饰粒子
+function generateOrnamentParticles(
+  radius: number,
+  eccentricity: number,
+  bandwidth: number,
+  thickness: number,
+  count: number,
+  distribution: 'uniform' | 'cluster',
+  clusterCount: number = 3,
+  clusterSpread: number = 0.5,
+  sizeRandomness: number = 0.3,
+  phaseRandomness: number = 0.8
+): { positions: Float32Array; sizes: Float32Array; phases: Float32Array; randomSeeds: Float32Array } {
+  const b = radius * Math.sqrt(1 - eccentricity * eccentricity);
+  const positions: number[] = [];
+  const sizes: number[] = [];
+  const phases: number[] = [];
+  const randomSeeds: number[] = [];
+
+  if (distribution === 'cluster') {
+    // 聚簇分布：在若干个聚簇中心附近生成粒子
+    const clusterCenters: number[] = [];
+    for (let c = 0; c < clusterCount; c++) {
+      clusterCenters.push(Math.random() * Math.PI * 2);
+    }
+
+    for (let i = 0; i < count; i++) {
+      // 随机选择一个聚簇中心
+      const clusterIdx = Math.floor(Math.random() * clusterCount);
+      const centerAngle = clusterCenters[clusterIdx];
+      // 在聚簇中心附近生成角度（高斯分布近似）
+      const spreadAngle = (Math.random() + Math.random() + Math.random() - 1.5) * clusterSpread * Math.PI;
+      const angle = centerAngle + spreadAngle;
+
+      const x = radius * Math.cos(angle);
+      const y = b * Math.sin(angle);
+
+      const offsetX = (Math.random() - 0.5) * bandwidth;
+      const offsetY = (Math.random() - 0.5) * bandwidth;
+      const offsetZ = (Math.random() - 0.5) * thickness;
+
+      positions.push(x + offsetX, offsetZ, y + offsetY);
+      sizes.push(1.0 + (Math.random() - 0.5) * 2 * sizeRandomness);
+      phases.push(phaseRandomness > 0 ? Math.random() * Math.PI * 2 : (i / count) * Math.PI * 2);
+      randomSeeds.push(Math.random());
+    }
+  } else {
+    // 均匀分布：沿轨道均匀分布（带相位随机）
+    for (let i = 0; i < count; i++) {
+      const baseAngle = (i / count) * Math.PI * 2;
+      const angle = baseAngle + (Math.random() - 0.5) * phaseRandomness * (Math.PI * 2 / count);
+
+      const x = radius * Math.cos(angle);
+      const y = b * Math.sin(angle);
+
+      const offsetX = (Math.random() - 0.5) * bandwidth;
+      const offsetY = (Math.random() - 0.5) * bandwidth;
+      const offsetZ = (Math.random() - 0.5) * thickness;
+
+      positions.push(x + offsetX, offsetZ, y + offsetY);
+      sizes.push(1.0 + (Math.random() - 0.5) * 2 * sizeRandomness);
+      phases.push(phaseRandomness > 0 ? Math.random() * Math.PI * 2 : baseAngle);
+      randomSeeds.push(Math.random());
+    }
+  }
+
+  return {
+    positions: new Float32Array(positions),
+    sizes: new Float32Array(sizes),
+    phases: new Float32Array(phases),
+    randomSeeds: new Float32Array(randomSeeds)
+  };
+}
+
+// ==================== 实心核心创建函数 ====================
 
 // 霈∠�摰硺��詨�憸𡏭𠧧 (CPU 蝡? - 雿輻鍂 THREE.Color 蝖桐�憸𡏭𠧧蝛粹𡢿甇�＆
 function calculateSolidCoreColors(settings: SolidCoreSettings): { baseColor: THREE.Vector3, accentColor: THREE.Vector3 } {
@@ -5285,7 +5688,8 @@ function createSurfaceFlameMesh(settings: SurfaceFlameSettings, isMobile: boolea
     direction = 'up',
     pulseEnabled = true,
     pulseSpeed = 1.0,
-    pulseIntensity = 0.3
+    pulseIntensity = 0.3,
+    rippleSettings
   } = settings;
 
   // �怎�憸𡏭𠧧
@@ -5307,10 +5711,21 @@ function createSurfaceFlameMesh(settings: SurfaceFlameSettings, isMobile: boolea
   // �孵�蝝Ｗ�
   const directionIndex = direction === 'up' ? 0 : direction === 'outward' ? 1 : 2;
 
-  // �芸ㄟ蝐餃�蝝Ｗ�
-  const noiseTypeIndex = noiseType === 'simplex' ? 0 : noiseType === 'voronoi' ? 1 : 0;
+  // 噪声类型索引：0=simplex, 1=voronoi, 2=ripple
+  const noiseTypeIndex = noiseType === 'simplex' ? 0 : noiseType === 'voronoi' ? 1 : noiseType === 'ripple' ? 2 : 0;
 
-  // �𥕦遣�亙之鈭擧瓲敹�����
+  // 水波纹参数默认值
+  const ripple = rippleSettings || {
+    waveCount: 15,
+    waveSpeed: 1.5,
+    damping: 0.3,
+    multiSourceEnabled: false,
+    sourceCount: 1,
+    sourceSpread: 0.5,
+    interference: 0.5
+  };
+
+  // 创建比核心稍大的球体
   const flameRadius = radius * (1 + thickness);
   const geometry = new THREE.IcosahedronGeometry(flameRadius, isMobile ? 4 : 5);
 
@@ -5345,7 +5760,15 @@ function createSurfaceFlameMesh(settings: SurfaceFlameSettings, isMobile: boolea
       uGradientDir: { value: 0 },
       uCustomDir: { value: new THREE.Vector3(0, 1, 0) },
       uSpiralDensity: { value: fc.spiralDensity ?? 3 },
-      uProceduralIntensity: { value: fc.proceduralIntensity ?? 1.0 }
+      uProceduralIntensity: { value: fc.proceduralIntensity ?? 1.0 },
+      // 水波纹参数
+      uRippleWaveCount: { value: ripple.waveCount },
+      uRippleWaveSpeed: { value: ripple.waveSpeed },
+      uRippleDamping: { value: ripple.damping },
+      uRippleMultiSource: { value: ripple.multiSourceEnabled ? 1.0 : 0.0 },
+      uRippleSourceCount: { value: ripple.sourceCount },
+      uRippleSourceSpread: { value: ripple.sourceSpread },
+      uRippleInterference: { value: ripple.interference }
     },
     transparent: true,
     depthWrite: false,
@@ -5749,8 +6172,6 @@ interface PlanetSceneProps {
   nebulaSettings?: AppSettings;
   nebulaInstancesData?: Map<string, ProcessedData>;
   sidebarOpen?: boolean;  // 侧边栏是否展开
-  drawSettings?: DrawSettings;  // 绘图模式设置
-  setDrawSettings?: React.Dispatch<React.SetStateAction<DrawSettings>>;  // 绘图设置更新函数
 }
 
 // �嘥��豢㦤霈曄蔭
@@ -5761,7 +6182,7 @@ const INITIAL_CAMERA = {
 
 // ==================== 銝餌�隞?====================
 
-const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraChange, resetCameraRef, overlayMode = false, nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false, drawSettings, setDrawSettings }) => {
+const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraChange, resetCameraRef, overlayMode = false, nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -5826,45 +6247,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   // �箸艶�嘥��硋��鞉�敹?
   const [sceneReady, setSceneReady] = useState(false);
 
-  // Ink Manager for symmetry drawing
-  const inkManagerRef = useRef<InkManager | null>(null);
-
-  // 绘图模式：确保预览绑定存在（默认绑定到 previewPlanetId）
-  useEffect(() => {
-    if (!drawSettings?.enabled || !setDrawSettings) return;
-    const drawingId = drawSettings.activeDrawingId;
-    const planetId = drawSettings.previewPlanetId;
-    if (!drawingId || !planetId) return;
-
-    const exists = (drawSettings.placements || []).some(p => p.drawingId === drawingId && p.planetId === planetId);
-    if (exists) return;
-
-    setDrawSettings(prev => {
-      const stillEnabled = prev.enabled;
-      const dId = prev.activeDrawingId;
-      const pId = prev.previewPlanetId;
-      if (!stillEnabled || !dId || !pId) return prev;
-      const already = (prev.placements || []).some(p => p.drawingId === dId && p.planetId === pId);
-      if (already) return prev;
-      return {
-        ...prev,
-        placements: [
-          ...(prev.placements || []),
-          {
-            id: `placement-${dId}-${pId}`,
-            drawingId: dId,
-            planetId: pId,
-            visible: true,
-            scale: 1,
-            tilt: { x: 0, y: 0, z: 0 },
-            offset: { x: 0, y: 0, z: 0 },
-            followPlanetRotation: 1
-          }
-        ]
-      };
-    });
-  }, [drawSettings?.enabled, drawSettings?.activeDrawingId, drawSettings?.previewPlanetId, setDrawSettings]);
-
   // ===== 銝𠰴���� Refs =====
   // ���冽��剁�撣衣�摰墧�撠橘�
   const starRainRef = useRef<{
@@ -5895,30 +6277,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       burstTriggered: boolean;
     }>;
     lastSpawnTime: number;
-  } | null>(null);
-
-  // ===== �见飵鈭支���� Refs =====
-  // �蠘劓蝏睃㦛頧刻蕨
-  const drawingTrailRef = useRef<{
-    points: THREE.Points;
-    positions: Float32Array;
-    colors: Float32Array;
-    sizes: Float32Array;
-    ages: Float32Array;
-    activeCount: number;
-    maxCount: number;
-    lastDrawPos: THREE.Vector3;
-    isDrawing: boolean;
-  } | null>(null);
-
-  // �抵捶��𠧧���
-  const slashEffectRef = useRef<{
-    active: boolean;
-    startTime: number;
-    startPos: THREE.Vector3;
-    endPos: THREE.Vector3;
-    direction: THREE.Vector3;
-    healProgress: number;
   } | null>(null);
 
   // �嘥��硋㦤�?
@@ -5987,12 +6345,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     bgSphere.visible = false; // �嘥��鞱�
     scene.add(bgSphere);
     backgroundSphereRef.current = bgSphere;
-
-    // Ink Manager Initialization
-    // Initialize InkManager after scene and renderer are ready
-    if (!inkManagerRef.current && renderer.domElement) {
-      inkManagerRef.current = new InkManager(scene, camera, renderer.domElement);
-    }
 
     // �𥕦遣�批��?
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -6404,106 +6756,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       lastSpawnTime: 0
     };
 
-    // 4. �蠘劓蝏睃㦛頧刻蕨蝎鍦�蝟餌�
-    const drawingTrailMaxCount = 2000;
-    const drawingTrailPositions = new Float32Array(drawingTrailMaxCount * 3);
-    const drawingTrailColors = new Float32Array(drawingTrailMaxCount * 3);
-    const drawingTrailSizes = new Float32Array(drawingTrailMaxCount);
-    const drawingTrailAges = new Float32Array(drawingTrailMaxCount);
-
-    const drawingTrailGeometry = new THREE.BufferGeometry();
-    drawingTrailGeometry.setAttribute('position', new THREE.BufferAttribute(drawingTrailPositions, 3));
-    drawingTrailGeometry.setAttribute('color', new THREE.BufferAttribute(drawingTrailColors, 3));
-    drawingTrailGeometry.setAttribute('size', new THREE.BufferAttribute(drawingTrailSizes, 1));
-    drawingTrailGeometry.setAttribute('age', new THREE.BufferAttribute(drawingTrailAges, 1)); // 瘛餃� age 撅墧�?
-
-    const drawingTrailMaterial = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 }
-      },
-      vertexShader: `
-        attribute float size;
-        attribute vec3 color;
-        attribute float age;
-        varying vec3 vColor;
-        varying float vAlpha;
-        varying float vAge;
-        uniform float uTime;
-        
-        void main() {
-          vColor = color;
-          vAge = age;
-          
-          // 蝎鍦��𤩺𧒄�湔��?
-          vec3 pos = position;
-          
-          // 瘛餃�瘚�𢆡���Curl Noise璅⊥�嚗?
-          float flowSpeed = 20.0;
-          float flowScale = 0.05;
-          float noise = sin(pos.x * flowScale + uTime * 2.0) * cos(pos.z * flowScale + uTime) * sin(pos.y * flowScale);
-          
-          pos.x += noise * 10.0 * (1.0 - age); // 頞𦠜鰵���摮鞉��刻�撘?
-          pos.y += sin(uTime * 3.0 + age * 10.0) * 5.0;
-          
-          vAlpha = smoothstep(0.0, 0.2, age) * smoothstep(1.0, 0.6, age);
-          
-          vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-          gl_PointSize = size * (300.0 / -mvPosition.z) * (0.5 + 0.5 * sin(uTime * 5.0 + age * 20.0));
-          gl_Position = projectionMatrix * mvPosition;
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vColor;
-        varying float vAlpha;
-        varying float vAge;
-        
-        void main() {
-          float dist = length(gl_PointCoord - vec2(0.5));
-          if (dist > 0.5) discard;
-          
-          // �詨��㗇�
-          float glow = exp(-dist * dist * 10.0);
-          
-          // 颲寧��㗇�
-          float halo = smoothstep(0.5, 0.2, dist) * 0.5;
-          
-          // 憸𡏭𠧧憓𧼮撩 (�笔��芰�)
-          vec3 finalColor = vColor + vec3(0.5) * glow;
-          
-          gl_FragColor = vec4(finalColor, (glow + halo) * vAlpha);
-        }
-      `,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    });
-
-    const drawingTrailPoints = new THREE.Points(drawingTrailGeometry, drawingTrailMaterial);
-    drawingTrailPoints.visible = false;
-    scene.add(drawingTrailPoints);
-
-    drawingTrailRef.current = {
-      points: drawingTrailPoints,
-      positions: drawingTrailPositions,
-      colors: drawingTrailColors,
-      sizes: drawingTrailSizes,
-      ages: drawingTrailAges,
-      activeCount: 0,
-      maxCount: drawingTrailMaxCount,
-      lastDrawPos: new THREE.Vector3(),
-      isDrawing: false
-    };
-
-    // 5. �抵捶��𠧧����嘥��?
-    slashEffectRef.current = {
-      active: false,
-      startTime: 0,
-      startPos: new THREE.Vector3(),
-      endPos: new THREE.Vector3(),
-      direction: new THREE.Vector3(),
-      healProgress: 1
-    };
-
     // �滚�撘?
     const handleResize = () => {
       if (!container || !camera || !renderer || !composer) return;
@@ -6615,8 +6867,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       starRainRef.current = null;
       volumeFogRef.current = null;
       lightOrbsRef.current = null;
-      drawingTrailRef.current = null;
-      slashEffectRef.current = null;
       backgroundSphereRef.current = null;
 
       nebulaPointsRef.current = null;
@@ -6926,14 +7176,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     controls.target.x = offsetX;
 
   }, [sidebarOpen]);
-
-  // Handle OrbitControls state based on Draw Mode
-  useEffect(() => {
-    if (controlsRef.current) {
-      // If drawing is enabled, disable camera controls to allow painting
-      controlsRef.current.enabled = !drawSettings?.enabled;
-    }
-  }, [drawSettings?.enabled]);
 
   // 湔鰵峕艶霈曄蔭
   useEffect(() => {
@@ -9018,238 +9260,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         }
       }
 
-      // 4. �蠘劓蝏睃㦛�湔鰵
-      if (drawingTrailRef.current && cameraRef.current) {
-        const trail = drawingTrailRef.current;
-        const hand = handData.current;
-        const leftHand = hand.leftHand;
-        const rightHand = hand.rightHand;
-
-        // 璉�瘚钅���撓�箸��選�隡睃�雿輻鍂�單�嚗��甈∪椰�页�
-        const activeHand = rightHand?.isIndexPointing ? rightHand :
-          leftHand?.isIndexPointing ? leftHand : null;
-
-        if (activeHand) {
-          trail.points.visible = true;
-
-          // 霈∠�3D蝛粹𡢿銝剔����雿滨蔭
-          const camera = cameraRef.current;
-          const fingerPos = new THREE.Vector3(activeHand.x, activeHand.y, 0.5);
-          fingerPos.unproject(camera);
-          const dir = fingerPos.sub(camera.position).normalize();
-          const distance = 500; // �箏�頝萘氖
-          const worldPos = camera.position.clone().add(dir.multiplyScalar(distance));
-
-          // 璉�瘚𧢲糓�阡�閬�溶�䭾鰵蝎鍦�
-          const distFromLast = worldPos.distanceTo(trail.lastDrawPos);
-          const minDist = 5; // ��撠誯𡢿頝?
-
-          if (!trail.isDrawing || distFromLast > minDist) {
-            // 瘛餃��啁�摮?
-            if (trail.activeCount < trail.maxCount) {
-              const idx = trail.activeCount;
-              trail.positions[idx * 3] = worldPos.x;
-              trail.positions[idx * 3 + 1] = worldPos.y;
-              trail.positions[idx * 3 + 2] = worldPos.z;
-              // �嗆眾�脣蔗
-              const hue = (time * 0.1 + idx * 0.01) % 1;
-              const color = new THREE.Color().setHSL(hue, 0.8, 0.7);
-              trail.colors[idx * 3] = color.r;
-              trail.colors[idx * 3 + 1] = color.g;
-              trail.colors[idx * 3 + 2] = color.b;
-              trail.sizes[idx] = 8 + Math.random() * 4;
-              trail.ages[idx] = 0;
-              trail.activeCount++;
-            }
-            trail.lastDrawPos.copy(worldPos);
-            trail.isDrawing = true;
-          }
-        } else {
-          trail.isDrawing = false;
-        }
-
-        // �湔鰵���㕑膘餈寧�摮琜�瘨�袇���嚗?
-        const fadeTime = 2.0; // 2蝘埝��?
-        let aliveCount = 0;
-        for (let i = 0; i < trail.activeCount; i++) {
-          trail.ages[i] += dt;
-          const age = trail.ages[i];
-
-          if (age < fadeTime) {
-            // 蝎鍦�餈䀹暑��嚗峕凒�啣之撠𧶏�皜𣂼�嚗?
-            const lifeRatio = 1 - age / fadeTime;
-            trail.sizes[i] = (8 + Math.random() * 4) * lifeRatio;
-
-            // 憒����閬��蝻拇㺭蝏��蝘餃𢆡蝎鍦�
-            if (aliveCount !== i) {
-              trail.positions[aliveCount * 3] = trail.positions[i * 3];
-              trail.positions[aliveCount * 3 + 1] = trail.positions[i * 3 + 1];
-              trail.positions[aliveCount * 3 + 2] = trail.positions[i * 3 + 2];
-              trail.colors[aliveCount * 3] = trail.colors[i * 3];
-              trail.colors[aliveCount * 3 + 1] = trail.colors[i * 3 + 1];
-              trail.colors[aliveCount * 3 + 2] = trail.colors[i * 3 + 2];
-              trail.sizes[aliveCount] = trail.sizes[i];
-              trail.ages[aliveCount] = trail.ages[i];
-            }
-            aliveCount++;
-          }
-        }
-        trail.activeCount = aliveCount;
-
-        // �湔鰵�牐�雿?
-        const posAttr = trail.points.geometry.attributes.position as THREE.BufferAttribute;
-        const colorAttr = trail.points.geometry.attributes.color as THREE.BufferAttribute;
-        const sizeAttr = trail.points.geometry.attributes.size as THREE.BufferAttribute;
-        const ageAttr = trail.points.geometry.attributes.age as THREE.BufferAttribute;
-
-        if (ageAttr) {
-          ageAttr.needsUpdate = true;
-          // �峕郊age�唳旿
-          for (let i = 0; i < trail.activeCount; i++) {
-            // 憒����閬��蝻拇㺭蝏��撌脩��其��Ｗ儐�臭葉憭��鈭��蝵桀�憸𡏭𠧧嚗諹���蘨��閬�＆靽?age 撅墧�扯◤甇�＆霈曄蔭
-            // 瘜冽�嚗𡁶眏鈭𦒘��Ｗ儐�臬歇蝏誩�����讠憬嚗諹��?ageAttr �?array 摨磰砲撌脩�鋡急迤蝖格凒�唬�
-            // 憒��銝𢠃𢒰��儐�舀迤蝖格凒�唬� trail.ages �啁�嚗屸�銋����蘨��閬��霈?needsUpdate
-          }
-        }
-
-        posAttr.needsUpdate = true;
-        colorAttr.needsUpdate = true;
-        sizeAttr.needsUpdate = true;
-
-        // �鞱�瘝⊥�蝎鍦��?
-        trail.points.visible = trail.activeCount > 0 || activeHand !== null;
-
-        // �湔鰵 uniform uTime
-        (trail.points.material as THREE.ShaderMaterial).uniforms.uTime.value = time;
-      }
-
-      // 4.5 �嗆眾頧刻蕨霈啣�嚗�鍂鈭𡒊�摮𣂼𢙺����頣�
-      if (cameraRef.current) {
-        const hand = handData.current;
-        const leftHand = hand.leftHand;
-        const rightHand = hand.rightHand;
-
-        // 摰匧�璉��伐�蝖桐��见飵�唳旿�㗇�
-        const isHandValid = hand && (hand.isActive || leftHand || rightHand);
-
-        // 璉�瘚钅���撓�箸��?
-        const activeHand = isHandValid && (rightHand?.isIndexPointing ? rightHand :
-          leftHand?.isIndexPointing ? leftHand : null);
-
-        if (activeHand) {
-          const now = performance.now();
-          const interval = 50; // 瘥?0ms霈啣�銝�銝芰�
-
-          if (now - lastTrailTimeRef.current > interval) {
-            lastTrailTimeRef.current = now;
-
-            // 霈∠�銝𣇉��鞉�
-            const camera = cameraRef.current;
-            const fingerPos = new THREE.Vector3(activeHand.x, activeHand.y, 0.5);
-            fingerPos.unproject(camera);
-            const dir = fingerPos.sub(camera.position).normalize();
-            const distance = -camera.position.z / dir.z;
-            const worldPos = camera.position.clone().add(dir.multiplyScalar(distance));
-
-            // 瘛餃��啗膘餈寞㺭蝏��靽脲���憭?0銝芰�嚗?
-            trailRef.current.push(worldPos.clone());
-            if (trailRef.current.length > 50) {
-              trailRef.current.shift();
-            }
-          }
-        } else {
-          // �𧢲�蝳餃��嗅翰����方膘餈?
-          if (trailRef.current.length > 0) {
-            // 憒���见飵�唳旿摰���䭾�嚗𣬚��單�蝛?
-            if (!isHandValid) {
-              trailRef.current = [];
-            } else {
-              // �血��鞉�皜�膄嚗��撣抒宏�文�銝芰��惩翰皜�膄嚗?
-              const now = performance.now();
-              if (now - lastTrailTimeRef.current > 30) {
-                lastTrailTimeRef.current = now;
-                // 瘥𤩺活蝘駁膄3銝芰��惩翰皜�膄�笔漲
-                for (let i = 0; i < 3 && trailRef.current.length > 0; i++) {
-                  trailRef.current.shift();
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // 5. �抵捶��𠧧����湔鰵
-      if (slashEffectRef.current && cameraRef.current) {
-        const slash = slashEffectRef.current;
-        const slashCamera = cameraRef.current;
-        const hand = handData.current;
-        const leftHand = hand.leftHand;
-        const rightHand = hand.rightHand;
-
-        // 璉�瘚见��嗆��踹�敹恍�毺宏�?
-        const activeHand = rightHand?.isKnifeHand ? rightHand :
-          leftHand?.isKnifeHand ? leftHand : null;
-
-        if (activeHand) {
-          const speed = Math.sqrt(activeHand.velocity.x ** 2 + activeHand.velocity.y ** 2);
-          const speedThreshold = 5.0; // �鞾�閫血����潘��踹�霂航圻
-
-          if (speed > speedThreshold && !slash.active) {
-            // 撘�憪𧢲鰵����?
-            slash.active = true;
-            slash.startTime = time;
-            // 霈∠�撅誩��惩�雿滨蔭
-            const vector = new THREE.Vector3(activeHand.x, activeHand.y, 0.5);
-            vector.unproject(slashCamera);
-            const dir = vector.sub(slashCamera.position).normalize();
-            const distance = -slashCamera.position.z / dir.z; // �訫��?Z=0 撟喲𢒰
-            const worldPos = slashCamera.position.clone().add(dir.multiplyScalar(distance));
-
-            slash.startPos.copy(worldPos);
-            // slash.startPos.set(activeHand.x * 400, activeHand.y * 300, 0); // �批���恣蝞埈䲮撘?
-
-            // 霈∠���𠧧�孵�嚗��銝��吔�
-            const velDir = new THREE.Vector3(activeHand.velocity.x, activeHand.velocity.y, 0).normalize();
-            slash.direction.copy(velDir);
-
-            // 憸�挽蝏𤘪��對��寞旿�笔漲憸��嚗?
-            slash.endPos.copy(slash.startPos).add(velDir.multiplyScalar(300));
-
-            slash.healProgress = 0;
-          }
-
-          if (slash.active && time - slash.startTime < 0.5) {
-            // �典��脣����蝏剜凒�啁��毺�嚗諹��𤩺��?
-            const vector = new THREE.Vector3(activeHand.x, activeHand.y, 0.5);
-            vector.unproject(slashCamera);
-            const dir = vector.sub(slashCamera.position).normalize();
-            const distance = -slashCamera.position.z / dir.z;
-            const worldPos = slashCamera.position.clone().add(dir.multiplyScalar(distance));
-            slash.endPos.copy(worldPos);
-          }
-        }
-
-        // ���餈��嚗?蝘𡜐�
-        if (slash.active) {
-          const healTime = 3.0;
-          slash.healProgress = Math.min(1, (time - slash.startTime) / healTime);
-
-          if (slash.healProgress >= 1) {
-            slash.active = false;
-          }
-        }
-      }
-
-      // Ink Manager Update
-      if (inkManagerRef.current) {
-        const ds = drawSettingsRef.current;
-        if (ds) {
-          inkManagerRef.current.setSettings(ds);
-          inkManagerRef.current.setPlanets(planetMeshesRef.current);
-        }
-        inkManagerRef.current.update(time);
-      }
-
       // 渲染
       if (composerRef.current) {
         composerRef.current.render();
@@ -9280,36 +9290,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       cancelAnimationFrame(animationFrameRef.current);
     };
   }, [handData]); // 优化：仅依赖 handData
-
-  // Toggle OrbitControls based on drawing mode
-  useEffect(() => {
-    if (controlsRef.current) {
-      // Disable controls when drawing is enabled to prevent camera movement intervention
-      controlsRef.current.enabled = !drawSettings?.enabled;
-    }
-  }, [drawSettings?.enabled]);
-
-  // 通过 ref 避免动画循环闭包拿到陈旧的 drawSettings
-  const drawSettingsRef = useRef(drawSettings);
-  useEffect(() => {
-    drawSettingsRef.current = drawSettings;
-  }, [drawSettings]);
-
-  // 绘图工作台模式下允许隐藏星球（但保留星球对象用于定位）
-  useEffect(() => {
-    const hide = !!(drawSettings?.enabled && drawSettings.hidePlanetWhileDrawing);
-    planetMeshesRef.current.forEach(p => {
-      if (p?.core) {
-        p.core.visible = !hide;
-      }
-      if (p?.rings) p.rings.visible = !hide;
-      if (p?.flames) p.flames.visible = !hide;
-      if (p?.radiation) p.radiation.visible = !hide;
-      if (p?.fireflies) p.fireflies.visible = !hide;
-      if (p?.magicCircles) p.magicCircles.visible = !hide;
-      if (p?.energyBodies) p.energyBodies.visible = !hide;
-    });
-  }, [drawSettings?.enabled, drawSettings?.hidePlanetWhileDrawing]);
 
   // 摮睃噼?ref嚗滚𢆡餃儐臭韏吔
   const onCameraChangeRef = useRef(onCameraChange);
@@ -10271,10 +10251,181 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       });
 
       const ringPoints = new THREE.Points(ringGeom, ringMat);
-      ringPoints.renderOrder = 20;  // �典�雿𤘪瓲敹���擧葡�?
+      ringPoints.renderOrder = 20;  // 确保正确渲染顺序
       ringGroup.add(ringPoints);
 
-      // 摨𠉛鍂�暹� - 雿輻鍂�啁�TiltSettings
+      // ===== 点缀粒子 =====
+      if (ring.ornament?.enabled && ring.ornament.count > 0) {
+        const orn = ring.ornament;
+        const ornamentData = generateOrnamentParticles(
+          ring.absoluteRadius,
+          ring.eccentricity || 0,
+          ring.bandwidth,
+          ring.thickness,
+          orn.count,
+          orn.distribution || 'uniform',
+          orn.clusterCount || 3,
+          orn.clusterSpread || 0.5,
+          orn.sizeRandomness || 0.3,
+          orn.orbitPhaseRandomness || 0.8
+        );
+
+        const ornGeom = new THREE.BufferGeometry();
+        ornGeom.setAttribute('position', new THREE.BufferAttribute(ornamentData.positions, 3));
+        ornGeom.setAttribute('aSize', new THREE.BufferAttribute(ornamentData.sizes, 1));
+        ornGeom.setAttribute('aPhase', new THREE.BufferAttribute(ornamentData.phases, 1));
+        ornGeom.setAttribute('aRandom', new THREE.BufferAttribute(ornamentData.randomSeeds, 1));
+
+        // 计算点缀颜色
+        let ornColor = new THREE.Vector3(1, 1, 1);
+        if (orn.colorMode === 'inherit') {
+          const [r, g, b] = hexToRgb(ring.color);
+          ornColor = new THREE.Vector3(r, g, b);
+        } else if (orn.colorMode === 'solid') {
+          const [r, g, b] = hexToRgb(orn.color || '#ffffff');
+          ornColor = new THREE.Vector3(r, g, b);
+        }
+
+        // 样式映射到shader shape值
+        const styleToShape: Record<string, number> = {
+          'plain': 0, 'flare': 1, 'spark': 2, 'texture': 3,
+          'star': 4, 'snowflake': 5, 'heart': 6, 'crescent': 7,
+          'crossGlow': 8, 'sakura': 9, 'sun': 10, 'sun2': 11,
+          'plum': 12, 'lily': 13, 'lotus': 14, 'prism': 15
+        };
+        const shapeVal = styleToShape[orn.style] ?? 0;
+
+        const ornMat = new THREE.ShaderMaterial({
+          vertexShader: `
+            attribute float aSize;
+            attribute float aPhase;
+            attribute float aRandom;
+            varying float vPhase;
+            varying float vRandom;
+            uniform float uTime;
+            uniform float uBaseSize;
+            uniform float uPulseEnabled;
+            uniform float uPulseSpeed;
+            uniform float uPulseIntensity;
+            uniform float uPulseSync;
+            
+            void main() {
+              vPhase = aPhase;
+              vRandom = aRandom;
+              
+              vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+              
+              // 脉冲效果
+              float pulse = 1.0;
+              if (uPulseEnabled > 0.5) {
+                float phaseOffset = uPulseSync > 0.5 ? 0.0 : aPhase;
+                pulse = 1.0 + sin(uTime * uPulseSpeed + phaseOffset) * uPulseIntensity;
+              }
+              
+              float size = uBaseSize * aSize * pulse;
+              gl_PointSize = size * (300.0 / -mvPosition.z);
+              gl_Position = projectionMatrix * mvPosition;
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 uColor;
+            uniform float uOpacity;
+            uniform float uBrightness;
+            uniform float uGlowIntensity;
+            uniform float uShape;
+            uniform float uFlareLeaves;
+            uniform float uFlareWidth;
+            varying float vPhase;
+            varying float vRandom;
+            
+            #define PI 3.14159265359
+            
+            // 星芒形状
+            float flareShape(vec2 uv, float leaves, float width) {
+              float angle = atan(uv.y, uv.x);
+              float r = length(uv);
+              float flare = abs(cos(angle * leaves * 0.5));
+              flare = pow(flare, 1.0 / width);
+              return smoothstep(1.0, 0.0, r / (flare * 0.5 + 0.1));
+            }
+            
+            // 星形
+            float starShape(vec2 uv) {
+              float angle = atan(uv.y, uv.x);
+              float r = length(uv);
+              float star = abs(cos(angle * 2.5));
+              star = 0.3 + star * 0.4;
+              return smoothstep(star, star - 0.1, r);
+            }
+            
+            // 火花形状
+            float sparkShape(vec2 uv) {
+              float r = length(uv);
+              float angle = atan(uv.y, uv.x);
+              float rays = pow(abs(sin(angle * 4.0)), 3.0) * 0.3;
+              return smoothstep(0.5 + rays, 0.0, r);
+            }
+            
+            void main() {
+              vec2 uv = gl_PointCoord * 2.0 - 1.0;
+              float r = length(uv);
+              
+              float alpha = 0.0;
+              
+              if (uShape < 0.5) {
+                // plain - 圆形
+                alpha = smoothstep(1.0, 0.3, r);
+              } else if (uShape < 1.5) {
+                // flare - 星芒
+                alpha = flareShape(uv, uFlareLeaves, uFlareWidth);
+              } else if (uShape < 2.5) {
+                // spark - 火花
+                alpha = sparkShape(uv);
+              } else if (uShape < 4.5) {
+                // texture/star
+                alpha = starShape(uv);
+              } else {
+                // 其他形状使用基础圆形 + 发光
+                float core = smoothstep(0.5, 0.0, r);
+                float glow = smoothstep(1.0, 0.0, r) * 0.5;
+                alpha = core + glow * uGlowIntensity;
+              }
+              
+              // 发光效果
+              float glow = smoothstep(1.2, 0.0, r) * uGlowIntensity * 0.3;
+              alpha = alpha + glow;
+              
+              vec3 finalColor = uColor * uBrightness;
+              gl_FragColor = vec4(finalColor, alpha * uOpacity);
+            }
+          `,
+          uniforms: {
+            uTime: { value: 0 },
+            uColor: { value: ornColor },
+            uOpacity: { value: orn.opacity ?? 1.0 },
+            uBrightness: { value: orn.brightness ?? 1.5 },
+            uGlowIntensity: { value: orn.glowIntensity ?? 0.8 },
+            uBaseSize: { value: orn.baseSize ?? 15 },
+            uShape: { value: shapeVal },
+            uFlareLeaves: { value: orn.flareLeaves ?? 4 },
+            uFlareWidth: { value: orn.flareWidth ?? 0.5 },
+            uPulseEnabled: { value: orn.pulseEnabled ? 1.0 : 0.0 },
+            uPulseSpeed: { value: orn.pulseSpeed ?? 1.0 },
+            uPulseIntensity: { value: orn.pulseIntensity ?? 0.3 },
+            uPulseSync: { value: orn.pulseSync ? 1.0 : 0.0 }
+          },
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        });
+
+        const ornPoints = new THREE.Points(ornGeom, ornMat);
+        ornPoints.renderOrder = 25;  // 点缀在主粒子之上
+        ornPoints.userData = { isOrnament: true, orbitSpeedMultiplier: orn.orbitSpeedMultiplier ?? 1.0 };
+        ringGroup.add(ornPoints);
+      }
+
+      // 应用倾斜 - 使用新的TiltSettings
       const tiltAngles = getTiltAngles(ring.tilt);
       ringGroup.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x);
       ringGroup.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
@@ -10283,7 +10434,120 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       rings.add(ringGroup);
     });
 
-    // 餈䂿賒�臬蒂 - 隞�銁�典�撘��喳鍳�冽𧒄�曄內
+    // ===== 丝线环 =====
+    const silkRings = planet.rings.silkRings || [];
+    silkRings.forEach(silk => {
+      if (!planet.rings.silkRingsEnabled || !silk.enabled) return;
+      // Solo 模式检查
+      if (planet.rings.silkRingsSoloId && planet.rings.silkRingsSoloId !== silk.id) return;
+
+      const coreRadius = planet.coreSystem?.solidCores?.[0]?.radius || 100;
+      const actualRadius = coreRadius * silk.orbitRadius;
+      const seed = silk.seed || Math.random() * 1000;
+
+      // 1. 建立轨道平面坐标系
+      const axis = new THREE.Vector3(silk.orbitAxis.x, silk.orbitAxis.y, silk.orbitAxis.z).normalize();
+      let u = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(axis.y) > 0.99) u.set(1, 0, 0);
+      u.crossVectors(u, axis).normalize();
+      const v = new THREE.Vector3().crossVectors(axis, u).normalize();
+
+      // 2. 生成有机曲线路径
+      const points: THREE.Vector3[] = [];
+      const segments = silk.tubeSegments || 100;
+
+      for (let i = 0; i <= segments; i++) {
+        const theta = (i / segments) * Math.PI * 2;
+
+        // 基础形变
+        const baseWobble = Math.sin(theta * 3.0 + seed) * 0.4;
+        // 高频波动
+        const wobbleFreq = silk.wobbleFrequency || 6;
+        const wobbleAmp = silk.wobbleAmplitude || 0.4;
+        const spiralRipple = Math.cos(theta * wobbleFreq + seed * 2.0);
+        // 动态半径
+        const r = actualRadius + (baseWobble + spiralRipple) * wobbleAmp * actualRadius * 0.1;
+
+        // 2D平面坐标
+        const x = Math.cos(theta) * r;
+        const y = Math.sin(theta) * r;
+
+        const point = new THREE.Vector3()
+          .addScaledVector(u, x)
+          .addScaledVector(v, y);
+
+        // Z轴飘移使曲线立体化
+        const zDriftScale = silk.zDriftScale || 0.5;
+        const zDrift = Math.sin(theta * 2.0 + seed) * wobbleAmp * actualRadius * 0.1 * zDriftScale;
+        point.addScaledVector(axis, zDrift);
+
+        points.push(point);
+      }
+
+      // 3. 创建闭合曲线和管道几何体
+      const curve = new THREE.CatmullRomCurve3(points, true, 'centripetal', 0.5);
+      const geometry = new THREE.TubeGeometry(
+        curve,
+        silk.tubeSegments || 100,
+        (silk.thickness || 0.05) * coreRadius * 0.01,
+        silk.radialSegments || 6,
+        true
+      );
+
+      // 4. 计算颜色 uniforms
+      const colorSettings = silk.color || { mode: 'none', baseColor: '#00ffff', colors: ['#00ffff', '#ffffff'] };
+      const colorModeIndex = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 }[colorSettings.mode] || 0;
+      const baseCol = hexToRgb(colorSettings.baseColor || '#00ffff');
+      const col1 = hexToRgb(colorSettings.colors?.[0] || '#00ffff');
+      const col2 = hexToRgb(colorSettings.colors?.[1] || '#ffffff');
+      const col3 = hexToRgb(colorSettings.colors?.[2] || '#00ffff');
+
+      // 5. 创建着色器材质
+      const material = new THREE.ShaderMaterial({
+        vertexShader: silkRingVertexShader,
+        fragmentShader: silkRingFragmentShader,
+        uniforms: {
+          uTime: { value: 0 },
+          uFlowSpeed: { value: silk.flowSpeed || 2.5 },
+          uStrandDensity: { value: silk.strandDensity || 30 },
+          uSparkleEnabled: { value: silk.sparkleEnabled ? 1.0 : 0.0 },
+          uSparkleThreshold: { value: silk.sparkleThreshold || 0.95 },
+          uFresnelPower: { value: silk.fresnelPower || 2.5 },
+          uOpacity: { value: silk.opacity || 0.8 },
+          uEmissive: { value: silk.emissive || 1.5 },
+          uBloomBoost: { value: silk.bloomBoost || 1.0 },
+          uWobbleEnabled: { value: silk.wobbleEnabled ? 1.0 : 0.0 },
+          uWobbleIntensity: { value: silk.wobbleIntensity || 0.05 },
+          // 颜色 uniforms
+          uColorMode: { value: colorModeIndex },
+          uBaseColor: { value: new THREE.Vector3(baseCol[0], baseCol[1], baseCol[2]) },
+          uColor1: { value: new THREE.Vector3(col1[0], col1[1], col1[2]) },
+          uColor2: { value: new THREE.Vector3(col2[0], col2[1], col2[2]) },
+          uColor3: { value: new THREE.Vector3(col3[0], col3[1], col3[2]) },
+          uColorMidPos: { value: colorSettings.colorMidPosition || 0.5 },
+          uProceduralIntensity: { value: colorSettings.proceduralIntensity || 1.0 }
+        },
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.name = `silkRing_${silk.id}`;
+      mesh.userData = { silkRingId: silk.id, rotationSpeed: silk.rotationSpeed || 0.1 };
+      mesh.renderOrder = 18;
+
+      // 应用倾斜
+      const tiltAngles = getTiltAngles(silk.tilt);
+      mesh.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x);
+      mesh.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
+      mesh.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
+
+      rings.add(mesh);
+    });
+
+    // 连续环带 - 使用自定义着色器实现渐变效果
     planet.rings.continuousRings.forEach(ring => {
       if (!planet.rings.continuousRingsEnabled || !ring.enabled) return;
 
@@ -10766,17 +11030,38 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     });
   }
 
-  // �𥕦遣蝎鍦��臬�雿蓥� - 雿輻鍂蝏嘥笆�𠰴�嚗峕𣈲����脫芋撘?
+  // 创建粒子环几何体 - 使用绝对半径参数，忽略baseRadius
   function createParticleRingGeometry(ring: any, baseRadius: number): THREE.BufferGeometry {
-    // 雿輻鍂蝏嘥笆�𠰴�嚗䔶��滢�韏𡝗瓲敹��敺?
+    // 使用绝对半径参数，直接使用ring中的值
     const radius = ring.absoluteRadius;
-    const positions = generateRingParticles(
-      radius,
-      ring.eccentricity,
-      ring.particleDensity,
-      ring.bandwidth,
-      ring.thickness
-    );
+
+    // 根据是否启用银河效果选择不同的粒子分布算法
+    let positions: Float32Array;
+    if (ring.galaxy?.enabled) {
+      // 银河系螺旋臂分布
+      positions = generateGalaxyParticles(
+        radius,
+        ring.particleDensity,
+        ring.bandwidth,
+        ring.thickness,
+        {
+          branches: ring.galaxy.branches ?? 4,
+          spin: ring.galaxy.spin ?? 0.8,
+          randomness: ring.galaxy.randomness ?? 0.25,
+          randomnessPower: ring.galaxy.randomnessPower ?? 3,
+          coreSize: ring.galaxy.coreSize ?? 0.2
+        }
+      );
+    } else {
+      // 默认椭圆轨道分布
+      positions = generateRingParticles(
+        radius,
+        ring.eccentricity,
+        ring.particleDensity,
+        ring.bandwidth,
+        ring.thickness
+      );
+    }
 
     const count = positions.length / 3;
     const colors = new Float32Array(count * 3);
@@ -11431,13 +11716,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         touchAction: 'manipulation'  // 隡睃閫行綉嚗屸漤鵭匧辣餈?
       }}
     >
-      {/* 2D Holo-Pad Overlay */}
-      {drawSettings?.enabled && setDrawSettings && (
-        <HoloCanvas
-          settings={drawSettings}
-          setSettings={setDrawSettings}
-        />
-      )}
     </div>
   );
 };

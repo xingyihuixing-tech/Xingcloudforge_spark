@@ -1,0 +1,5 @@
+{
+  "name": "Stellar Forge",
+  "description": "A high-performance, interactive 3D Galaxy generator using Three.js and React. Explore procedurally generated spiral galaxies with customizable parameters.",
+  "requestFramePermissions": []
+}

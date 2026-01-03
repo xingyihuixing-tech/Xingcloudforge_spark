@@ -9,7 +9,6 @@
 - **星云模式（NebulaScene）**：从图片生成粒子点云，并叠加多种动态特效。
 - **星球模式（PlanetScene）**：渲染星球系统；在 **互通模式（Interop Mode）** 下接管星云实例的渲染与 uniforms 同步。
 - **控制面板（ControlPanel）**：统一编辑全局 settings 与星云实例参数。
-- **绘图 Workbench（HoloCanvas + InkManager + DrawControlPanel）**：在星球模式中进行 2D 输入采样与 3D 墨迹特效渲染，支持多作品/多图层、多星球 placement、2D/3D 对称、压感与防抖。
 
 ## 本地运行
 
@@ -32,17 +31,6 @@
   - 目录说明：见 `components/README.md`
 - `shaders/`
   - 目录说明：见 `shaders/README.md`
-
-## 绘图 Workbench（Dimension Crafter）
-
-该系统用于在 PlanetScene 中进行“中央 2D 工作台绘制 + 3D 生长空间特效渲染”，核心链路：
-
-- `components/HoloCanvas.tsx`
-  - 采集指针输入（压感/倾角/防抖），写入 `DrawSettings.drawings[*].layers[*].strokes`，并进行 2D 预览重绘。
-- `components/InkManager.ts`
-  - 读取 `drawings + placements`，在 Three.js 场景内生成/更新特效对象（Points/InstancedMesh），并应用 layer/placement 变换与 2D/3D 对称。
-- `components/DrawControlPanel.tsx`
-  - 管理作品/图层/placement；笔刷与能量束参数；对称设置；图层与 placement 的变换调参。
 
 ## 关键设计：互通模式与实例级特效（方案 A）
 

@@ -9,13 +9,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
-import DrawControlPanel from './components/DrawControlPanel';
 import GestureHandler from './components/GestureHandler';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { UserMenu } from './components/UserMenu';
 import { UserLogin } from './components/UserLogin';
 import AIAssistantPanel from './components/AIAssistantPanel';
-import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, DrawSettings, BrushType, Symmetry2DMode, RadialReflectionMode, Symmetry3DMode } from './types';
+import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
 import {
   DEFAULT_SETTINGS,
   SAMPLE_IMAGES,
@@ -317,43 +316,6 @@ const App: React.FC = () => {
   const [appMode, setAppMode] = useState<AppMode>('nebula');
   const [overlayMode, setOverlayMode] = useState(false); // 叠加模式：同时显示星云和星球
 
-  // 绘图模式设置
-  const [drawSettings, setDrawSettings] = useState<DrawSettings>({
-    enabled: false,
-    brush: {
-      type: BrushType.Stardust,
-      size: 10,
-      opacity: 0.8,
-      color: '#ffffff',
-      usePressure: true,
-      pressureInfluence: { size: true, opacity: true, flow: false }
-    },
-    symmetry2D: {
-      mode: Symmetry2DMode.None,
-      mirrorAxisAngle: 90,
-      segments: 8,
-      radialReflectionMode: RadialReflectionMode.None,
-      rotationOffset: 0
-    },
-    symmetry3D: {
-      mode: Symmetry3DMode.None,
-      segments: 8,
-      octantAxes: { x: true, y: true, z: true },
-      heightStep: 10,
-      scaleDecay: 0.95,
-      twistPerStep: 20,
-      depthFromRadius: 0
-    },
-    drawings: [],
-    activeDrawingId: null,
-    placements: [],
-    canvasOpacity: 0.7,
-    hideCanvasWhilePainting: false,
-    hidePlanetWhileDrawing: true,
-    previewPlanetId: null,
-    canvasSize: 300
-  });
-
   const [data, setData] = useState<ProcessedData | null>(null);
 
   // 主题与材质配置状态（App 作为 SSOT）
@@ -532,9 +494,6 @@ const App: React.FC = () => {
     };
     root.style.setProperty('--custom-secondary-rgb', hexToRgb(activeColors.secondary));
   }, [themeConfig.activeColors, themeConfig.consoleBg]);
-
-
-
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [showControls, setShowControls] = useState(true);
@@ -932,8 +891,6 @@ const App: React.FC = () => {
     }));
   };
 
-
-
   // 计算总粒子数
   const calculateTotalParticles = () => {
     let total = 0;
@@ -1123,7 +1080,7 @@ const App: React.FC = () => {
           style={{
             background: 'linear-gradient(135deg, rgba(20,20,30,0.08) 0%, rgba(40,40,60,0.08) 100%)',
             backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px)',
             boxShadow: '0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.2)',
             border: '1px solid rgba(255,255,255,0.15)',
             borderTop: 'none'
@@ -1231,8 +1188,6 @@ const App: React.FC = () => {
               nebulaSettings={overlayMode ? settings : undefined}
               nebulaInstancesData={overlayMode ? nebulaInstancesData : undefined}
               sidebarOpen={showControls}
-              drawSettings={drawSettings}
-              setDrawSettings={setDrawSettings}
             />
           </div>
         )}
@@ -1258,43 +1213,6 @@ const App: React.FC = () => {
           className={`absolute top-24 z-[199] w-10 h-10 ai-star-container transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
           title="打开 AI 助手"
         />
-
-        {/* Draw Mode Button - 仅星球模式显示 */}
-        {appMode === 'planet' && (
-          <button
-            onClick={() => {
-              const newEnabled = !drawSettings.enabled;
-              setDrawSettings(prev => ({
-                ...prev,
-                enabled: newEnabled,
-                previewPlanetId: newEnabled
-                  ? (prev.previewPlanetId || planetSettings.planets?.[0]?.id || null)
-                  : prev.previewPlanetId
-              }));
-              // 进入绘图模式时强制打开侧边栏
-              if (newEnabled) {
-                setShowControls(true);
-              }
-            }}
-            className={`absolute top-40 z-[199] w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
-            style={{
-              background: drawSettings.enabled
-                ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.8), rgba(168, 85, 247, 0.8))'
-                : 'rgba(30,30,40,0.25)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              boxShadow: drawSettings.enabled
-                ? '0 4px 20px rgba(236, 72, 153, 0.4), inset 0 1px 0 rgba(255,255,255,0.3)'
-                : '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15)',
-              border: drawSettings.enabled
-                ? '1px solid rgba(255,255,255,0.4)'
-                : '1px solid rgba(255,255,255,0.25)'
-            }}
-            title={drawSettings.enabled ? "关闭绘图模式" : "开启绘图模式"}
-          >
-            <span className="text-xl">{drawSettings.enabled ? '✨' : '🖌️'}</span>
-          </button>
-        )}
 
         {/* 视角信息面板 - 仅星球模式显示 - 玻璃样式 */}
         {appMode === 'planet' && cameraInfo && (
@@ -1385,43 +1303,32 @@ const App: React.FC = () => {
         z-[100]
       `}>
         <div className="w-full md:w-80 h-full">
-          {drawSettings.enabled && appMode === 'planet' ? (
-            <DrawControlPanel
-              settings={drawSettings}
-              setSettings={setDrawSettings}
-              planetSettings={planetSettings}
-            />
-          ) : (
-            <ControlPanel
-              settings={settings}
-              setSettings={setSettings}
-              planetSettings={planetSettings}
-              setPlanetSettings={setPlanetSettings}
-              appMode={appMode}
-              onImageUpload={handleFileUpload}
-              onSampleSelect={handleLoadSample}
-              onClearMainNebula={() => setData(null)}
-              nebulaPreviewMode={nebulaPreviewMode}
-              setNebulaPreviewMode={setNebulaPreviewMode}
-              fps={fps}
-              particleCount={calculateTotalParticles()}
-              colorPickMode={colorPickMode}
-              setColorPickMode={setColorPickMode}
-              pickedColor={pickedColor}
-              onExtractColors={handleExtractColors}
-              gestureEnabled={gestureEnabled}
-              setGestureEnabled={setGestureEnabled}
-              overlayMode={overlayMode}
-              materialSettings={materialSettings}
-              nebulaPresets={nebulaPresets}
-              setNebulaPresets={setNebulaPresets}
-            />
-          )}
+          <ControlPanel
+            settings={settings}
+            setSettings={setSettings}
+            planetSettings={planetSettings}
+            setPlanetSettings={setPlanetSettings}
+            appMode={appMode}
+            onImageUpload={handleFileUpload}
+            onSampleSelect={handleLoadSample}
+            onClearMainNebula={() => setData(null)}
+            nebulaPreviewMode={nebulaPreviewMode}
+            setNebulaPreviewMode={setNebulaPreviewMode}
+            fps={fps}
+            particleCount={calculateTotalParticles()}
+            colorPickMode={colorPickMode}
+            setColorPickMode={setColorPickMode}
+            pickedColor={pickedColor}
+            onExtractColors={handleExtractColors}
+            gestureEnabled={gestureEnabled}
+            setGestureEnabled={setGestureEnabled}
+            overlayMode={overlayMode}
+            materialSettings={materialSettings}
+            nebulaPresets={nebulaPresets}
+            setNebulaPresets={setNebulaPresets}
+          />
         </div>
       </div>
-
-      {/* AI 助手按钮 */}
-
 
       {/* AI 助手面板 */}
       <AIAssistantPanel

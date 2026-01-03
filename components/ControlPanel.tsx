@@ -52,6 +52,7 @@ import {
   FlameSystemSettings,
   AfterimageZoneSettings,
   AfterimageSystemSettings,
+  SilkRingSettings,
   NebulaPreset,
   NebulaInstance
 } from '../types';
@@ -77,6 +78,8 @@ import {
   SURFACE_FLAME_PRESETS,
   FLAME_JET_PRESETS,
   SPIRAL_FLAME_PRESETS,
+  createDefaultSilkRing,
+  SILK_RING_PRESETS,
   DEFAULT_FLAME_SYSTEM,
   DEFAULT_AFTERIMAGE_SYSTEM,
   createDefaultAfterimageZone,
@@ -7481,6 +7484,28 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                     updatePlanet({ rings: { ...planet.rings, continuousRings: updated } });
                   };
 
+                  // ===== 丝线环选中逻辑 =====
+                  const silkRings = planet.rings.silkRings || [];
+                  const effectiveSelectedSilkRingId = selectedSilkRingId && silkRings.find(r => r.id === selectedSilkRingId)
+                    ? selectedSilkRingId
+                    : silkRings[0]?.id || null;
+                  const currentSilkRing = silkRings.find(r => r.id === effectiveSelectedSilkRingId);
+
+                  const updateSilkRing = (ringId: string, updates: Partial<SilkRingSettings>) => {
+                    const updated = silkRings.map(r => r.id === ringId ? { ...r, ...updates } : r);
+                    updatePlanet({ rings: { ...planet.rings, silkRings: updated } });
+                  };
+
+                  const setSilkRingColorMode = (mode: string) => {
+                    if (!currentSilkRing) return;
+                    const currentColor = currentSilkRing.color || { mode: 'none', baseColor: '#00ffff', colors: ['#00ffff', '#ffffff'] };
+                    if (mode === 'none') {
+                      updateSilkRing(currentSilkRing.id, { color: { ...currentColor, mode: 'none' } as any });
+                    } else {
+                      updateSilkRing(currentSilkRing.id, { color: { ...currentColor, mode: mode as any } });
+                    }
+                  };
+
                   // 颜色模式辅助函数
                   const getColorMode = (gradientColor: any) => gradientColor?.enabled ? (gradientColor.mode || 'twoColor') : 'none';
                   const setParticleRingColorMode = (mode: string) => {
@@ -7528,6 +7553,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                         {[
                           { key: 'particle' as const, label: '粒子环', count: planet.rings.particleRings.filter(r => r.enabled).length, color: '#a78bfa', enabled: (planet.rings.enabled ?? true) && planet.rings.particleRingsEnabled },
                           { key: 'continuous' as const, label: '环带', count: planet.rings.continuousRings.filter(r => r.enabled).length, color: '#60a5fa', enabled: (planet.rings.enabled ?? true) && planet.rings.continuousRingsEnabled },
+                          { key: 'silk' as const, label: '线环', count: (planet.rings.silkRings || []).filter(r => r.enabled).length, color: '#f472b6', enabled: (planet.rings.enabled ?? true) && (planet.rings.silkRingsEnabled ?? true) },
                           { key: 'spiral' as const, label: '螺旋环', count: planet.flameSystem?.spiralFlames?.filter(s => s.enabled).length || 0, color: '#34d399', enabled: (planet.rings.enabled ?? true) && (planet.flameSystem?.spiralFlamesEnabled ?? true) }
                         ].map(tab => {
                           const isActive = ringSubTab === tab.key;
@@ -7877,6 +7903,75 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 )}
                               </div>
 
+                              {/* 银河系效果 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs text-gray-400">银河系效果</span>
+                                  <button
+                                    onClick={() => {
+                                      const galaxy = currentParticleRing.galaxy || {
+                                        enabled: false, preset: 'custom' as const, branches: 4, spin: 0.8,
+                                        randomness: 0.25, randomnessPower: 3, coreSize: 0.2, coreBrightness: 1.5,
+                                        useRadialGradient: true, insideColor: '#f8d090', outsideColor: '#2b1d42'
+                                      };
+                                      updateParticleRing(currentParticleRing.id, { galaxy: { ...galaxy, enabled: !galaxy.enabled } });
+                                    }}
+                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
+                                    style={{
+                                      background: currentParticleRing.galaxy?.enabled
+                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
+                                        : 'rgba(120, 120, 120, 0.3)',
+                                      backdropFilter: 'blur(8px)',
+                                      border: currentParticleRing.galaxy?.enabled
+                                        ? '1px solid var(--ui-secondary)'
+                                        : '1px solid rgba(255,255,255,0.1)',
+                                      color: currentParticleRing.galaxy?.enabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
+                                    }}
+                                  >
+                                    {currentParticleRing.galaxy?.enabled ? '已启用' : '已禁用'}
+                                  </button>
+                                </div>
+
+                                {currentParticleRing.galaxy?.enabled && (() => {
+                                  const gal = currentParticleRing.galaxy!;
+                                  const updateGal = (updates: Partial<typeof gal>) => updateParticleRing(currentParticleRing.id, { galaxy: { ...gal, ...updates } });
+                                  return (
+                                    <div className="space-y-2">
+                                      {/* 螺旋臂参数 */}
+                                      <RangeControl label="螺旋臂数量" value={gal.branches ?? 4} min={1} max={12} step={1} onChange={(v) => updateGal({ branches: v })} />
+                                      <RangeControl label="扭曲程度" value={gal.spin ?? 0.8} min={0} max={6} step={0.1} onChange={(v) => updateGal({ spin: v })} />
+                                      <RangeControl label="粒子分散度" value={gal.randomness ?? 0.25} min={0} max={2} step={0.05} onChange={(v) => updateGal({ randomness: v })} />
+                                      <RangeControl label="分散指数" value={gal.randomnessPower ?? 3} min={1} max={5} step={0.5} onChange={(v) => updateGal({ randomnessPower: v })} />
+
+                                      {/* 核心参数 */}
+                                      <RangeControl label="核心膨胀" value={gal.coreSize ?? 0.2} min={0} max={2} step={0.1} onChange={(v) => updateGal({ coreSize: v })} />
+                                      <RangeControl label="核心亮度" value={gal.coreBrightness ?? 1.5} min={1} max={3} step={0.1} onChange={(v) => updateGal({ coreBrightness: v })} />
+
+                                      {/* 径向颜色渐变 */}
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">径向渐变</span>
+                                        <button
+                                          onClick={() => updateGal({ useRadialGradient: !gal.useRadialGradient })}
+                                          className="px-2 py-0.5 text-[10px] rounded"
+                                          style={getOptionButtonStyle(gal.useRadialGradient ?? true)}
+                                        >
+                                          {gal.useRadialGradient ? '开启' : '关闭'}
+                                        </button>
+                                      </div>
+                                      {gal.useRadialGradient && (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">内</span>
+                                          <input type="color" value={gal.insideColor ?? '#f8d090'} onChange={(e) => updateGal({ insideColor: e.target.value })} className="w-8 h-6 rounded cursor-pointer" />
+                                          <span className="text-gray-500">→</span>
+                                          <span className="text-xs text-gray-400">外</span>
+                                          <input type="color" value={gal.outsideColor ?? '#2b1d42'} onChange={(e) => updateGal({ outsideColor: e.target.value })} className="w-8 h-6 rounded cursor-pointer" />
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+
                               {/* 运动速度 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>运动速度</span>
@@ -7891,6 +7986,338 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>姿态设置</span>
                                 <TiltAxisSelector tilt={currentParticleRing.tilt ?? DEFAULT_TILT_SETTINGS} onChange={(tilt) => updateParticleRing(currentParticleRing.id, { tilt })} getButtonStyle={getOptionButtonStyle} />
                                 <OrbitAxisSelector orbitAxis={currentParticleRing.orbitAxis ?? DEFAULT_ORBIT_AXIS_SETTINGS} onChange={(orbitAxis) => updateParticleRing(currentParticleRing.id, { orbitAxis })} getButtonStyle={getOptionButtonStyle} />
+                              </div>
+
+                              {/* 点缀装饰 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs text-gray-400">✨ 点缀装饰</span>
+                                  <button
+                                    onClick={() => {
+                                      const ornament = currentParticleRing.ornament || {
+                                        enabled: false, style: 'flare' as const, count: 20, distribution: 'uniform' as const,
+                                        baseSize: 15, sizeRandomness: 0.3, colorMode: 'inherit' as const, color: '#ffffff',
+                                        opacity: 1, brightness: 1.5, glowIntensity: 0.8, pulseEnabled: false,
+                                        pulseSpeed: 1, pulseIntensity: 0.3, pulseSync: false, orbitSpeedMultiplier: 1,
+                                        orbitPhaseRandomness: 0.8, flareLeaves: 4, flareWidth: 0.5
+                                      };
+                                      updateParticleRing(currentParticleRing.id, { ornament: { ...ornament, enabled: !ornament.enabled } });
+                                    }}
+                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
+                                    style={{
+                                      background: currentParticleRing.ornament?.enabled
+                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
+                                        : 'rgba(120, 120, 120, 0.3)',
+                                      backdropFilter: 'blur(8px)',
+                                      border: currentParticleRing.ornament?.enabled
+                                        ? '1px solid var(--ui-secondary)'
+                                        : '1px solid rgba(255,255,255,0.1)',
+                                      color: currentParticleRing.ornament?.enabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
+                                    }}
+                                  >
+                                    {currentParticleRing.ornament?.enabled ? '已启用' : '已禁用'}
+                                  </button>
+                                </div>
+
+                                {currentParticleRing.ornament?.enabled && (() => {
+                                  const orn = currentParticleRing.ornament!;
+                                  const updateOrn = (updates: Partial<typeof orn>) => updateParticleRing(currentParticleRing.id, { ornament: { ...orn, ...updates } });
+                                  return (
+                                    <div className="space-y-2">
+                                      {/* 样式选择 */}
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">样式</span>
+                                        <select
+                                          value={orn.style}
+                                          onChange={(e) => updateOrn({ style: e.target.value as any })}
+                                          className="flex-1 text-xs bg-gray-700 rounded px-2 py-1 text-white"
+                                        >
+                                          <optgroup label="流萤样式">
+                                            <option value="plain">圆点</option>
+                                            <option value="flare">星芒</option>
+                                            <option value="spark">火花</option>
+                                            <option value="texture">贴图</option>
+                                          </optgroup>
+                                          <optgroup label="星云形状">
+                                            <option value="star">星形</option>
+                                            <option value="snowflake">雪花</option>
+                                            <option value="heart">爱心</option>
+                                            <option value="crescent">月牙</option>
+                                            <option value="crossGlow">十字</option>
+                                            <option value="sakura">樱花</option>
+                                            <option value="sun">太阳</option>
+                                            <option value="sun2">太阳2</option>
+                                            <option value="plum">梅花</option>
+                                            <option value="lily">百合</option>
+                                            <option value="lotus">莲花</option>
+                                            <option value="prism">棱镜</option>
+                                          </optgroup>
+                                        </select>
+                                      </div>
+
+                                      {/* 星芒参数 */}
+                                      {orn.style === 'flare' && (
+                                        <div className="flex gap-2">
+                                          <RangeControl label="叶片数" value={orn.flareLeaves ?? 4} min={2} max={8} step={1} onChange={(v) => updateOrn({ flareLeaves: v })} />
+                                          <RangeControl label="叶片宽" value={orn.flareWidth ?? 0.5} min={0.1} max={1} step={0.1} onChange={(v) => updateOrn({ flareWidth: v })} />
+                                        </div>
+                                      )}
+
+                                      {/* 数量与分布 */}
+                                      <RangeControl label="数量" value={orn.count} min={5} max={100} step={5} onChange={(v) => updateOrn({ count: v })} />
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">分布</span>
+                                        <div className="flex gap-1">
+                                          {[{ id: 'uniform', label: '均匀' }, { id: 'cluster', label: '聚簇' }].map(d => (
+                                            <button
+                                              key={d.id}
+                                              onClick={() => updateOrn({ distribution: d.id as any })}
+                                              className="px-2 py-0.5 text-[10px] rounded transition-all"
+                                              style={getOptionButtonStyle(orn.distribution === d.id)}
+                                            >
+                                              {d.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      {orn.distribution === 'cluster' && (
+                                        <>
+                                          <RangeControl label="聚簇数" value={orn.clusterCount ?? 3} min={2} max={8} step={1} onChange={(v) => updateOrn({ clusterCount: v })} />
+                                          <RangeControl label="分散度" value={orn.clusterSpread ?? 0.5} min={0.1} max={1} step={0.1} onChange={(v) => updateOrn({ clusterSpread: v })} />
+                                        </>
+                                      )}
+
+                                      {/* 大小 */}
+                                      <RangeControl label="基准大小" value={orn.baseSize} min={5} max={50} step={1} onChange={(v) => updateOrn({ baseSize: v })} />
+                                      <RangeControl label="随机缩放" value={orn.sizeRandomness} min={0} max={1} step={0.1} onChange={(v) => updateOrn({ sizeRandomness: v })} />
+
+                                      {/* 颜色模式 */}
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">颜色</span>
+                                        <div className="flex gap-1">
+                                          {[{ id: 'inherit', label: '继承' }, { id: 'solid', label: '纯色' }].map(c => (
+                                            <button
+                                              key={c.id}
+                                              onClick={() => updateOrn({ colorMode: c.id as any })}
+                                              className="px-2 py-0.5 text-[10px] rounded transition-all"
+                                              style={getOptionButtonStyle(orn.colorMode === c.id)}
+                                            >
+                                              {c.label}
+                                            </button>
+                                          ))}
+                                        </div>
+                                        {orn.colorMode === 'solid' && (
+                                          <input type="color" value={orn.color} onChange={(e) => updateOrn({ color: e.target.value })} className="w-8 h-6 rounded cursor-pointer" />
+                                        )}
+                                      </div>
+
+                                      {/* 透明度与发光 */}
+                                      <RangeControl label="不透明度" value={orn.opacity ?? 1} min={0.1} max={1} step={0.1} onChange={(v) => updateOrn({ opacity: v })} />
+                                      <RangeControl label="亮度" value={orn.brightness ?? 1.5} min={0.5} max={3} step={0.1} onChange={(v) => updateOrn({ brightness: v })} />
+                                      <RangeControl label="发光强度" value={orn.glowIntensity ?? 0.8} min={0} max={2} step={0.1} onChange={(v) => updateOrn({ glowIntensity: v })} />
+
+                                      {/* 脉冲动画 */}
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400">脉冲</span>
+                                        <button
+                                          onClick={() => updateOrn({ pulseEnabled: !orn.pulseEnabled })}
+                                          className="px-2 py-0.5 text-[10px] rounded"
+                                          style={getOptionButtonStyle(orn.pulseEnabled)}
+                                        >
+                                          {orn.pulseEnabled ? '开启' : '关闭'}
+                                        </button>
+                                        {orn.pulseEnabled && (
+                                          <button
+                                            onClick={() => updateOrn({ pulseSync: !orn.pulseSync })}
+                                            className="px-2 py-0.5 text-[10px] rounded"
+                                            style={getOptionButtonStyle(orn.pulseSync)}
+                                          >
+                                            {orn.pulseSync ? '同步' : '随机'}
+                                          </button>
+                                        )}
+                                      </div>
+                                      {orn.pulseEnabled && (
+                                        <>
+                                          <RangeControl label="脉冲速度" value={orn.pulseSpeed ?? 1} min={0.5} max={3} step={0.1} onChange={(v) => updateOrn({ pulseSpeed: v })} />
+                                          <RangeControl label="脉冲幅度" value={orn.pulseIntensity ?? 0.3} min={0} max={1} step={0.1} onChange={(v) => updateOrn({ pulseIntensity: v })} />
+                                        </>
+                                      )}
+
+                                      {/* 公转速度 */}
+                                      <RangeControl label="公转倍率" value={orn.orbitSpeedMultiplier ?? 1} min={0} max={2} step={0.1} onChange={(v) => updateOrn({ orbitSpeedMultiplier: v })} />
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ===== 线环 Tab ===== */}
+                      {ringSubTab === 'silk' && (
+                        <div className="border-l-2 pl-2" style={{ borderColor: 'var(--ui-decoration)' }}>
+                          <FloatingListSelector
+                            items={silkRings}
+                            selectedId={effectiveSelectedSilkRingId}
+                            onSelect={(id) => setSelectedSilkRingId(id)}
+                            onToggleEnabled={(id, enabled) => updateSilkRing(id, { enabled })}
+                            onRename={(id, name) => updateSilkRing(id, { name })}
+                            onDelete={(id) => {
+                              const updated = silkRings.filter(r => r.id !== id);
+                              updatePlanet({ rings: { ...planet.rings, silkRings: updated } });
+                              if (effectiveSelectedSilkRingId === id) setSelectedSilkRingId(updated[0]?.id || null);
+                            }}
+                            onCopy={(id) => {
+                              const source = silkRings.find(r => r.id === id);
+                              if (source) {
+                                const newId = Date.now().toString();
+                                const copy = { ...source, id: newId, name: `${source.name} 副本`, seed: Math.random() * 1000 };
+                                updatePlanet({ rings: { ...planet.rings, silkRings: [...silkRings, copy] } });
+                                setSelectedSilkRingId(newId);
+                              }
+                            }}
+                            onAdd={() => {
+                              const id = Date.now().toString();
+                              const newRing = createDefaultSilkRing(id, `线环 ${silkRings.length + 1}`);
+                              updatePlanet({ rings: { ...planet.rings, silkRings: [...silkRings, newRing] } });
+                              setSelectedSilkRingId(id);
+                            }}
+                            title="线环"
+                            accentColor="#f472b6"
+                            emptyText="暂无线环"
+                            enabledKey={planet.rings.silkRingsEnabled ?? true}
+                            onToggleMasterEnabled={(enabled) => updatePlanet({ rings: { ...planet.rings, silkRingsEnabled: enabled } })}
+                          />
+
+                          {currentSilkRing && (
+                            <div className="mt-2 space-y-2">
+                              {/* 预设选择器 */}
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-white/60 w-16">预设</span>
+                                <select
+                                  value={currentSilkRing.preset || 'custom'}
+                                  onChange={(e) => {
+                                    const preset = SILK_RING_PRESETS[e.target.value];
+                                    if (preset) {
+                                      updateSilkRing(currentSilkRing.id, { ...preset, preset: e.target.value });
+                                    }
+                                  }}
+                                  className="flex-1 text-xs bg-black/30 border border-white/10 rounded px-2 py-1 text-white"
+                                >
+                                  <option value="dataStream">数据流</option>
+                                  <option value="silkRibbon">丝绸飘带</option>
+                                  <option value="energyFiber">能量纤维</option>
+                                  <option value="nebulaSilk">星云丝带</option>
+                                  <option value="fireSilk">烈焰丝绸</option>
+                                  <option value="custom">自定义</option>
+                                </select>
+                              </div>
+
+                              {/* 几何参数 */}
+                              <div className="space-y-1">
+                                <div className="text-xs text-white/50 mb-1">几何</div>
+                                <RangeControl label="轨道半径" value={currentSilkRing.orbitRadius} min={1} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitRadius: v })} />
+                                <RangeControl label="线环粗细" value={currentSilkRing.thickness} min={0.01} max={0.2} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { thickness: v })} />
+                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={2} max={12} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
+                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0.1} max={1} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
+                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={0} max={1} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
+                              </div>
+
+                              {/* 动画参数 */}
+                              <div className="space-y-1">
+                                <div className="text-xs text-white/50 mb-1">动画</div>
+                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={0.5} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
+                                <RangeControl label="自转速度" value={currentSilkRing.rotationSpeed} min={0} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { rotationSpeed: v })} />
+                                <div className="flex items-center gap-2">
+                                  <input type="checkbox" checked={currentSilkRing.wobbleEnabled} onChange={(e) => updateSilkRing(currentSilkRing.id, { wobbleEnabled: e.target.checked })} />
+                                  <span className="text-xs text-white/70">网格抖动</span>
+                                  {currentSilkRing.wobbleEnabled && (
+                                    <RangeControl label="强度" value={currentSilkRing.wobbleIntensity} min={0} max={0.1} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleIntensity: v })} />
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* 视觉效果 */}
+                              <div className="space-y-1">
+                                <div className="text-xs text-white/50 mb-1">视觉</div>
+                                <RangeControl label="丝线密度" value={currentSilkRing.strandDensity} min={10} max={50} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { strandDensity: v })} />
+                                <div className="flex items-center gap-2">
+                                  <input type="checkbox" checked={currentSilkRing.sparkleEnabled} onChange={(e) => updateSilkRing(currentSilkRing.id, { sparkleEnabled: e.target.checked })} />
+                                  <span className="text-xs text-white/70">闪点效果</span>
+                                  {currentSilkRing.sparkleEnabled && (
+                                    <RangeControl label="阈值" value={currentSilkRing.sparkleThreshold} min={0.9} max={0.99} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { sparkleThreshold: v })} />
+                                  )}
+                                </div>
+                                <RangeControl label="菲涅尔指数" value={currentSilkRing.fresnelPower} min={1} max={5} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { fresnelPower: v })} />
+                                <RangeControl label="透明度" value={currentSilkRing.opacity} min={0.3} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { opacity: v })} />
+                                <RangeControl label="发光强度" value={currentSilkRing.emissive} min={0.5} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { emissive: v })} />
+                                <RangeControl label="Bloom增强" value={currentSilkRing.bloomBoost} min={0} max={2} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { bloomBoost: v })} />
+                              </div>
+
+                              {/* 颜色模式 */}
+                              <div className="space-y-1">
+                                <div className="text-xs text-white/50 mb-1">颜色</div>
+                                <div className="flex gap-1">
+                                  {[
+                                    { key: 'none', label: '单色' },
+                                    { key: 'twoColor', label: '双色' },
+                                    { key: 'threeColor', label: '三色' },
+                                    { key: 'procedural', label: '混色' }
+                                  ].map(({ key, label }) => (
+                                    <button
+                                      key={key}
+                                      onClick={() => setSilkRingColorMode(key)}
+                                      className={`flex-1 px-2 py-1 text-xs rounded ${currentSilkRing.color?.mode === key ? 'bg-pink-500/50 text-white' : 'bg-black/30 text-white/60'}`}
+                                    >
+                                      {label}
+                                    </button>
+                                  ))}
+                                </div>
+                                {/* 颜色输入 */}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-white/60 w-12">颜色1</span>
+                                  <input
+                                    type="color"
+                                    value={currentSilkRing.color?.colors?.[0] || '#00ffff'}
+                                    onChange={(e) => {
+                                      const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])];
+                                      colors[0] = e.target.value;
+                                      updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors, baseColor: e.target.value } as any });
+                                    }}
+                                    className="w-8 h-6 rounded border-0"
+                                  />
+                                  {(currentSilkRing.color?.mode === 'twoColor' || currentSilkRing.color?.mode === 'threeColor' || currentSilkRing.color?.mode === 'procedural') && (
+                                    <>
+                                      <span className="text-xs text-white/60 w-12">颜色2</span>
+                                      <input
+                                        type="color"
+                                        value={currentSilkRing.color?.colors?.[1] || '#ffffff'}
+                                        onChange={(e) => {
+                                          const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])];
+                                          colors[1] = e.target.value;
+                                          updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors } as any });
+                                        }}
+                                        className="w-8 h-6 rounded border-0"
+                                      />
+                                    </>
+                                  )}
+                                  {(currentSilkRing.color?.mode === 'threeColor' || currentSilkRing.color?.mode === 'procedural') && (
+                                    <>
+                                      <span className="text-xs text-white/60 w-12">颜色3</span>
+                                      <input
+                                        type="color"
+                                        value={currentSilkRing.color?.colors?.[2] || '#00ffff'}
+                                        onChange={(e) => {
+                                          const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])];
+                                          colors[2] = e.target.value;
+                                          updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors } as any });
+                                        }}
+                                        className="w-8 h-6 rounded border-0"
+                                      />
+                                    </>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           )}
@@ -9162,12 +9589,15 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                           <option value="cuboctahedron">截半立方体</option>
                                           <option value="icosidodecahedron">截半二十面体</option>
                                         </optgroup>
+                                        <optgroup label="星形多面体">
+                                          <option value="smallStellatedDodecahedron">星形体</option>
+                                        </optgroup>
                                       </select>
                                     </div>
                                     <RangeControl label="半径" value={currentEnergyBody.radius} min={30} max={500} step={10} onChange={(v) => updateEnergyBody(currentEnergyBody.id, { radius: v })} />
-                                    {currentEnergyBody.polyhedronType.startsWith('truncated') || currentEnergyBody.polyhedronType === 'cuboctahedron' || currentEnergyBody.polyhedronType === 'icosidodecahedron' ? (
+                                    {currentEnergyBody.polyhedronType.startsWith('truncated') || currentEnergyBody.polyhedronType === 'cuboctahedron' || currentEnergyBody.polyhedronType === 'icosidodecahedron' || currentEnergyBody.polyhedronType === 'smallStellatedDodecahedron' ? (
                                       <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-xs text-yellow-500/70">截角类型固定为0</span>
+                                        <span className="text-xs text-yellow-500/70">此类型不支持细分</span>
                                       </div>
                                     ) : (
                                       <RangeControl label="细分级别" value={currentEnergyBody.subdivisionLevel} min={0} max={4} step={1} onChange={(v) => updateEnergyBody(currentEnergyBody.id, { subdivisionLevel: v })} />
@@ -9426,7 +9856,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               { id: 'plasmaShell', name: '等离子壳', data: SURFACE_FLAME_PRESETS.plasmaShell },
                               { id: 'imaginaryWall', name: '虚数屏障', data: SURFACE_FLAME_PRESETS.imaginaryWall },
                               { id: 'divineAegis', name: '神圣庇护', data: SURFACE_FLAME_PRESETS.divineAegis },
-                              { id: 'bioMembrane', name: '生物膜', data: SURFACE_FLAME_PRESETS.bioMembrane }
+                              { id: 'bioMembrane', name: '生物膜', data: SURFACE_FLAME_PRESETS.bioMembrane },
+                              { id: 'waterRipple', name: '水波纹', data: SURFACE_FLAME_PRESETS.waterRipple }
                             ]}
                             currentData={currentFlame ? { ...currentFlame, id: undefined, name: undefined, enabled: undefined } : null}
                             hasInstance={!!currentFlame}
@@ -9485,8 +9916,33 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                   <select value={currentFlame.noiseType} onChange={(e) => updateFlame(currentFlame.id, { noiseType: e.target.value as any })} className="flex-1 text-xs bg-gray-700 rounded px-2 py-1 text-white">
                                     <option value="simplex">Simplex</option>
                                     <option value="voronoi">Voronoi</option>
+                                    <option value="ripple">水波纹</option>
                                   </select>
                                 </div>
+                                {currentFlame.noiseType === 'ripple' && (() => {
+                                  const ripple = currentFlame.rippleSettings || {
+                                    waveCount: 15, waveSpeed: 1.5, damping: 0.3,
+                                    multiSourceEnabled: false, sourceCount: 1, sourceSpread: 0.5, interference: 0.5
+                                  };
+                                  const updateRipple = (u: Partial<typeof ripple>) => updateFlame(currentFlame.id, { rippleSettings: { ...ripple, ...u } });
+                                  return (
+                                    <div className="p-2 bg-gray-700/30 rounded mt-1 mb-1">
+                                      <span className="text-[9px] text-cyan-400 block mb-1">水波纹参数</span>
+                                      <RangeControl label="波纹环数" value={ripple.waveCount} min={5} max={30} step={1} onChange={(v) => updateRipple({ waveCount: v })} />
+                                      <RangeControl label="传播速度" value={ripple.waveSpeed} min={0.5} max={3} step={0.1} onChange={(v) => updateRipple({ waveSpeed: v })} />
+                                      <RangeControl label="边缘衰减" value={ripple.damping} min={0} max={1} step={0.05} onChange={(v) => updateRipple({ damping: v })} />
+                                      <div className="flex items-center justify-between mt-2 mb-1">
+                                        <span className="text-[9px] text-gray-400">多波源干涉</span>
+                                        <input type="checkbox" checked={ripple.multiSourceEnabled} onChange={(e) => updateRipple({ multiSourceEnabled: e.target.checked })} className="w-3 h-3 rounded" />
+                                      </div>
+                                      {ripple.multiSourceEnabled && (<>
+                                        <RangeControl label="波源数量" value={ripple.sourceCount} min={1} max={5} step={1} onChange={(v) => updateRipple({ sourceCount: v })} />
+                                        <RangeControl label="波源分散" value={ripple.sourceSpread} min={0} max={1} step={0.1} onChange={(v) => updateRipple({ sourceSpread: v })} />
+                                        <RangeControl label="干涉强度" value={ripple.interference} min={0} max={1} step={0.1} onChange={(v) => updateRipple({ interference: v })} />
+                                      </>)}
+                                    </div>
+                                  );
+                                })()}
                                 <RangeControl label="分形层级" value={currentFlame.fractalLayers} min={1} max={5} step={1} onChange={(v) => updateFlame(currentFlame.id, { fractalLayers: v })} />
                               </div>
 
