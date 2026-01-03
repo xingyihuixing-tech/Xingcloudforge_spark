@@ -8,6 +8,7 @@
  */
 
 import React, { useCallback, useState } from 'react';
+import { Palette, ChevronDown } from 'lucide-react';
 
 // ============================================
 // XingSpark 配置类型
@@ -205,18 +206,24 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                     { id: 'style' as const, label: 'Logo 风格' },
                     { id: 'color' as const, label: 'Logo 颜色' },
                     { id: 'chat' as const, label: '对话栏设置' },
-                ].map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`flex-1 py-2.5 px-4 text-xs font-medium transition-all ${activeTab === tab.id
-                            ? 'text-cyan-400 border-b-2 border-cyan-400'
-                            : 'text-white/50 hover:text-white/80'
-                            }`}
-                    >
-                        {tab.label}
-                    </button>
-                ))}
+                ].map(tab => {
+                    const isActive = activeTab === tab.id;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`flex-1 py-2.5 px-4 text-xs font-medium transition-all ${isActive ? '' : 'text-white/50 hover:text-white/80'
+                                }`}
+                            style={isActive ? {
+                                color: gradient.colors[0],
+                                borderBottom: `2px solid ${gradient.colors[0]}`,
+                                boxShadow: `0 2px 8px ${gradient.colors[0]}40`,
+                            } : undefined}
+                        >
+                            {tab.label}
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Tab 内容 */}
@@ -246,36 +253,38 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                             </span>
                         </div>
 
-                        {/* 10种字体 - 2x5 网格 */}
-                        <div className="grid grid-cols-5 gap-2">
+                        {/* 10种字体 - 2列2列网格 (参考项目样式) */}
+                        <div className="grid grid-cols-2 gap-3">
                             {FONT_OPTIONS.map(font => {
                                 const isSelected = config.font === font.name;
                                 return (
                                     <button
                                         key={font.name}
                                         onClick={() => setConfig(prev => ({ ...prev, font: font.name }))}
-                                        className="p-3 rounded-xl transition-all hover:scale-[1.02] bg-white/5 hover:bg-white/10"
+                                        className="p-4 rounded-xl transition-all hover:scale-[1.02] bg-white/5 hover:bg-white/10"
                                         style={{
                                             border: isSelected ? `2px solid ${gradient.colors[0]}` : '1px solid rgba(100,116,139,0.2)',
-                                            boxShadow: isSelected ? `0 0 16px ${gradient.colors[0]}40` : 'none'
+                                            boxShadow: isSelected ? `0 0 16px ${gradient.colors[0]}40, 0 0 24px ${gradient.colors[1] || gradient.colors[0]}20` : 'none'
                                         }}
                                     >
                                         <div
-                                            className="text-center"
+                                            className="text-center mb-2"
                                             style={{
                                                 fontFamily: `'${font.name}', cursive`,
-                                                fontSize: '1.2rem',
+                                                fontSize: font.size,
                                                 background: `conic-gradient(from 0deg at 50% 50%, ${[...gradient.colors, gradient.colors[0]].join(', ')})`,
                                                 WebkitBackgroundClip: 'text',
                                                 backgroundClip: 'text',
                                                 WebkitTextFillColor: 'transparent',
                                                 color: 'transparent',
-                                                lineHeight: '1.8',
                                             }}
                                         >
-                                            XS
+                                            <span style={{ fontSize: '1em' }}>X</span>
+                                            <span style={{ fontSize: '0.9em' }}>ing</span>
+                                            <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
+                                            <span style={{ fontSize: '0.9em' }}>park</span>
                                         </div>
-                                        <div className="text-[9px] text-center text-white/40 mt-1">{font.label}</div>
+                                        <div className="text-[10px] text-center text-white/40">{font.label}</div>
                                     </button>
                                 );
                             })}
@@ -311,9 +320,10 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                                 className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-700/50 rounded-xl transition-colors"
                             >
                                 <span className="flex items-center gap-2">
-                                    🎨 渐变预设 · <span className="text-xs opacity-70">{currentPreset?.name || '自定义'}</span>
+                                    <Palette size={14} />
+                                    渐变预设 · <span className="text-xs opacity-70">{currentPreset?.name || '自定义'}</span>
                                 </span>
-                                <span className={`transition-transform ${gradientPresetsExpanded ? 'rotate-180' : ''}`}>▼</span>
+                                <ChevronDown size={16} className={`transition-transform ${gradientPresetsExpanded ? 'rotate-180' : ''}`} />
                             </button>
 
                             {gradientPresetsExpanded && (

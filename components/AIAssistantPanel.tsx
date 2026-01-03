@@ -483,11 +483,14 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 <div
                     className="w-[600px] ai-panel-container"
                     style={{
-                        // 6.1 Strict UI: Dynamic Border Color from XingConfig
-                        borderColor: `rgba(${parseInt(xingConfig.inputGlow.colors[0].slice(1, 3), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(3, 5), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(5, 7), 16)}, ${xingConfig.inputGlow.borderOpacity})`,
-                        // 确保 AI Panel Container 定义了 border-width，或者我们在 style 中强制覆盖
-                        borderWidth: '1px',
-                        borderStyle: 'solid'
+                        // 动态边框光晕效果 (参考 AISidebar.tsx 5610-5616)
+                        boxShadow: `
+                            0 24px 48px rgba(0,0,0,0.15), 
+                            0 8px 16px rgba(0,0,0,0.1),
+                            0 0 20px ${xingConfig.gradient.colors[0]}40,
+                            0 0 40px ${xingConfig.gradient.colors[1] || xingConfig.gradient.colors[0]}25,
+                            0 0 60px ${xingConfig.gradient.colors[2] || xingConfig.gradient.colors[0]}15
+                        `,
                     }}
                 >
                     {/* 4-Segment Breathe Borders - colors are in CSS, but check if they need to match user config. 
@@ -653,8 +656,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     onDrop={handleDrop}
                                     onDragOver={handleDragOver}
                                     style={{
-                                        // Static state: Border color matches inputGlow config
+                                        // 常态静态光晕 + 边框颜色
                                         borderColor: isRefining ? 'transparent' : `rgba(${parseInt(xingConfig.inputGlow.colors[0].slice(1, 3), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(3, 5), 16)}, ${parseInt(xingConfig.inputGlow.colors[0].slice(5, 7), 16)}, ${xingConfig.inputGlow.borderOpacity})`,
+                                        boxShadow: isRefining ? undefined : `
+                                            0 0 ${xingConfig.inputGlow.thickBlur}px ${xingConfig.inputGlow.colors[0]}${Math.round(xingConfig.inputGlow.thickOpacity * 255).toString(16).padStart(2, '0')},
+                                            0 0 ${xingConfig.inputGlow.thinBlur}px ${xingConfig.inputGlow.colors[1] || xingConfig.inputGlow.colors[0]}${Math.round(xingConfig.inputGlow.thinOpacity * 255).toString(16).padStart(2, '0')}
+                                        `,
                                     }}
                                 >
                                     {/* 左：上传按钮 (+号) */}
