@@ -9207,18 +9207,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 
       // Ink Renderer Update - 渲染绘图笔触
       if (inkRendererRef.current && drawSettings?.enabled) {
-        // 更新笔刷参数
-        inkRendererRef.current.updateBrushUniforms(drawSettings.brush);
+        // 同步绘图数据（仅在数据变化时更新几何体）
+        inkRendererRef.current.sync(drawSettings);
 
-        // 渲染所有可见的绘图实例
-        for (const drawing of drawSettings.drawings) {
-          if (drawing.visible) {
-            inkRendererRef.current.renderDrawing(drawing, drawSettings);
-          }
-        }
-
-        // 更新动画
-        inkRendererRef.current.update();
+        // 更新动画效果
+        inkRendererRef.current.update(drawSettings.brush);
       }
 
       // 渲染

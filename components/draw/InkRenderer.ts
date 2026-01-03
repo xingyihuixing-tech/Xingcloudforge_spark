@@ -1,9 +1,9 @@
 /**
- * InkRenderer - 墨迹渲染器
+ * InkRenderer - 墨迹3D渲染器
  * 
- * input: 笔触数据、对称设置、笔刷参数
+ * input: DrawSettings（包含 drawings/layers/strokes 数据）
  * output: Three.js 粒子系统，渲染到场景中
- * pos: 绘图系统渲染核心，负责将 2D 笔触转换为 3D 粒子效果
+ * pos: 将 2D 笔触数据转换为 3D 粒子效果
  * update: 一旦我被更新，请更新 components/draw 目录的 _README.md
  */
 
@@ -21,29 +21,37 @@ import {
 import { applySymmetry, Point2D, Point3D } from './SymmetryEngine';
 import INK_SHADERS from './InkShaders';
 
-// ==================== 渲染器类 ====================
+// 渲染层的唯一标识
+interface LayerRenderData {
+    points: THREE.Points;
+    geometry: THREE.BufferGeometry;
+    material: THREE.ShaderMaterial;
+    strokeCount: number; // 用于检测是否需要更新
+    lastUpdateTime: number;
+}
 
 export class InkRenderer {
     private scene: THREE.Scene;
-    private particleSystems: Map<string, THREE.Points>;
-    private materials: Map<BrushType, THREE.ShaderMaterial>;
+    private layerRenderData: Map<string, LayerRenderData>;
+    private materialCache: Map<BrushType, THREE.ShaderMaterial>;
     private clock: THREE.Clock;
+    private sphereRadius: number;
+    private needsUpdate: Set<string>; // 需要更新的图层 ID
 
-    constructor(scene: THREE.Scene) {
+    constructor(scene: THREE.Scene, sphereRadius: number = 100) {
         this.scene = scene;
-        this.particleSystems = new Map();
-        this.materials = new Map();
+        this.layerRenderData = new Map();
+        this.materialCache = new Map();
         this.clock = new THREE.Clock();
+        this.sphereRadius = sphereRadius;
+        this.needsUpdate = new Set();
 
-        // 预创建所有笔刷类型的材质
-        this.initMaterials();
+        this.initMaterialCache();
     }
 
-    // 初始化材质
-    private initMaterials(): void {
-        const brushTypes = Object.values(BrushType);
-
-        for (const brushType of brushTypes) {
+    // 初始化材质缓存
+    private initMaterialCache(): void {
+        for (const brushType of Object.values(BrushType)) {
             const shaders = INK_SHADERS[brushType];
             if (!shaders) continue;
 
@@ -55,8 +63,7 @@ export class InkRenderer {
                 depthWrite: false,
                 blending: THREE.AdditiveBlending
             });
-
-            this.materials.set(brushType, material);
+            this.materialCache.set(brushType, material);
         }
     }
 
@@ -68,6 +75,7 @@ export class InkRenderer {
             uOpacity: { value: 0.8 }
         };
 
+        // 根据笔刷类型添加特定 uniforms
         switch (brushType) {
             case BrushType.Stardust:
                 return {
@@ -77,7 +85,6 @@ export class InkRenderer {
                     uGlowIntensity: { value: 1.5 },
                     uTwinkleSpeed: { value: 2 }
                 };
-
             case BrushType.GasCloud:
                 return {
                     ...baseUniforms,
@@ -86,7 +93,6 @@ export class InkRenderer {
                     uSoftness: { value: 0.6 },
                     uTurbulence: { value: 0.3 }
                 };
-
             case BrushType.EnergyBeam:
                 return {
                     ...baseUniforms,
@@ -96,7 +102,6 @@ export class InkRenderer {
                     uElectricArc: { value: 0 },
                     uArcFrequency: { value: 3 }
                 };
-
             case BrushType.SpiralRing:
                 return {
                     ...baseUniforms,
@@ -107,7 +112,6 @@ export class InkRenderer {
                     uRiseSpeed: { value: 0.3 },
                     uEmissive: { value: 1.5 }
                 };
-
             case BrushType.Firefly:
                 return {
                     ...baseUniforms,
@@ -117,7 +121,6 @@ export class InkRenderer {
                     uHeadStyle: { value: 1 },
                     uFlareLeaves: { value: 4 }
                 };
-
             case BrushType.Fracture:
                 return {
                     ...baseUniforms,
@@ -128,338 +131,237 @@ export class InkRenderer {
                     uFlowSpeed: { value: 0.2 },
                     uEmission: { value: 1 }
                 };
-
             default:
                 return baseUniforms;
         }
     }
 
-    // 更新笔刷 uniforms
-    updateBrushUniforms(brushSettings: BrushSettings): void {
-        const material = this.materials.get(brushSettings.type);
-        if (!material) return;
-
-        // 基础参数
-        material.uniforms.uSize.value = brushSettings.size;
-        material.uniforms.uOpacity.value = brushSettings.opacity;
-
-        // 特定笔刷参数
-        switch (brushSettings.type) {
-            case BrushType.Stardust:
-                if (brushSettings.stardust) {
-                    material.uniforms.uDensity.value = brushSettings.stardust.density;
-                    material.uniforms.uScatter.value = brushSettings.stardust.scatter;
-                    material.uniforms.uGlowIntensity.value = brushSettings.stardust.glowIntensity;
-                    material.uniforms.uTwinkleSpeed.value = brushSettings.stardust.twinkleSpeed;
-                }
-                break;
-
-            case BrushType.GasCloud:
-                if (brushSettings.gasCloud) {
-                    material.uniforms.uNoiseScale.value = brushSettings.gasCloud.noiseScale;
-                    material.uniforms.uFlowSpeed.value = brushSettings.gasCloud.flowSpeed;
-                    material.uniforms.uSoftness.value = brushSettings.gasCloud.softness;
-                    material.uniforms.uTurbulence.value = brushSettings.gasCloud.turbulence;
-                }
-                break;
-
-            case BrushType.EnergyBeam:
-                if (brushSettings.energyBeam) {
-                    material.uniforms.uCoreWidth.value = brushSettings.energyBeam.coreWidth;
-                    material.uniforms.uGlowRadius.value = brushSettings.energyBeam.glowRadius;
-                    material.uniforms.uGlowIntensity.value = brushSettings.energyBeam.glowIntensity;
-                    material.uniforms.uElectricArc.value = brushSettings.energyBeam.electricArc ? 1 : 0;
-                    material.uniforms.uArcFrequency.value = brushSettings.energyBeam.arcFrequency;
-                }
-                break;
-
-            case BrushType.SpiralRing:
-                if (brushSettings.spiralRing) {
-                    material.uniforms.uSpiralDensity.value = brushSettings.spiralRing.spiralDensity;
-                    material.uniforms.uPitch.value = brushSettings.spiralRing.pitch;
-                    material.uniforms.uThickness.value = brushSettings.spiralRing.thickness;
-                    material.uniforms.uRotationSpeed.value = brushSettings.spiralRing.rotationSpeed;
-                    material.uniforms.uRiseSpeed.value = brushSettings.spiralRing.riseSpeed;
-                    material.uniforms.uEmissive.value = brushSettings.spiralRing.emissive;
-                }
-                break;
-
-            case BrushType.Firefly:
-                if (brushSettings.firefly) {
-                    material.uniforms.uHeadSize.value = brushSettings.firefly.headSize;
-                    material.uniforms.uHeadBrightness.value = brushSettings.firefly.headBrightness;
-                    material.uniforms.uPulseSpeed.value = brushSettings.firefly.pulseSpeed;
-                    material.uniforms.uHeadStyle.value =
-                        brushSettings.firefly.headStyle === 'plain' ? 0 :
-                            brushSettings.firefly.headStyle === 'flare' ? 1 : 2;
-                    material.uniforms.uFlareLeaves.value = brushSettings.firefly.flareLeaves;
-                }
-                break;
-
-            case BrushType.Fracture:
-                if (brushSettings.fracture) {
-                    material.uniforms.uCrackScale.value = brushSettings.fracture.crackScale;
-                    material.uniforms.uCrackThreshold.value = brushSettings.fracture.crackThreshold;
-                    material.uniforms.uCrackFeather.value = brushSettings.fracture.crackFeather;
-                    material.uniforms.uCrackWarp.value = brushSettings.fracture.crackWarp;
-                    material.uniforms.uFlowSpeed.value = brushSettings.fracture.flowSpeed;
-                    material.uniforms.uEmission.value = brushSettings.fracture.emission;
-                }
-                break;
-        }
+    // 标记图层需要更新
+    markLayerDirty(layerId: string): void {
+        this.needsUpdate.add(layerId);
     }
 
-    // 从笔触数据创建粒子几何体
-    createGeometryFromStroke(
-        stroke: Stroke,
+    // 从笔触创建几何体
+    private createGeometryFromLayer(
         layer: DrawingLayer,
-        projection: ProjectionMode,
-        scale: number = 100
+        projection: ProjectionMode
     ): THREE.BufferGeometry {
-        const points = stroke.points;
-        const numPoints = points.length / 4; // [x, y, pressure, timestamp]
-
-        // 应用对称获取所有 3D 点
-        const allPoints: Point3D[] = [];
+        const allPoints: number[] = [];
         const allPressures: number[] = [];
         const allIndices: number[] = [];
+        const allColors: number[] = [];
 
-        for (let i = 0; i < numPoints; i++) {
-            const p2d: Point2D = {
-                x: points[i * 4],
-                y: points[i * 4 + 1],
-                pressure: points[i * 4 + 2]
-            };
+        const color = new THREE.Color(layer.color);
+        let pointIndex = 0;
 
-            const symmetricPoints = applySymmetry(p2d, stroke.symmetrySnapshot);
+        for (const stroke of layer.strokes) {
+            const numPoints = stroke.points.length / 4;
 
-            for (const p3d of symmetricPoints) {
-                // 根据投影模式转换坐标
-                let finalPos: THREE.Vector3;
+            for (let i = 0; i < numPoints; i++) {
+                const p2d: Point2D = {
+                    x: stroke.points[i * 4],
+                    y: stroke.points[i * 4 + 1],
+                    pressure: stroke.points[i * 4 + 2]
+                };
 
-                switch (projection) {
-                    case ProjectionMode.Sphere:
-                        // 球面映射
-                        const theta = p3d.x * Math.PI;
-                        const phi = (p3d.y + 1) * Math.PI / 2;
-                        finalPos = new THREE.Vector3(
-                            Math.sin(phi) * Math.cos(theta) * scale,
-                            Math.cos(phi) * scale,
-                            Math.sin(phi) * Math.sin(theta) * scale
-                        );
-                        break;
+                // 应用对称获取所有 3D 点
+                const symmetricPoints = applySymmetry(p2d, stroke.symmetrySnapshot);
 
-                    case ProjectionMode.Ring:
-                        // 环形映射
-                        const ringAngle = p3d.x * Math.PI;
-                        const ringRadius = scale * (0.8 + p3d.z * 0.2);
-                        finalPos = new THREE.Vector3(
-                            Math.cos(ringAngle) * ringRadius,
-                            p3d.y * scale * 0.1,
-                            Math.sin(ringAngle) * ringRadius
-                        );
-                        break;
+                for (const p3d of symmetricPoints) {
+                    // 根据投影模式转换坐标
+                    let finalX: number, finalY: number, finalZ: number;
+                    const scale = this.sphereRadius * layer.transform.scale;
 
-                    case ProjectionMode.Screen:
-                    default:
-                        // 屏幕空间映射
-                        finalPos = new THREE.Vector3(
-                            p3d.x * scale,
-                            p3d.y * scale,
-                            p3d.z * scale * 0.1
-                        );
-                        break;
+                    switch (projection) {
+                        case ProjectionMode.Sphere:
+                            // 球面映射：将 2D 坐标映射到球面
+                            const theta = p3d.x * Math.PI; // 经度
+                            const phi = (p3d.y + 1) * Math.PI / 2; // 纬度
+                            finalX = Math.sin(phi) * Math.cos(theta) * scale;
+                            finalY = Math.cos(phi) * scale;
+                            finalZ = Math.sin(phi) * Math.sin(theta) * scale;
+                            break;
+
+                        case ProjectionMode.Ring:
+                            // 环形映射：围绕 Y 轴形成环
+                            const ringAngle = p3d.x * Math.PI;
+                            const ringRadius = scale * (0.8 + p3d.z * 0.2);
+                            finalX = Math.cos(ringAngle) * ringRadius;
+                            finalY = p3d.y * scale * 0.1;
+                            finalZ = Math.sin(ringAngle) * ringRadius;
+                            break;
+
+                        case ProjectionMode.Screen:
+                        default:
+                            // 屏幕空间：平面映射
+                            finalX = p3d.x * scale;
+                            finalY = p3d.y * scale;
+                            finalZ = (p3d.z || 0) * scale * 0.1;
+                            break;
+                    }
+
+                    // 应用图层高度偏移
+                    finalY += layer.transform.altitude;
+
+                    allPoints.push(finalX, finalY, finalZ);
+                    allPressures.push(p3d.pressure);
+                    allIndices.push(pointIndex++);
+                    allColors.push(color.r, color.g, color.b);
                 }
-
-                allPoints.push({
-                    x: finalPos.x,
-                    y: finalPos.y,
-                    z: finalPos.z,
-                    pressure: p3d.pressure
-                });
-                allPressures.push(p3d.pressure);
-                allIndices.push(allPoints.length - 1);
             }
         }
 
-        // 创建几何体
         const geometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(allPoints.length * 3);
-        const pressures = new Float32Array(allPoints.length);
-        const indices = new Float32Array(allPoints.length);
-        const colors = new Float32Array(allPoints.length * 3);
-
-        // 解析颜色
-        const color = new THREE.Color(layer.color);
-
-        for (let i = 0; i < allPoints.length; i++) {
-            positions[i * 3] = allPoints[i].x;
-            positions[i * 3 + 1] = allPoints[i].y;
-            positions[i * 3 + 2] = allPoints[i].z;
-            pressures[i] = allPressures[i];
-            indices[i] = i;
-            colors[i * 3] = color.r;
-            colors[i * 3 + 1] = color.g;
-            colors[i * 3 + 2] = color.b;
-        }
-
-        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        geometry.setAttribute('aPressure', new THREE.BufferAttribute(pressures, 1));
-        geometry.setAttribute('aPointIndex', new THREE.BufferAttribute(indices, 1));
-        geometry.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(allPoints, 3));
+        geometry.setAttribute('aPressure', new THREE.Float32BufferAttribute(allPressures, 1));
+        geometry.setAttribute('aPointIndex', new THREE.Float32BufferAttribute(allIndices, 1));
+        geometry.setAttribute('aColor', new THREE.Float32BufferAttribute(allColors, 3));
 
         return geometry;
     }
 
-    // 渲染单个图层
-    renderLayer(
-        layer: DrawingLayer,
-        drawing: Drawing,
-        settings: DrawSettings
-    ): void {
-        if (!layer.visible || layer.strokes.length === 0) return;
-
+    // 更新或创建图层的渲染数据
+    private syncLayer(layer: DrawingLayer, drawing: Drawing, settings: DrawSettings): void {
         const layerId = `${drawing.id}_${layer.id}`;
+        const existing = this.layerRenderData.get(layerId);
 
-        // 移除旧的粒子系统
-        const existing = this.particleSystems.get(layerId);
+        // 检查是否需要更新
+        const needsRebuild = !existing ||
+            this.needsUpdate.has(layer.id) ||
+            existing.strokeCount !== layer.strokes.length;
+
+        if (!needsRebuild) return;
+
+        // 移除旧的渲染对象
         if (existing) {
-            this.scene.remove(existing);
+            this.scene.remove(existing.points);
             existing.geometry.dispose();
         }
 
-        // 合并所有笔触几何体
-        const geometries: THREE.BufferGeometry[] = [];
-
-        for (const stroke of layer.strokes) {
-            const geometry = this.createGeometryFromStroke(
-                stroke,
-                layer,
-                layer.projection,
-                100 * layer.transform.scale
-            );
-            geometries.push(geometry);
+        // 如果图层为空或不可见，不创建新对象
+        if (!layer.visible || layer.strokes.length === 0) {
+            this.layerRenderData.delete(layerId);
+            this.needsUpdate.delete(layer.id);
+            return;
         }
 
-        if (geometries.length === 0) return;
+        // 创建新几何体
+        const geometry = this.createGeometryFromLayer(layer, layer.projection);
 
-        // 合并几何体
-        const mergedGeometry = this.mergeGeometries(geometries);
+        // 获取材质（克隆以支持不同混合模式）
+        const baseMaterial = this.materialCache.get(layer.brushType);
+        if (!baseMaterial) {
+            this.needsUpdate.delete(layer.id);
+            return;
+        }
 
-        // 获取材质并设置混合模式
-        const material = this.materials.get(layer.brushType);
-        if (!material) return;
-
-        const clonedMaterial = material.clone();
-        clonedMaterial.blending = layer.blending === 'additive'
+        const material = baseMaterial.clone();
+        material.blending = layer.blending === 'additive'
             ? THREE.AdditiveBlending
             : THREE.NormalBlending;
 
         // 创建粒子系统
-        const points = new THREE.Points(mergedGeometry, clonedMaterial);
+        const points = new THREE.Points(geometry, material);
 
         // 应用图层变换
         points.rotation.x = layer.transform.tilt.x * Math.PI / 180;
         points.rotation.y = layer.transform.tilt.y * Math.PI / 180;
         points.rotation.z = layer.transform.tilt.z * Math.PI / 180;
-        points.position.y = layer.transform.altitude;
 
         this.scene.add(points);
-        this.particleSystems.set(layerId, points);
 
-        // 清理临时几何体
-        geometries.forEach(g => g.dispose());
+        // 保存渲染数据
+        this.layerRenderData.set(layerId, {
+            points,
+            geometry,
+            material,
+            strokeCount: layer.strokes.length,
+            lastUpdateTime: this.clock.getElapsedTime()
+        });
+
+        this.needsUpdate.delete(layer.id);
     }
 
-    // 合并多个几何体
-    private mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
-        if (geometries.length === 1) return geometries[0];
+    // 同步所有绘图数据（仅更新有变化的部分）
+    sync(settings: DrawSettings): void {
+        if (!settings.enabled) return;
 
-        // 计算总点数
-        let totalPoints = 0;
-        for (const g of geometries) {
-            totalPoints += g.getAttribute('position').count;
-        }
+        const validLayerIds = new Set<string>();
 
-        // 创建合并后的数组
-        const positions = new Float32Array(totalPoints * 3);
-        const pressures = new Float32Array(totalPoints);
-        const indices = new Float32Array(totalPoints);
-        const colors = new Float32Array(totalPoints * 3);
+        for (const drawing of settings.drawings) {
+            if (!drawing.visible) continue;
 
-        let offset = 0;
-        for (const g of geometries) {
-            const count = g.getAttribute('position').count;
-            const pos = g.getAttribute('position').array as Float32Array;
-            const pres = g.getAttribute('aPressure').array as Float32Array;
-            const idx = g.getAttribute('aPointIndex').array as Float32Array;
-            const col = g.getAttribute('aColor').array as Float32Array;
-
-            positions.set(pos, offset * 3);
-            pressures.set(pres, offset);
-            colors.set(col, offset * 3);
-
-            // 更新索引偏移
-            for (let i = 0; i < count; i++) {
-                indices[offset + i] = idx[i] + offset;
+            for (const layer of drawing.layers) {
+                const layerId = `${drawing.id}_${layer.id}`;
+                validLayerIds.add(layerId);
+                this.syncLayer(layer, drawing, settings);
             }
-
-            offset += count;
         }
 
-        const merged = new THREE.BufferGeometry();
-        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        merged.setAttribute('aPressure', new THREE.BufferAttribute(pressures, 1));
-        merged.setAttribute('aPointIndex', new THREE.BufferAttribute(indices, 1));
-        merged.setAttribute('aColor', new THREE.BufferAttribute(colors, 3));
-
-        return merged;
-    }
-
-    // 渲染整个绘图实例
-    renderDrawing(drawing: Drawing, settings: DrawSettings): void {
-        if (!drawing.visible) return;
-
-        for (const layer of drawing.layers) {
-            this.renderLayer(layer, drawing, settings);
+        // 清理已删除的图层
+        for (const [layerId, data] of this.layerRenderData) {
+            if (!validLayerIds.has(layerId)) {
+                this.scene.remove(data.points);
+                data.geometry.dispose();
+                this.layerRenderData.delete(layerId);
+            }
         }
     }
 
-    // 更新动画
-    update(): void {
+    // 更新动画（每帧调用）
+    update(brushSettings?: BrushSettings): void {
         const time = this.clock.getElapsedTime();
 
         // 更新所有材质的时间 uniform
-        for (const material of this.materials.values()) {
+        for (const material of this.materialCache.values()) {
             if (material.uniforms.uTime) {
                 material.uniforms.uTime.value = time;
             }
         }
 
-        // 更新旋转动画
-        for (const [layerId, points] of this.particleSystems) {
-            // 从 layerId 获取旋转速度（简化版）
-            // 实际应该从 layer.transform.rotationSpeed 获取
-            points.rotation.y += 0.001;
+        // 更新笔刷相关 uniforms
+        if (brushSettings) {
+            const material = this.materialCache.get(brushSettings.type);
+            if (material) {
+                material.uniforms.uSize.value = brushSettings.size;
+                material.uniforms.uOpacity.value = brushSettings.opacity;
+            }
+        }
+
+        // 更新图层旋转动画
+        for (const [layerId, data] of this.layerRenderData) {
+            // 解析 layerId 获取旋转速度（简化：使用固定旋转）
+            data.points.rotation.y += 0.002;
         }
     }
 
-    // 清除所有粒子系统
-    clear(): void {
-        for (const [id, points] of this.particleSystems) {
-            this.scene.remove(points);
-            points.geometry.dispose();
+    // 设置球体半径
+    setSphereRadius(radius: number): void {
+        this.sphereRadius = radius;
+        // 标记所有图层需要更新
+        for (const [layerId] of this.layerRenderData) {
+            const layerIdOnly = layerId.split('_')[1];
+            if (layerIdOnly) this.needsUpdate.add(layerIdOnly);
         }
-        this.particleSystems.clear();
+    }
+
+    // 清除所有渲染数据
+    clear(): void {
+        for (const [, data] of this.layerRenderData) {
+            this.scene.remove(data.points);
+            data.geometry.dispose();
+        }
+        this.layerRenderData.clear();
+        this.needsUpdate.clear();
     }
 
     // 销毁渲染器
     dispose(): void {
         this.clear();
-        for (const material of this.materials.values()) {
+        for (const material of this.materialCache.values()) {
             material.dispose();
         }
-        this.materials.clear();
+        this.materialCache.clear();
     }
 }
 

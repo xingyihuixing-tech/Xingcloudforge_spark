@@ -1391,9 +1391,6 @@ const App: React.FC = () => {
         <HoloPad
           settings={drawSettings}
           setSettings={setDrawSettings}
-          onStrokeComplete={(strokeData) => {
-            console.log('Stroke completed:', strokeData.length / 4, 'points');
-          }}
         />
       )}
 
