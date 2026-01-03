@@ -502,6 +502,16 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [xingConfig, userId, saveToCloud]);
 
+    // 同步 XingSpark 颜色到全局 CSS 变量，供 ControlPanel 等组件使用
+    useEffect(() => {
+        const root = document.documentElement;
+        root.style.setProperty('--xing-c1', xingConfig.gradient.colors[0] || '#71b0ff');
+        root.style.setProperty('--xing-c2', xingConfig.gradient.colors[1] || '#FFB6C1');
+        root.style.setProperty('--xing-c3', xingConfig.gradient.colors[2] || '#2bf6a5');
+        root.style.setProperty('--xing-c4', xingConfig.gradient.colors[3] || '#37f1d2');
+        root.style.setProperty('--xing-font', CHAT_FONT_OPTIONS.find(f => f.name === xingConfig.font)?.family || 'Pacifico');
+    }, [xingConfig.gradient.colors, xingConfig.font]);
+
     if (!isOpen) return null;
 
     // 当前选中的模型名称
@@ -631,12 +641,16 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                             </div>
                                         ) : (
                                             <div
-                                                className={`inline-block px-3 py-2 rounded-xl whitespace-pre-wrap ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
+                                                className={`inline-block px-3 py-2 rounded-xl ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
                                                 style={{
                                                     // 应用对话字体和字号
                                                     fontFamily: CHAT_FONT_OPTIONS.find(f => f.id === xingConfig.theme?.chatFont)?.family || CHAT_FONT_OPTIONS[0].family,
                                                     fontSize: `${xingConfig.theme?.chatFontSize ?? 14}px`,
+                                                    wordBreak: 'break-word',
+                                                    whiteSpace: 'pre-wrap',
                                                     ...(msg.role === 'user' ? {
+                                                        backgroundSize: '200% 200%',
+                                                        animation: `xing-gradient-flow ${xingConfig.userMsg?.speed ?? 6}s ease infinite`,
                                                         background: `linear-gradient(${xingConfig.userMsg?.angle ?? 135}deg, ${(xingConfig.userMsg?.colors ?? ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2']).map((c, i, arr) => {
                                                             const opacity = i === 0 ? (xingConfig.userMsg?.lightOpacity ?? 0.15) : (xingConfig.userMsg?.darkOpacity ?? 0.25);
                                                             return `${c}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
@@ -782,9 +796,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                 onClick={() => setShowModelSelector(!showModelSelector)}
                                                 className="flex items-center gap-3 text-[10px] text-white/40 hover:text-white/70 transition-colors focus:outline-none"
                                             >
-                                                <span className="truncate max-w-[80px] text-left">Chat: <span className="text-white/60">{currentChatModelName}</span></span>
-                                                <span className="truncate max-w-[80px] text-left">Image: <span className="text-white/60">{currentImageModelName}</span></span>
-                                                <span className={`transform transition-transform duration-300 ml-auto ${showModelSelector ? 'rotate-180' : ''}`}>^</span>
+                                                <span className="text-left">Chat: <span className="text-white/60">{currentChatModelName}</span></span>
+                                                <span className="text-left">Image: <span className="text-white/60">{currentImageModelName}</span></span>
+                                                <span className={`transform transition-transform duration-300 ml-1 ${showModelSelector ? 'rotate-180' : ''}`}>^</span>
                                             </button>
 
                                             {/* 模型选择面板 (向上弹出) */}
