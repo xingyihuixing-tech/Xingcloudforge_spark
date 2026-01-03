@@ -9210,7 +9210,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 
           // Find and set planet mesh for raycasting
           const activeInstance = drawSettings.instances?.find(i => i.id === drawSettings.activeInstanceId);
-          const targetPlanetId = activeInstance?.bindPlanetId || planetSettings.planets[0]?.id;
+          const targetPlanetId = activeInstance?.bindPlanetId || settings.planets[0]?.id;
           const targetPlanetData = targetPlanetId ? planetMeshesRef.current.get(targetPlanetId) : null;
 
           if (targetPlanetData?.core) {

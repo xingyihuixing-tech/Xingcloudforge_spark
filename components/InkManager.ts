@@ -406,8 +406,7 @@ export class InkManager {
         } else {
             // Hide ghost if off canvas
             if (this.ghostMesh) {
-                (this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute).count = 0;
-                (this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+                this.ghostMesh.geometry.setDrawRange(0, 0);
             }
         }
     }
@@ -420,10 +419,6 @@ export class InkManager {
         const planetPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
         const localPoint = worldPoint.clone().sub(planetPos);
 
-        // No need to apply rotation inverse if we are drawing in "World Alignment"
-        // But if we want to draw ON the rotating planet, we need to inverse planet rotation.
-        // For this version (Component Generator), let's stick to World Alignment for stability.
-
         const points = this.generateSymmetryPoints(localPoint);
         const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
 
@@ -433,8 +428,9 @@ export class InkManager {
         points.forEach((p, i) => {
             if (i < 64) posAttr.setXYZ(i, p.x, p.y, p.z);
         });
-        posAttr.setDrawRange(0, points.length);
+
         posAttr.needsUpdate = true;
+        this.ghostMesh.geometry.setDrawRange(0, points.length);
     }
 
     private handleAddPoint(worldPoint: THREE.Vector3, pressure: number) {
