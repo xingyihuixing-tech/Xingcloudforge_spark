@@ -41,11 +41,22 @@ export interface ThemeConfig {
     chatFontSize: number;
 }
 
+// 用户消息气泡配置 (参考 AISidebar.tsx 6282-6366)
+export interface UserMsgConfig {
+    colors: string[];       // 4色渐变
+    angle: number;          // 0-360°
+    speed: number;          // 动画速度 2-12s
+    lightOpacity: number;   // 浅色透明度 0.05-0.5
+    darkOpacity: number;    // 深色透明度 0.1-0.6
+    borderColor: string;    // 边框颜色 hex
+}
+
 export interface XingSparkConfig {
     font: string;
     gradient: LogoGradientConfig;
     inputGlow: InputGlowConfig;
     theme: ThemeConfig;
+    userMsg: UserMsgConfig;
 }
 
 // 默认配置
@@ -75,6 +86,14 @@ export const DEFAULT_XING_CONFIG: XingSparkConfig = {
     theme: {
         chatFont: 'default',
         chatFontSize: 14
+    },
+    userMsg: {
+        colors: ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2'],
+        angle: 135,
+        speed: 6,
+        lightOpacity: 0.15,
+        darkOpacity: 0.25,
+        borderColor: '#71b0ff'
     }
 };
 
@@ -131,11 +150,20 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     onBack
 }) => {
     const [activeTab, setActiveTab] = useState<'style' | 'color' | 'chat'>('style');
+    // 渐变预设折叠状态
+    const [gradientPresetsExpanded, setGradientPresetsExpanded] = useState(false);
 
     // 安全获取配置 (防止云端旧配置缺少新字段)
     const theme = config.theme ?? DEFAULT_XING_CONFIG.theme;
     const inputGlow = config.inputGlow ?? DEFAULT_XING_CONFIG.inputGlow;
     const gradient = config.gradient ?? DEFAULT_XING_CONFIG.gradient;
+    const userMsg = config.userMsg ?? DEFAULT_XING_CONFIG.userMsg;
+
+    // 匹配当前颜色的预设
+    const currentPreset = GRADIENT_PRESETS.find(p =>
+        p.colors.length === gradient.colors.length &&
+        p.colors.every((c, i) => c.toLowerCase() === gradient.colors[i].toLowerCase())
+    );
 
     // 更新渐变配置
     const updateGradient = useCallback((updates: Partial<LogoGradientConfig>) => {
@@ -150,6 +178,11 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
     // 更新主题配置
     const updateTheme = useCallback((updates: Partial<ThemeConfig>) => {
         setConfig(prev => ({ ...prev, theme: { ...DEFAULT_XING_CONFIG.theme, ...prev.theme, ...updates } }));
+    }, [setConfig]);
+
+    // 更新用户消息气泡配置
+    const updateUserMsg = useCallback((updates: Partial<UserMsgConfig>) => {
+        setConfig(prev => ({ ...prev, userMsg: { ...DEFAULT_XING_CONFIG.userMsg, ...prev.userMsg, ...updates } }));
     }, [setConfig]);
 
     return (
@@ -177,8 +210,8 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`flex-1 py-2.5 px-4 text-xs font-medium transition-all ${activeTab === tab.id
-                                ? 'text-cyan-400 border-b-2 border-cyan-400'
-                                : 'text-white/50 hover:text-white/80'
+                            ? 'text-cyan-400 border-b-2 border-cyan-400'
+                            : 'text-white/50 hover:text-white/80'
                             }`}
                     >
                         {tab.label}
@@ -271,25 +304,38 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                             </span>
                         </div>
 
-                        {/* 渐变预设 */}
-                        <div>
-                            <label className="text-xs text-white/60 mb-2 block">渐变预设</label>
-                            <div className="grid grid-cols-4 gap-2">
-                                {GRADIENT_PRESETS.map(preset => (
-                                    <button
-                                        key={preset.id}
-                                        onClick={() => updateGradient({ colors: [...preset.colors] })}
-                                        className="p-2 rounded-lg transition-all hover:scale-105 bg-white/5 hover:bg-white/10"
-                                        title={preset.name}
-                                    >
-                                        <div
-                                            className="w-full h-5 rounded-md mb-1"
-                                            style={{ background: `linear-gradient(90deg, ${preset.colors.join(', ')})` }}
-                                        />
-                                        <span className="text-[10px] text-white/50">{preset.name}</span>
-                                    </button>
-                                ))}
-                            </div>
+                        {/* 渐变预设 - 可折叠列表 */}
+                        <div className="rounded-xl border border-slate-700 bg-slate-800/30">
+                            <button
+                                onClick={() => setGradientPresetsExpanded(!gradientPresetsExpanded)}
+                                className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-700/50 rounded-xl transition-colors"
+                            >
+                                <span className="flex items-center gap-2">
+                                    🎨 渐变预设 · <span className="text-xs opacity-70">{currentPreset?.name || '自定义'}</span>
+                                </span>
+                                <span className={`transition-transform ${gradientPresetsExpanded ? 'rotate-180' : ''}`}>▼</span>
+                            </button>
+
+                            {gradientPresetsExpanded && (
+                                <div className="px-3 pb-3 space-y-3">
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {GRADIENT_PRESETS.map(preset => {
+                                            const isActive = currentPreset?.id === preset.id;
+                                            return (
+                                                <button
+                                                    key={preset.id}
+                                                    onClick={() => updateGradient({ colors: [...preset.colors] })}
+                                                    className={`w-full p-2 rounded-lg text-center transition-all hover:scale-105 hover:bg-slate-700 ${isActive ? 'ring-2 ring-blue-400' : ''}`}
+                                                    title={preset.name}
+                                                >
+                                                    <div className="w-full h-6 rounded-md mb-1" style={{ background: `linear-gradient(90deg, ${preset.colors.join(', ')})` }} />
+                                                    <span className="text-[10px] text-slate-400">{preset.name}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* 颜色数量 */}
@@ -328,60 +374,82 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                             ))}
                         </div>
 
-                        {/* 渐变类型 */}
+                        {/* 渐变类型 - 玻璃风格按钮 */}
                         <div>
-                            <label className="text-xs text-white/60 mb-2 block">渐变类型</label>
-                            <div className="flex gap-2">
-                                {(['conic', 'linear', 'radial'] as const).map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => updateGradient({ type })}
-                                        className={`flex-1 py-1.5 text-xs rounded-lg transition-all ${gradient.type === type
-                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                                : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
-                                            }`}
-                                    >
-                                        {type === 'conic' ? '漩涡' : type === 'linear' ? '线性' : '放射'}
-                                    </button>
-                                ))}
+                            <label className="text-xs font-medium text-slate-300">渐变类型</label>
+                            <div className="flex gap-2 mt-1">
+                                {(['conic', 'linear', 'radial'] as const).map(type => {
+                                    const gradientColors = gradient.colors;
+                                    const isActive = gradient.type === type;
+                                    return (
+                                        <button
+                                            key={type}
+                                            onClick={() => updateGradient({ type })}
+                                            className="px-3 py-1.5 text-xs rounded-lg transition-all hover:scale-105"
+                                            style={isActive ? {
+                                                background: `linear-gradient(135deg, ${gradientColors.join(', ')})`,
+                                                color: 'white',
+                                                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                                                boxShadow: `0 4px 12px ${gradientColors[0]}50, inset 0 1px 0 rgba(255,255,255,0.3)`,
+                                                border: '1px solid rgba(255,255,255,0.2)',
+                                            } : {
+                                                background: 'linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.8) 100%)',
+                                                backdropFilter: 'blur(8px)',
+                                                color: '#cbd5e1',
+                                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 4px rgba(0,0,0,0.1)',
+                                                border: '1px solid rgba(100,116,139,0.3)',
+                                            }}
+                                        >
+                                            {type === 'conic' ? '漩涡' : type === 'linear' ? '线性' : '放射'}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
-                        {/* 流动类型 & 方向 */}
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs text-white/60 mb-2 block">流动类型</label>
-                                <div className="flex gap-1">
-                                    {(['vortex', 'wave'] as const).map(flowType => (
+                        {/* 流动方式 - 玻璃风格按钮 */}
+                        <div>
+                            <label className="text-xs font-medium text-slate-300">流动方式</label>
+                            <div className="flex gap-2 mt-1">
+                                {(['vortex', 'wave'] as const).map(flowType => {
+                                    const gradientColors = gradient.colors;
+                                    const isActive = gradient.flowType === flowType;
+                                    return (
                                         <button
                                             key={flowType}
                                             onClick={() => updateGradient({ flowType })}
-                                            className={`flex-1 py-1.5 text-xs rounded-lg transition-all ${gradient.flowType === flowType
-                                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                                    : 'text-white/50 bg-white/5 border border-transparent'
-                                                }`}
+                                            className="px-3 py-1.5 text-xs rounded-lg transition-all hover:scale-105"
+                                            style={isActive ? {
+                                                background: `linear-gradient(135deg, ${gradientColors.join(', ')})`,
+                                                color: 'white',
+                                                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                                                boxShadow: `0 4px 12px ${gradientColors[0]}50, inset 0 1px 0 rgba(255,255,255,0.3)`,
+                                                border: '1px solid rgba(255,255,255,0.2)',
+                                            } : {
+                                                background: 'linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.8) 100%)',
+                                                backdropFilter: 'blur(8px)',
+                                                color: '#cbd5e1',
+                                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 4px rgba(0,0,0,0.1)',
+                                                border: '1px solid rgba(100,116,139,0.3)',
+                                            }}
                                         >
                                             {flowType === 'vortex' ? '漩涡' : '波浪'}
                                         </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <label className="text-xs text-white/60 mb-2 block">流动方向</label>
-                                <div className="flex gap-1">
-                                    {(['cw', 'ccw'] as const).map(dir => (
-                                        <button
-                                            key={dir}
-                                            onClick={() => updateGradient({ flowDirection: dir })}
-                                            className={`flex-1 py-1.5 text-xs rounded-lg transition-all ${gradient.flowDirection === dir
-                                                    ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                                    : 'text-white/50 bg-white/5 border border-transparent'
-                                                }`}
-                                        >
-                                            {dir === 'cw' ? '顺时针' : '逆时针'}
-                                        </button>
-                                    ))}
-                                </div>
+                                    );
+                                })}
+                                <button
+                                    onClick={() => updateGradient({ flowDirection: gradient.flowDirection === 'cw' ? 'ccw' : 'cw' })}
+                                    className="px-3 py-1.5 text-xs rounded-lg transition-all hover:scale-105"
+                                    style={{
+                                        background: 'linear-gradient(135deg, rgba(51,65,85,0.6) 0%, rgba(30,41,59,0.8) 100%)',
+                                        backdropFilter: 'blur(8px)',
+                                        color: '#cbd5e1',
+                                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 4px rgba(0,0,0,0.1)',
+                                        border: '1px solid rgba(100,116,139,0.3)',
+                                    }}
+                                >
+                                    {gradient.flowDirection === 'cw' ? '顺时针' : '逆时针'}
+                                </button>
                             </div>
                         </div>
 
@@ -399,7 +467,7 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                             <div>
                                 <label className="text-xs text-white/60">轨道范围: {gradient.orbitRange}%</label>
                                 <input
-                                    type="range" min="0" max="100"
+                                    type="range" min="20" max="80"
                                     value={gradient.orbitRange}
                                     onChange={e => updateGradient({ orbitRange: parseInt(e.target.value) })}
                                     className="w-full h-1 mt-1"
@@ -465,8 +533,8 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                                         key={font.id}
                                         onClick={() => updateTheme({ chatFont: font.id })}
                                         className={`px-3 py-2.5 text-sm rounded-lg transition-all ${theme.chatFont === font.id
-                                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
-                                                : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
+                                            ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/50'
+                                            : 'text-white/50 hover:text-white/80 bg-white/5 border border-transparent'
                                             }`}
                                         style={{ fontFamily: font.family }}
                                     >
@@ -577,6 +645,87 @@ export const XingSparkSettingsPanel: React.FC<XingSparkSettingsPanelProps> = ({
                                         value={inputGlow.borderOpacity * 100}
                                         onChange={e => updateInputGlow({ borderOpacity: parseInt(e.target.value) / 100 })}
                                         className="w-full h-1 mt-1"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 用户消息气泡设置 */}
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+                            <h3 className="text-sm font-medium text-white/80 mb-3">用户消息气泡</h3>
+                            <div className="space-y-3">
+                                {/* 渐变颜色 */}
+                                <div>
+                                    <label className="text-xs text-white/50 mb-2 block">渐变颜色</label>
+                                    <div className="flex gap-2">
+                                        {userMsg.colors.map((color, i) => (
+                                            <input
+                                                key={i}
+                                                type="color"
+                                                value={color}
+                                                onChange={e => {
+                                                    const newColors = [...userMsg.colors];
+                                                    newColors[i] = e.target.value;
+                                                    updateUserMsg({ colors: newColors });
+                                                }}
+                                                className="w-8 h-8 rounded cursor-pointer border-0"
+                                            />
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 渐变角度 */}
+                                <div>
+                                    <label className="text-xs text-white/50">渐变角度: {userMsg.angle}°</label>
+                                    <input
+                                        type="range" min="0" max="360"
+                                        value={userMsg.angle}
+                                        onChange={e => updateUserMsg({ angle: parseInt(e.target.value) })}
+                                        className="w-full h-1 mt-1"
+                                    />
+                                </div>
+
+                                {/* 动画速度 */}
+                                <div>
+                                    <label className="text-xs text-white/50">动画速度: {userMsg.speed}s</label>
+                                    <input
+                                        type="range" min="2" max="12"
+                                        value={userMsg.speed}
+                                        onChange={e => updateUserMsg({ speed: parseInt(e.target.value) })}
+                                        className="w-full h-1 mt-1"
+                                    />
+                                </div>
+
+                                {/* 透明度 */}
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-xs text-white/50">浅色透明度: {Math.round(userMsg.lightOpacity * 100)}%</label>
+                                        <input
+                                            type="range" min="5" max="50"
+                                            value={userMsg.lightOpacity * 100}
+                                            onChange={e => updateUserMsg({ lightOpacity: parseInt(e.target.value) / 100 })}
+                                            className="w-full h-1 mt-1"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-white/50">深色透明度: {Math.round(userMsg.darkOpacity * 100)}%</label>
+                                        <input
+                                            type="range" min="10" max="60"
+                                            value={userMsg.darkOpacity * 100}
+                                            onChange={e => updateUserMsg({ darkOpacity: parseInt(e.target.value) / 100 })}
+                                            className="w-full h-1 mt-1"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 边框颜色 */}
+                                <div>
+                                    <label className="text-xs text-white/50">边框颜色</label>
+                                    <input
+                                        type="color"
+                                        value={userMsg.borderColor}
+                                        onChange={e => updateUserMsg({ borderColor: e.target.value })}
+                                        className="w-8 h-8 rounded cursor-pointer border-0 mt-1"
                                     />
                                 </div>
                             </div>

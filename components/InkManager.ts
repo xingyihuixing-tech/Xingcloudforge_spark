@@ -281,12 +281,30 @@ export class InkManager {
         const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
         this.mouse.set(x, y);
+        this.mouse.set(x, y);
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
+        // Raycast against the planet object recursively
         const intersects = this.raycaster.intersectObject(this.planetObj, true);
 
-        if (intersects.length > 0) {
-            const point = intersects[0].point; // World intersection
+        // Filter intersects to find the first one that is NOT our own pointsMesh
+        let hit: THREE.Intersection | null = null;
+        for (const intersect of intersects) {
+            // Check if the intersected object is our points mesh
+            if (intersect.object === this.pointsMesh) {
+                continue;
+            }
+            // Check if the object is visible
+            if (!intersect.object.visible) {
+                continue;
+            }
+
+            hit = intersect;
+            break;
+        }
+
+        if (hit) {
+            const point = hit.point; // World intersection
             const pressure = (e.pressure !== undefined && e.pressure > 0) ? e.pressure : 0.5;
             const effectivePressure = e.pointerType === 'pen' ? pressure : 1.0;
 

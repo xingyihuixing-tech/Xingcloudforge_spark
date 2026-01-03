@@ -6889,7 +6889,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 
   }, [sidebarOpen]);
 
-  // �湔鰵�峕艶霈曄蔭
+  // Handle OrbitControls state based on Draw Mode
+  useEffect(() => {
+    if (controlsRef.current) {
+      // If drawing is enabled, disable camera controls to allow painting
+      controlsRef.current.enabled = !drawSettings?.enabled;
+    }
+  }, [drawSettings?.enabled]);
+
+  // 湔鰵峕艶霈曄蔭
   useEffect(() => {
     const bgSphere = backgroundSphereRef.current;
     if (!bgSphere) return;

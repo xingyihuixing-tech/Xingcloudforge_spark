@@ -182,6 +182,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                             gradient: { ...DEFAULT_XING_CONFIG.gradient, ...loaded.gradient },
                             inputGlow: { ...DEFAULT_XING_CONFIG.inputGlow, ...loaded.inputGlow },
                             theme: { ...DEFAULT_XING_CONFIG.theme, ...loaded.theme },
+                            userMsg: { ...DEFAULT_XING_CONFIG.userMsg, ...loaded.userMsg },
                         });
                     }
                 })
@@ -579,10 +580,17 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                 )}
                                             </div>
                                         ) : (
-                                            <div className={`inline-block px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${msg.role === 'user'
-                                                ? 'bg-blue-500/20 text-blue-100'
-                                                : 'bg-white/5 text-white/80'
-                                                }`}>
+                                            <div
+                                                className={`inline-block px-3 py-2 rounded-xl text-sm whitespace-pre-wrap ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
+                                                style={msg.role === 'user' ? {
+                                                    background: `linear-gradient(${xingConfig.userMsg?.angle ?? 135}deg, ${(xingConfig.userMsg?.colors ?? ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2']).map((c, i, arr) => {
+                                                        const opacity = i === 0 ? (xingConfig.userMsg?.lightOpacity ?? 0.15) : (xingConfig.userMsg?.darkOpacity ?? 0.25);
+                                                        return `${c}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
+                                                    }).join(', ')})`,
+                                                    border: `1px solid ${xingConfig.userMsg?.borderColor ?? '#71b0ff'}40`,
+                                                    color: 'rgba(255,255,255,0.9)',
+                                                } : undefined}
+                                            >
                                                 {msg.content}
                                             </div>
                                         )}
