@@ -71,14 +71,14 @@ void main() {
     
     // Ink flow turbulence
     if (uFlow > 0.0) {
-        float noise = snoise(pos * 0.1 + vec3(0.0, uTime * 0.5, 0.0));
+        float noise = snoise(pos * 0.01 + vec3(0.0, uTime * 0.5, 0.0));
         pos += normalize(pos) * noise * uFlow * 5.0;
     }
     
     vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     
-    // Size attenuation (simulating perspective)
+    // Size attenuation
     gl_PointSize = size * aSize * (300.0 / -mvPosition.z);
 }
 `;
@@ -99,10 +99,7 @@ void main() {
     // Soft brush edge
     float strength = smoothstep(0.5, 0.0, dist);
     
-    // Bloom boost
-    vec3 finalColor = uColor * (1.0 + uBloom);
-    
-    gl_FragColor = vec4(finalColor, strength * uOpacity * vAlpha);
+    gl_FragColor = vec4(uColor, strength * uOpacity * vAlpha);
 }
 `;
 
@@ -115,13 +112,15 @@ export class InkManager {
     private raycaster: THREE.Raycaster;
     private mouse: THREE.Vector2;
 
-    // Rendering Data using Layers
+    // Meshes for the active instance's layers
     private layerMeshes: Map<string, THREE.Points> = new Map();
     private activeLayerId: string | null = null;
 
-    // Interaction Canvas
-    private canvasMesh: THREE.Mesh | null = null;
-    private planetGroup: THREE.Object3D | null = null; // The parent group we draw on
+    // The single Interaction Canvas (Always exists, toggled visible)
+    private canvasMesh: THREE.Mesh;
+
+    // Target Planet Tracking
+    private targetPlanet: THREE.Object3D | null = null;
 
     private isDrawing: boolean = false;
     private settings: DrawSettings | null = null;
@@ -141,14 +140,25 @@ export class InkManager {
 
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
-
-        // Ghost cursor buffer (max 64 points)
         this.ghostPositions = new Float32Array(64 * 3);
 
-        this.initCanvasMesh();
+        // 1. Initialize Interaction Canvas (Independent)
+        const geometry = new THREE.SphereGeometry(100, 64, 64);
+        const material = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.0, // Invisible hit target
+            wireframe: true,
+            visible: false,
+            depthWrite: false // Prevents messing with background
+        });
+        this.canvasMesh = new THREE.Mesh(geometry, material);
+        this.canvasMesh.name = 'InteractionCanvas';
+        this.canvasMesh.renderOrder = 9999;
+        this.scene.add(this.canvasMesh);
+
         this.initGhostMesh();
 
-        // Bind events
         this._onDown = this.onPointerDown.bind(this);
         this._onMove = this.onPointerMove.bind(this);
         this._onUp = this.onPointerUp.bind(this);
@@ -156,70 +166,52 @@ export class InkManager {
         this.addListeners();
     }
 
-    private initCanvasMesh() {
-        // Create an invisible interaction sphere
-        // Radius 100 matches the standard planet radius
-        const geometry = new THREE.SphereGeometry(100, 64, 64);
-        const material = new THREE.MeshBasicMaterial({
-            color: 0xffffff,
-            transparent: true,
-            opacity: 0.05, // Slight visibility for feedback
-            wireframe: true, // Grid effect
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            visible: false
-        });
-
-        this.canvasMesh = new THREE.Mesh(geometry, material);
-        this.canvasMesh.name = 'InteractionCanvas';
-        this.canvasMesh.renderOrder = 998;
-        this.scene.add(this.canvasMesh);
-    }
-
     private initGhostMesh() {
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(this.ghostPositions, 3).setUsage(THREE.DynamicDrawUsage));
 
         const material = new THREE.PointsMaterial({
-            color: 0xffffff,
-            size: 5,
-            sizeAttenuation: false, // Screen space size
-            transparent: true,
-            opacity: 0.5,
-            depthTest: false,
-            depthWrite: false
+            color: 0xffffff, size: 5, sizeAttenuation: false,
+            transparent: true, opacity: 0.5,
+            depthTest: false, depthWrite: false
         });
 
         this.ghostMesh = new THREE.Points(geometry, material);
-        this.ghostMesh.renderOrder = 1000;
+        this.ghostMesh.renderOrder = 10000;
         this.ghostMesh.visible = false;
         this.scene.add(this.ghostMesh);
     }
 
     public setSettings(settings: DrawSettings) {
         this.settings = settings;
-        this.activeLayerId = settings.activeLayerId;
 
-        // Update interaction canvas
+        // 1. Resolve Active Instance
+        const activeInstance = settings.instances.find(i => i.id === settings.activeInstanceId);
+
+        if (activeInstance) {
+            this.activeLayerId = activeInstance.activeLayerId;
+            this.syncLayers(activeInstance.layers);
+        } else {
+            this.syncLayers([]); // No instance, clear layers
+        }
+
+        // 2. Update Canvas State
+        const isEnabled = settings.enabled && settings.mode !== DrawMode.Off;
         if (this.canvasMesh) {
-            this.canvasMesh.visible = settings.enabled && settings.mode !== DrawMode.Off;
-
-            // Base radius 100. Scale = 1 + (altitude / 100)
-            const alt = settings.currentAltitude !== undefined ? settings.currentAltitude : settings.altitude;
+            this.canvasMesh.visible = isEnabled;
+            // Scale based on altitude (Visual feedback)
+            const alt = settings.altitude || 10;
             const scale = 1.0 + (alt / 100.0);
             this.canvasMesh.scale.setScalar(scale);
 
             if (this.canvasMesh.material instanceof THREE.MeshBasicMaterial) {
-                this.canvasMesh.material.opacity = settings.enabled ? 0.05 : 0;
+                this.canvasMesh.material.opacity = isEnabled ? 0.05 : 0;
             }
         }
 
-        // Sync Layers
-        this.syncLayers(settings.layers);
-
-        // Toggle ghost cursor visibility
+        // 3. Ghost Cursor
         if (this.ghostMesh) {
-            this.ghostMesh.visible = settings.ghostCursorEnabled;
+            this.ghostMesh.visible = settings.ghostCursorEnabled && isEnabled;
             if (this.ghostMesh.material instanceof THREE.PointsMaterial) {
                 this.ghostMesh.material.color.set(settings.brush.color);
             }
@@ -227,8 +219,9 @@ export class InkManager {
     }
 
     private syncLayers(layers: DrawingLayer[]) {
-        // 1. Remove meshes for deleted layers
         const layerIds = new Set(layers.map(l => l.id));
+
+        // Delete removed layers
         for (const [id, mesh] of this.layerMeshes) {
             if (!layerIds.has(id)) {
                 if (mesh.parent) mesh.parent.remove(mesh);
@@ -238,29 +231,21 @@ export class InkManager {
             }
         }
 
-        // 2. Create/Update meshes
+        // Create/Update layers
         layers.forEach(layer => {
             let mesh = this.layerMeshes.get(layer.id);
 
-            // Create if new
+            // Init Mesh
             if (!mesh) {
-                // Initialize buffer with enough space
-                const maxPoints = 50000;
-                // Reuse layer points if they are large enough, otherwise create new
-                // For now, assume layer.points is the source. 
-                // To allow dynamic drawing, we need a fixed large buffer and partial update.
-                // We'll create a fresh buffer and copy layer points into it.
-                // Or better: Use layer.points directly if it's already a Float32Array of correct size.
-                // Given the type definition, layer.points is likely just the data. 
-                // We'll allocate a standard large buffer for editing.
-
+                const maxPoints = 30000;
                 const positions = new Float32Array(maxPoints * 3);
                 const sizes = new Float32Array(maxPoints);
                 const alphas = new Float32Array(maxPoints);
 
-                // Copy existing data
-                positions.set(layer.points);
-                // Fill defaults for sizes/alphas (since we don't persist them yet in DrawingLayer)
+                // Load existing data if any
+                if (layer.points && layer.points.length > 0) {
+                    positions.set(layer.points);
+                }
                 sizes.fill(10.0);
                 alphas.fill(1.0);
 
@@ -278,7 +263,6 @@ export class InkManager {
                         uColor: { value: new THREE.Color(layer.color) },
                         uOpacity: { value: layer.opacity },
                         uFlow: { value: 0.0 },
-                        uBloom: { value: 0.0 }, // Can add visual style to Layer later
                         size: { value: 1.0 }
                     },
                     transparent: true,
@@ -289,10 +273,11 @@ export class InkManager {
                 mesh = new THREE.Points(geometry, material);
                 mesh.frustumCulled = false;
                 mesh.renderOrder = 999;
-                mesh.userData = { layerId: layer.id };
-
+                mesh.userData = { layerId: layer.id, rotationSpeed: layer.rotationSpeed };
                 this.layerMeshes.set(layer.id, mesh);
-                this.scene.add(mesh); // Initial add
+
+                // Add to scene (not planet, to avoid scale inheritance issues)
+                this.scene.add(mesh);
             }
 
             if (mesh) {
@@ -300,14 +285,22 @@ export class InkManager {
                 const mat = mesh.material as THREE.ShaderMaterial;
                 mat.uniforms.uColor.value.set(layer.color);
                 mat.uniforms.uOpacity.value = layer.opacity;
+                mesh.userData.rotationSpeed = layer.rotationSpeed;
 
                 this.updateLayerTransform(mesh, layer);
-                this.reparentMesh(mesh, layer.bindPlanetId);
             }
         });
     }
 
     private updateLayerTransform(mesh: THREE.Points, layer: DrawingLayer) {
+        // Apply Transform relative to Planet Center
+        // We do this by keeping the mesh at (0,0,0) locally but rotating/scaling it.
+        // It should follow the planet position.
+
+        if (this.targetPlanet) {
+            mesh.position.copy(this.targetPlanet.getWorldPosition(new THREE.Vector3()));
+        }
+
         mesh.rotation.set(
             THREE.MathUtils.degToRad(layer.tilt.x),
             THREE.MathUtils.degToRad(layer.tilt.y),
@@ -318,111 +311,80 @@ export class InkManager {
         const altitudeScale = 1.0 + (alt / 100.0);
         const finalScale = layer.scale * altitudeScale;
         mesh.scale.setScalar(finalScale);
-
-        if (layer.rotationSpeed !== 0) {
-            mesh.userData.rotationSpeed = layer.rotationSpeed;
-        } else {
-            mesh.userData.rotationSpeed = 0;
-        }
     }
 
-    private reparentMesh(mesh: THREE.Points, planetId: string | null) {
-        // If current active planet matches target, attach to it.
-        if (this.planetGroup && this.planetGroup.userData.planetId === planetId) {
-            if (mesh.parent !== this.planetGroup) {
-                this.planetGroup.add(mesh);
-            }
-        } else {
-            // Fallback to scene
-            if (mesh.parent !== this.scene) {
-                this.scene.add(mesh);
-            }
-        }
-    }
-
-    public setPlanet(planetGroup: THREE.Object3D | null) {
-        if (this.planetGroup === planetGroup) return;
-
-        if (this.planetGroup && this.canvasMesh) {
-            this.planetGroup.remove(this.canvasMesh);
-        }
-
-        this.planetGroup = planetGroup;
-
-        if (planetGroup && this.canvasMesh) {
-            planetGroup.add(this.canvasMesh);
-            this.canvasMesh.visible = this.settings?.enabled ?? false;
-        } else if (this.canvasMesh) {
-            this.scene.add(this.canvasMesh);
-            this.canvasMesh.visible = false;
-        }
-
-        // Re-parent layers
-        if (this.settings) {
-            this.syncLayers(this.settings.layers);
+    public setPlanet(planet: THREE.Object3D | null) {
+        this.targetPlanet = planet;
+        if (this.targetPlanet && this.canvasMesh) {
+            // Move canvas to planet position
+            const worldPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
+            this.canvasMesh.position.copy(worldPos);
         }
     }
 
     public update(time: number) {
+        // Update Canvas Position
+        if (this.targetPlanet && this.canvasMesh) {
+            const worldPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
+            this.canvasMesh.position.copy(worldPos);
+        }
+
+        // Update Layers
         this.layerMeshes.forEach(mesh => {
+            // Follow planet
+            if (this.targetPlanet) {
+                const worldPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
+                mesh.position.copy(worldPos);
+
+                // Inherit planet rotation for "sticking" effect?
+                // If we want layers to stick to planet surface, we should multiply by planet rotation.
+                // But for "Halo" effects, independent rotation is better.
+                // For now, let's just support self-rotation + position tracking.
+            }
+
             const mat = mesh.material as THREE.ShaderMaterial;
             if (mat.uniforms) {
                 mat.uniforms.uTime.value = time;
-
-                if (mesh.userData.rotationSpeed) {
-                    mesh.rotation.y += mesh.userData.rotationSpeed * 0.001;
-                }
+            }
+            if (mesh.userData.rotationSpeed) {
+                mesh.rotation.y += mesh.userData.rotationSpeed * 0.001;
             }
         });
     }
 
-    public dispose() {
-        this.removeListeners();
-        this.layerMeshes.forEach(mesh => {
-            if (mesh.parent) mesh.parent.remove(mesh);
-            mesh.geometry.dispose();
-            (mesh.material as THREE.Material).dispose();
-        });
-        this.layerMeshes.clear();
-
-        if (this.canvasMesh) {
-            if (this.canvasMesh.parent) this.canvasMesh.parent.remove(this.canvasMesh);
-            this.canvasMesh.geometry.dispose();
-            (this.canvasMesh.material as THREE.Material).dispose();
-        }
-
-        if (this.ghostMesh) {
-            if (this.ghostMesh.parent) this.ghostMesh.parent.remove(this.ghostMesh);
-            this.ghostMesh.geometry.dispose();
-            (this.ghostMesh.material as THREE.Material).dispose();
-        }
-    }
-
+    // ... [Event Listeners: addListeners, removeListeners, onPointerDown, onPointerUp, dispose] ...
     private addListeners() {
         this.domElement.addEventListener('pointerdown', this._onDown);
         window.addEventListener('pointermove', this._onMove);
         window.addEventListener('pointerup', this._onUp);
     }
-
     private removeListeners() {
         this.domElement.removeEventListener('pointerdown', this._onDown);
         window.removeEventListener('pointermove', this._onMove);
         window.removeEventListener('pointerup', this._onUp);
     }
-
+    public dispose() {
+        this.removeListeners();
+        this.scene.remove(this.canvasMesh);
+        this.canvasMesh.geometry.dispose();
+        this.layerMeshes.forEach(m => {
+            this.scene.remove(m);
+            m.geometry.dispose();
+        });
+        this.layerMeshes.clear();
+    }
     private onPointerDown(e: PointerEvent) {
         if (!this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
         if (e.button !== 0) return;
         this.isDrawing = true;
     }
-
     private onPointerUp(e: PointerEvent) {
         this.isDrawing = false;
     }
 
     private onPointerMove(e: PointerEvent) {
         if (!this.settings?.enabled || this.settings.mode === DrawMode.Off) return;
-        if (!this.canvasMesh) return;
+        if (!this.canvasMesh || !this.canvasMesh.visible) return;
 
         const rect = this.domElement.getBoundingClientRect();
         const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
@@ -431,78 +393,80 @@ export class InkManager {
         this.mouse.set(x, y);
         this.raycaster.setFromCamera(this.mouse, this.camera);
 
-        // Raycast against Interaction Canvas
         const intersects = this.raycaster.intersectObject(this.canvasMesh, false);
 
         if (intersects.length > 0) {
             const hit = intersects[0];
-            const point = hit.point;
-            const pressure = (e.pressure !== undefined && e.pressure > 0) ? e.pressure : 0.5;
-            const effectivePressure = e.pointerType === 'pen' ? pressure : 1.0;
-
             if (this.isDrawing) {
-                this.handleAddPoint(point, effectivePressure);
+                this.handleAddPoint(hit.point, e.pressure || 0.5);
             }
-
             if (this.settings.ghostCursorEnabled) {
-                this.updateGhostCursor(point);
+                this.updateGhostCursor(hit.point);
             }
         } else {
+            // Hide ghost if off canvas
             if (this.ghostMesh) {
-                const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
-                posAttr.count = 0;
-                posAttr.needsUpdate = true;
+                (this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute).count = 0;
+                (this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
             }
         }
     }
 
     private updateGhostCursor(worldPoint: THREE.Vector3) {
-        if (!this.ghostMesh || !this.planetGroup || !this.settings) return;
+        if (!this.ghostMesh || !this.targetPlanet) return;
 
-        // Convert world to local (Canvas Space = Planet Space)
-        const localPoint = worldPoint.clone();
-        this.planetGroup.worldToLocal(localPoint);
+        // Convert World -> Local (Relative to Planet Center)
+        // Since Canvas is centered on Planet, Local = World - PlanetPos
+        const planetPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
+        const localPoint = worldPoint.clone().sub(planetPos);
 
-        // Canvas is already at 'Altitude', so localPoint is correct.
+        // No need to apply rotation inverse if we are drawing in "World Alignment"
+        // But if we want to draw ON the rotating planet, we need to inverse planet rotation.
+        // For this version (Component Generator), let's stick to World Alignment for stability.
 
         const points = this.generateSymmetryPoints(localPoint);
         const posAttr = this.ghostMesh.geometry.attributes.position as THREE.BufferAttribute;
 
-        points.forEach((p, i) => {
-            if (i < 64) {
-                posAttr.setXYZ(i, p.x, p.y, p.z);
-            }
-        });
+        // Update Ghost Mesh Position to match Planet
+        this.ghostMesh.position.copy(planetPos);
 
+        points.forEach((p, i) => {
+            if (i < 64) posAttr.setXYZ(i, p.x, p.y, p.z);
+        });
         posAttr.setDrawRange(0, points.length);
         posAttr.needsUpdate = true;
     }
 
     private handleAddPoint(worldPoint: THREE.Vector3, pressure: number) {
-        if (!this.settings || !this.activeLayerId || !this.planetGroup) return;
+        if (!this.settings || !this.activeLayerId || !this.targetPlanet) return;
 
-        const layer = this.settings.layers.find(l => l.id === this.activeLayerId);
-        if (!layer) return;
+        const activeInstance = this.settings.instances.find(i => i.id === this.settings!.activeInstanceId);
+        const layer = activeInstance?.layers.find(l => l.id === this.activeLayerId);
+        const mesh = this.layerMeshes.get(this.activeLayerId!);
 
-        const mesh = this.layerMeshes.get(layer.id);
-        if (!mesh) return;
+        if (!layer || !mesh) return;
 
-        // Transform Logic:
-        // Point is on Canvas (Planet Local).
-        // Layer has additional transform (Tilt, Scale).
-        // We want the point to appear at 'worldPoint' visually.
-        // But the Mesh is transformed. So we must Inverse-Transform the point into Mesh Space.
+        // Calc Local Point relative to Mesh
+        // Mesh Position = Planet Position
+        // Mesh Rotation = Layer Tilt
+        // Mesh Scale = Layer Scale
 
-        const localPoint = worldPoint.clone();
-        this.planetGroup.worldToLocal(localPoint);
+        const planetPos = this.targetPlanet.getWorldPosition(new THREE.Vector3());
 
-        // Inverse Transform
+        // 1. Center relative to planet
+        const relPoint = worldPoint.clone().sub(planetPos);
+
+        // 2. Inverse Transform (Scale & Rotation)
+        // We use the Mesh's matrix for convenience, ensuring `updateMatrix()` is called.
         mesh.updateMatrix();
         const invMatrix = mesh.matrix.clone().invert();
-        localPoint.applyMatrix4(invMatrix);
+
+        // Wait, mesh.matrix includes position. 
+        // worldPoint is World. mesh.matrix maps Local -> World.
+        // So Local = World * Invert(Matrix)
+        const localPoint = worldPoint.clone().applyMatrix4(invMatrix);
 
         const pointsToAdd = this.generateSymmetryPoints(localPoint);
-
         const geometry = mesh.geometry;
         const positions = geometry.attributes.position.array as Float32Array;
         const sizes = geometry.attributes.aSize.array as Float32Array;
@@ -510,26 +474,16 @@ export class InkManager {
 
         pointsToAdd.forEach(p => {
             if (layer.count >= positions.length / 3) return;
-
             const i = layer.count;
+
             positions[i * 3] = p.x;
             positions[i * 3 + 1] = p.y;
             positions[i * 3 + 2] = p.z;
 
-            const baseSize = this.settings!.brush.size || 10;
-            sizes[i] = baseSize * (this.settings!.brush.usePressure ? pressure : 1.0);
-            alphas[i] = this.settings!.brush.usePressure ? pressure : 1.0;
+            sizes[i] = (this.settings!.brush.size || 10) * pressure;
+            alphas[i] = pressure;
 
             layer.count++;
-
-            // Sync back to layer.points so it persists?
-            // Currently layer.count increases, but layer.points is not automatically updated 
-            // if we are writing to `positions` which is a copy.
-            // Wait, we initialized positions from layer.points. 
-            // But layer.points might be a smaller array initially.
-            // For true persistence, `layer.points` should reference this buffer or we copy back.
-            // For now, let's assume `positions` is the authoritative buffer while session is active.
-            // If we save, we'd need to serialize `positions` up to `layer.count`.
         });
 
         geometry.attributes.position.needsUpdate = true;

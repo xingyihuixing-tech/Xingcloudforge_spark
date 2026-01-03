@@ -776,66 +776,55 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         >
                                             +
                                         </button>
-                                        <select
-                                            value={chatModel}
-                                            onChange={e => setChatModel(e.target.value)}
-                                            className="text-[10px] text-white/40 bg-transparent border-none cursor-pointer hover:text-white/70 focus:outline-none max-w-[100px]"
-                                        >
-                                            {CHAT_MODELS.map(m => (
-                                                <option key={m.id} value={m.id} className="bg-slate-800 text-white">{m.name}</option>
-                                            ))}
-                                        </select>
+                                        {/* 双模型选择器 (移入工具栏) */}
+                                        <div className="relative ml-2 flex-1">
+                                            <button
+                                                onClick={() => setShowModelSelector(!showModelSelector)}
+                                                className="flex items-center gap-3 text-[10px] text-white/40 hover:text-white/70 transition-colors focus:outline-none"
+                                            >
+                                                <span className="truncate max-w-[80px] text-left">Chat: <span className="text-white/60">{currentChatModelName}</span></span>
+                                                <span className="truncate max-w-[80px] text-left">Image: <span className="text-white/60">{currentImageModelName}</span></span>
+                                                <span className={`transform transition-transform duration-300 ml-auto ${showModelSelector ? 'rotate-180' : ''}`}>^</span>
+                                            </button>
+
+                                            {/* 模型选择面板 (向上弹出) */}
+                                            {showModelSelector && (
+                                                <div className="absolute bottom-full left-0 mb-2 w-[240px] z-50">
+                                                    <div className="bg-[#1a1a24] rounded-xl p-3 grid grid-cols-2 gap-3 border border-white/10 shadow-2xl backdrop-blur-xl">
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">对话模型</span>
+                                                            {CHAT_MODELS.map(m => (
+                                                                <button
+                                                                    key={m.id}
+                                                                    onClick={() => { setChatModel(m.id); setShowModelSelector(false); }}
+                                                                    className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}
+                                                                >
+                                                                    {m.name}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">生图模型</span>
+                                                            {IMAGE_MODELS.map(m => (
+                                                                <button
+                                                                    key={m.id}
+                                                                    onClick={() => { setImageModel(m.id); setShowModelSelector(false); }}
+                                                                    className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'}`}
+                                                                >
+                                                                    {m.name}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
                             {/* 底部：双模型显示与切换 */}
-                            <div className="relative border-t border-white/5">
-                                <button
-                                    onClick={() => setShowModelSelector(!showModelSelector)}
-                                    className="w-full flex items-center justify-between px-4 py-2 text-[10px] text-white/30 hover:text-white/60 hover:bg-white/5 transition-all"
-                                >
-                                    <div className="flex gap-4">
-                                        <span>Chat: <span className="text-white/50">{currentChatModelName}</span></span>
-                                        <span>Image: <span className="text-white/50">{currentImageModelName}</span></span>
-                                    </div>
-                                    <span className={`transform transition-transform duration-300 ${showModelSelector ? 'rotate-180' : ''}`}>^</span>
-                                </button>
 
-                                {/* 模型选择面板 (展开) */}
-                                {showModelSelector && (
-                                    <div className="absolute bottom-full left-0 w-full px-2 mb-1">
-                                        <div className="bg-[#1a1a24] rounded-xl p-3 grid grid-cols-2 gap-4 border border-white/10 shadow-2xl">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">对话模型</span>
-                                                {CHAT_MODELS.map(m => (
-                                                    <button
-                                                        key={m.id}
-                                                        onClick={() => setChatModel(m.id)}
-                                                        className={`text-left text-xs py-1.5 px-2 rounded-lg transition-colors ${chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'
-                                                            }`}
-                                                    >
-                                                        {m.name}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-[10px] text-white/30 font-bold uppercase tracking-wider mb-1">生图模型</span>
-                                                {IMAGE_MODELS.map(m => (
-                                                    <button
-                                                        key={m.id}
-                                                        onClick={() => setImageModel(m.id)}
-                                                        className={`text-left text-xs py-1.5 px-2 rounded-lg transition-colors ${imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5'
-                                                            }`}
-                                                    >
-                                                        {m.name}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
                         </>
                     )}
                 </div>

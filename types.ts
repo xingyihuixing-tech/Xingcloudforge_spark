@@ -1681,10 +1681,7 @@ export interface DrawingLayer {
   name: string;
   visible: boolean;
 
-  // Component Properties
-  bindPlanetId: string | null; // Which planet this is attached to
-
-  // Transform
+  // Transform (Relative to Instance)
   tilt: { x: number; y: number; z: number };
   scale: number;
   altitude: number;
@@ -1698,6 +1695,41 @@ export interface DrawingLayer {
   // Data
   points: Float32Array; // The actual stroke data (positions)
   count: number; // Number of active points
+}
+
+export interface DrawingInstance {
+  id: string;
+  name: string;
+  bindPlanetId: string | null; // This instance is bound to this planet
+  layers: DrawingLayer[];      // Layers within this instance
+  activeLayerId: string | null;
+  visible: boolean;
+}
+
+// 绘制设置
+export interface DrawSettings {
+  enabled: boolean;
+  mode: DrawMode;
+
+  // Instance & Layer Management
+  instances: DrawingInstance[];
+  activeInstanceId: string | null;
+
+  // Symmetry parameters (Applicable to current layer)
+  segments: number;       // 对称份数 2-64
+
+  // Vortex parameters (Vortex Mode)
+  vortexHeight?: number;  // 涡旋高度偏移 per segment
+  vortexScale?: number;   // 涡旋缩放 per segment
+
+  // Brush Settings (Global Tool)
+  brush: BrushSettings;
+
+  // Transient/Global Settings
+  altitude: number;       // Default altitude for NEW layers
+  inkFlow: number;        // Global Ink Flow
+  inkBloom: number;       // Global Ink Bloom
+  ghostCursorEnabled: boolean;
 }
 
 export enum DrawMode {
