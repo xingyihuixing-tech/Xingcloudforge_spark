@@ -1754,47 +1754,124 @@ export enum DrawMode {
   Vortex = 'vortex'          // 涡旋 (旋转+高度/缩放偏移)
 }
 
-// 笔刷设置
+// ==================== 绘图系统 (Dimension Crafter) ====================
+
+// 1. 笔刷系统
+export enum BrushType {
+  Stardust = 'stardust',     // 星尘 (粒子)
+  GasCloud = 'gasCloud',     // 气云 (体积光)
+  EnergyBeam = 'energyBeam', // 能量束 (发光线条)
+  Crystal = 'crystal'        // 晶体 (几何体)
+}
+
 export interface BrushSettings {
-  size: number;           // 笔刷大小 1-50
-  opacity: number;        // 透明度 0.1-1
-  color: string;          // 颜色
-  hardness: number;       // 硬度 0-1
-  usePressure: boolean;   // 是否启用压感
-  pressureInfluence: {    // 压感影响
+  type: BrushType;
+
+  // Base
+  size: number;           // 1-100
+  opacity: number;        // 0-1
+  color: string;
+
+  // Dynamics
+  usePressure: boolean;   // 压感开关
+  pressureInfluence: {
     size: boolean;
     opacity: boolean;
-    flow: boolean;        // 流量/湍流
+    flow: boolean;        // 流量/密度 control
   };
+
+  // Specific Parameters (Union type or just optional bags)
+  // Stardust
+  density?: number;       // 粒子密度
+  scatter?: number;       // 散射范围
+
+  // Gas
+  noiseScale?: number;    // 云絮纹理大小
+  flowSpeed?: number;     // 流动速度
+
+  // Energy
+  coreWidth?: number;     // 核心宽度 (0-1 relative to size)
+  glowIntensity?: number; // 辉光强度
+  stabilization?: number; // 防抖等级 0-1 (StreamLine)
 }
 
-// 绘制设置
+// 2. 对称系统
+export enum SymmetryMode {
+  None = 'none',
+  Mirror = 'mirror',     // 镜像
+  Radial = 'radial',     // 径向 (曼陀罗)
+  Spiral = 'spiral'      // 螺旋 (3D投影特有)
+}
+
+export interface SymmetrySettings {
+  mode: SymmetryMode;
+
+  // Mirror Options
+  mirrorAxis: 'x' | 'y' | 'quad'; // 水平/垂直/四象限
+
+  // Radial Options
+  segments: number;       // 2-64
+  radialReflection: boolean; // 内部镜像 (万花筒效果)
+
+  // Spiral Options (3D)
+  twist: number;          // 扭曲度
+  decay: number;          // 衰减
+}
+
+// 3. 2D -> 3D 映射模式
+export enum ProjectionMode {
+  Sphere = 'sphere', // 极坐标映射 (球体包裹)
+  Ring = 'ring',     // 经纬映射 (光环/圆盘)
+  Screen = 'screen'  // 屏幕空间映射 (直接贴在视角平面，暂不推荐)
+}
+
+// 4. 核心数据结构
+export interface DrawingLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+
+  // Transform
+  tilt: { x: number; y: number; z: number };
+  scale: number;
+  altitude: number;
+  rotationSpeed: number;
+
+  projection: ProjectionMode; // How 2D maps to 3D
+
+  // Data
+  points: Float32Array; // Flattened [u, v, pressure, u, v, pressure...] (Normalized 2D Stroke)
+  count: number;
+
+  // Rendering Params (Snapshot of brush settings at creation time? 
+  // Or referencing a style? For simplicity, store critical rendering params here)
+  brushType: BrushType;
+  color: string;
+  params: Record<string, number>; // Generic params for shader (density, noise, etc)
+}
+
+export interface DrawingInstance {
+  id: string;
+  name: string;
+  bindPlanetId: string | null;
+  layers: DrawingLayer[];
+  activeLayerId: string | null;
+  visible: boolean;
+}
+
 export interface DrawSettings {
   enabled: boolean;
-  mode: DrawMode;
 
-  // Active Layer State
-  activeLayerId: string | null;
-  layers: DrawingLayer[];
-
-  // Symmetry parameters (Applied when drawing new points)
-  segments: number;       // 对称份数 2-64
-
-  // Vortex parameters (Vortex Mode)
-  vortexHeight?: number;  // 涡旋高度偏移 per segment
-  vortexScale?: number;   // 涡旋缩放 per segment
-
-  // Brush Settings (Applied to new points in active layer)
+  // Global Tools
   brush: BrushSettings;
+  symmetry: SymmetrySettings;
+  projection: ProjectionMode; // Current selected projection
 
-  // Global Ink Effects (can be per-layer later)
-  inkFlow: number;        // 墨迹流动感
-  inkBloom: number;       // 墨迹辉光
+  // Data
+  instances: DrawingInstance[];
+  activeInstanceId: string | null;
 
-  // Interaction
-  ghostCursorEnabled: boolean; // 是否启用幽灵光标预览
-
-  // Transient State (Not saved in layer)
-  currentAltitude: number; // Current drawing altitude
+  // UI State
+  canvasOpacity: number; // 2D Holo-Pad opacity
+  hideCanvasWhilePainting: boolean;
 }
-

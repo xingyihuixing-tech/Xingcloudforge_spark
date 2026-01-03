@@ -13,6 +13,8 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { AfterimagePass } from 'three/addons/postprocessing/AfterimagePass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js'; // Assuming this exists or revert to what was there
+import HoloCanvas from './HoloCanvas';
 import {
   PlanetSceneSettings,
   PlanetSettings,
@@ -7959,9 +7961,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                 const phase = settings.initialPhase || 0;
                 const orbitAxisSettings = settings.orbitAxis;
                 const fireflySize = settings.size || 8;
-                // �硋偏摰賢漲��閬��憭湧�閫��憭批��寥�
-                // 憭湧� gl_PointSize = size * 300 / z嚗�銁�詨�頝萘氖 z=500 �嗥漲銝?size*0.6 �讐�
-                // 雿�偏�其蝙�其���������閬�凒憭抒��潭��賢銁閫��銝𠰴龪�?
+                // 硋偏摰賢漲閬憭湧閫憭批寥
+                // 憭湧 gl_PointSize = size * 300 / z嚗銁詨頝萘氖 z=500 嗥漲銝?size*0.6 讐
+                // 雿偏其蝙其閬凒憭抒潭賢銁閫銝𠰴龪?
                 const trailWidth = fireflySize * 1.5;
                 const trailLength = settings.trailLength || 50;
                 const billboardOrbit = settings.billboardOrbit || false;
@@ -11383,13 +11385,25 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         background: 'black',
         userSelect: 'none',
         WebkitUserSelect: 'none',
-        touchAction: 'manipulation'  // 隡睃�閫行綉嚗屸��漤鵭�匧辣餈?
+        touchAction: 'manipulation'  // 隡睃閫行綉嚗屸漤鵭匧辣餈?
       }}
-    />
+    >
+      {/* 2D Holo-Pad Overlay */}
+      {drawSettings?.enabled && (
+        <HoloCanvas
+          settings={drawSettings}
+          onStrokeComplete={(points) => {
+            if (inkManagerRef.current) {
+              inkManagerRef.current.projectStroke(points);
+            }
+          }}
+        />
+      )}
+    </div>
   );
 };
 
-// ==================== 蝎鍦��穃��函頂蝏?====================
+// ==================== 蝎鍦穃函頂蝏?====================
 
 interface ParticleEmitterData {
   mesh: THREE.Points;

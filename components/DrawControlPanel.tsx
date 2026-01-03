@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
-import { DrawSettings, DrawMode, PlanetSceneSettings, BrushSettings, DrawingLayer, DrawingInstance } from '../types';
+import { DrawSettings, BrushSettings, DrawingLayer, DrawingInstance, BrushType, SymmetryMode, ProjectionMode, SymmetrySettings, PlanetSceneSettings } from '../types';
 
 interface DrawControlPanelProps {
     settings: DrawSettings;
@@ -77,9 +77,12 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
             scale: 1,
             altitude: settings.altitude || 10,
             rotationSpeed: 0,
+            projection: settings.projection,
+            brushType: settings.brush.type,
             color: settings.brush.color,
             opacity: 1,
             blending: 'additive',
+            params: {}, // Store specific brush params here if needed
             points: new Float32Array(),
             count: 0
         };
@@ -160,6 +163,10 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
         setSettings(prev => ({ ...prev, brush: { ...prev.brush, ...updates } }));
     };
 
+    const updateSymmetry = (updates: Partial<SymmetrySettings>) => {
+        setSettings(prev => ({ ...prev, symmetry: { ...prev.symmetry, ...updates } }));
+    };
+
 
     return (
         <div className="w-full h-full flex flex-col p-4 bg-gray-900/95 backdrop-blur-xl text-white overflow-y-auto custom-scrollbar border-l border-white/10">
@@ -167,7 +174,7 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
             <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
                 <h2 className="text-lg font-bold flex items-center gap-2 text-transparent bg-clip-text bg-gradient-to-r from-pink-400 to-purple-400">
                     <i className="fas fa-paint-brush"></i>
-                    绘图工坊
+                    维度绘笔
                 </h2>
                 <button
                     onClick={() => setSettings(prev => ({ ...prev, enabled: false }))}
@@ -337,13 +344,43 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                 {/* 4. Brush & Symmetry */}
                 <div className="space-y-3">
                     <div className="flex items-center gap-2 text-sm font-semibold text-gray-300">
-                        <i className="fas fa-edit text-xs"></i> 绘图工具
+                        <i className="fas fa-magic text-xs"></i> 绘笔与对称
                     </div>
 
-                    <div className="bg-white/5 rounded-xl p-3 space-y-3 border border-white/5">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs text-gray-400">颜色</span>
-                            <div className="flex items-center gap-2">
+                    <div className="bg-white/5 rounded-xl p-3 space-y-4 border border-white/5">
+
+                        {/* 4.1 笔刷类型 */}
+                        <div className="space-y-2">
+                            <div className="text-[10px] text-gray-500 uppercase flex justify-between">
+                                <span>笔刷类型</span>
+                                <span className="text-gray-400">{settings.brush.type}</span>
+                            </div>
+                            <div className="grid grid-cols-4 gap-1">
+                                {[
+                                    { id: BrushType.Stardust, icon: 'fa-asterisk', label: '星尘' },
+                                    { id: BrushType.GasCloud, icon: 'fa-cloud', label: '气云' },
+                                    { id: BrushType.EnergyBeam, icon: 'fa-bolt', label: '光束' },
+                                    { id: BrushType.Crystal, icon: 'fa-gem', label: '晶体' },
+                                ].map(b => (
+                                    <button
+                                        key={b.id}
+                                        onClick={() => updateBrush({ type: b.id })}
+                                        className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all border
+                                            ${settings.brush.type === b.id
+                                                ? 'bg-blue-600/30 text-blue-200 border-blue-500/50'
+                                                : 'bg-black/20 text-gray-400 border-transparent hover:bg-white/5'}`}
+                                    >
+                                        <i className={`fas ${b.icon} text-sm mb-1`}></i>
+                                        <span className="text-[10px] scale-90">{b.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* 4.2 笔刷参数 */}
+                        <div className="space-y-2 pt-2 border-t border-white/5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-400">颜色</span>
                                 <input
                                     type="color"
                                     value={settings.brush.color}
@@ -351,50 +388,46 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                                         updateBrush({ color: e.target.value });
                                         if (activeLayer) updateActiveLayer({ color: e.target.value });
                                     }}
-                                    className="w-8 h-8 rounded cursor-pointer bg-transparent border-none p-0"
+                                    className="w-6 h-6 rounded cursor-pointer bg-transparent border-none p-0"
                                 />
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-gray-500">大小 ({settings.brush.size})</span>
+                                    <input
+                                        type="range" min="1" max="100"
+                                        value={settings.brush.size}
+                                        onChange={(e) => updateBrush({ size: parseInt(e.target.value) })}
+                                        className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <span className="text-[10px] text-gray-500">透明度 ({settings.brush.opacity.toFixed(1)})</span>
+                                    <input
+                                        type="range" min="0.1" max="1" step="0.1"
+                                        value={settings.brush.opacity}
+                                        onChange={(e) => updateBrush({ opacity: parseFloat(e.target.value) })}
+                                        className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Size/Opacity/Mode (existing code logic kept simple here) */}
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-gray-500">大小</span>
-                                <input
-                                    type="range" min="1" max="50"
-                                    value={settings.brush.size}
-                                    onChange={(e) => updateBrush({ size: parseInt(e.target.value) })}
-                                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-gray-500">浓度</span>
-                                <input
-                                    type="range" min="0.1" max="1" step="0.05"
-                                    value={settings.brush.opacity}
-                                    onChange={(e) => updateBrush({ opacity: parseFloat(e.target.value) })}
-                                    className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
-                                />
-                            </div>
-                        </div>
-
-                        {/* 模式选择 */}
+                        {/* 4.3 对称系统 */}
                         <div className="space-y-2 pt-2 border-t border-white/5">
                             <div className="text-[10px] text-gray-500 uppercase">对称模式</div>
-                            <div className="grid grid-cols-3 gap-1">
+                            <div className="grid grid-cols-4 gap-1">
                                 {[
-                                    { id: DrawMode.Normal, label: '普通' },
-                                    { id: DrawMode.MirrorX, label: '镜像X' },
-                                    { id: DrawMode.Radial, label: '环形' },
-                                    { id: DrawMode.Kaleidoscope, label: '万花筒' },
-                                    { id: DrawMode.PlanetSpin, label: '自转' },
-                                    { id: DrawMode.Vortex, label: '涡旋' },
+                                    { id: SymmetryMode.None, label: '无' },
+                                    { id: SymmetryMode.Mirror, label: '镜像' },
+                                    { id: SymmetryMode.Radial, label: '径向' },
+                                    { id: SymmetryMode.Spiral, label: '螺旋' },
                                 ].map(m => (
                                     <button
                                         key={m.id}
-                                        onClick={() => setSettings(prev => ({ ...prev, mode: m.id as DrawMode }))}
+                                        onClick={() => updateSymmetry({ mode: m.id })}
                                         className={`py-1 rounded text-[10px] transition-all border
-                                             ${settings.mode === m.id
+                                             ${settings.symmetry.mode === m.id
                                                 ? 'bg-purple-600/30 text-purple-200 border-purple-500/50'
                                                 : 'bg-black/20 text-gray-400 border-transparent hover:bg-white/5'}`}
                                     >
@@ -402,17 +435,50 @@ const DrawControlPanel: React.FC<DrawControlPanelProps> = ({ settings, setSettin
                                     </button>
                                 ))}
                             </div>
-                            {(settings.mode === DrawMode.Radial || settings.mode === DrawMode.Kaleidoscope || settings.mode === DrawMode.PlanetSpin || settings.mode === DrawMode.Vortex) && (
-                                <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-gray-500 whitespace-nowrap">份数: {settings.segments}</span>
+
+                            {/* Symmetry Params */}
+                            {settings.symmetry.mode === SymmetryMode.Mirror && (
+                                <div className="flex gap-2">
+                                    {['x', 'y', 'quad'].map(axis => (
+                                        <button
+                                            key={axis}
+                                            onClick={() => updateSymmetry({ mirrorAxis: axis as any })}
+                                            className={`px-2 py-1 text-[10px] rounded border ${settings.symmetry.mirrorAxis === axis ? 'bg-purple-500/30 border-purple-500' : 'border-white/10'}`}
+                                        >
+                                            {axis.toUpperCase()}轴
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {(settings.symmetry.mode === SymmetryMode.Radial || settings.symmetry.mode === SymmetryMode.Spiral) && (
+                                <div className="space-y-1">
+                                    <div className="flex justify-between text-[10px] text-gray-500">
+                                        <span>份数</span>
+                                        <span>{settings.symmetry.segments}</span>
+                                    </div>
                                     <input
-                                        type="range" min="2" max="64"
-                                        value={settings.segments}
-                                        onChange={(e) => setSettings(prev => ({ ...prev, segments: parseInt(e.target.value) }))}
+                                        type="range" min="2" max="32" step="1"
+                                        value={settings.symmetry.segments}
+                                        onChange={(e) => updateSymmetry({ segments: parseInt(e.target.value) })}
                                         className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
                                     />
                                 </div>
                             )}
+                        </div>
+
+                        {/* 4.4 Holo-Pad Visibility */}
+                        <div className="space-y-1 pt-2 border-t border-white/5">
+                            <div className="flex justify-between text-[10px] text-gray-500">
+                                <span>画板透明度 (辅助线)</span>
+                                <span>{(settings.canvasOpacity * 100).toFixed(0)}%</span>
+                            </div>
+                            <input
+                                type="range" min="0" max="1" step="0.1"
+                                value={settings.canvasOpacity}
+                                onChange={(e) => setSettings(prev => ({ ...prev, canvasOpacity: parseFloat(e.target.value) }))}
+                                className="w-full h-1 bg-gray-700 rounded-lg appearance-none"
+                            />
                         </div>
                     </div>
                 </div>

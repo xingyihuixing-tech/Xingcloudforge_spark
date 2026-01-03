@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { DrawSettings, DrawMode, DrawingLayer } from '../types';
+import { DrawSettings, DrawMode, DrawingLayer, BrushType, ProjectionMode, SymmetryMode } from '../types';
 
 // ==================== SHADERS ====================
 
@@ -103,6 +103,86 @@ void main() {
 }
 `;
 
+// --- STARDUST SHADER ---
+const stardustVertexShader = `
+varying float vAlpha;
+attribute float aSize;
+attribute float aAlpha;
+uniform float uTime;
+
+void main() {
+    vAlpha = aAlpha;
+    vec3 pos = position;
+    // Twinkle effect based on position and time
+    float twinkle = sin(uTime * 5.0 + pos.x * 0.1 + pos.y * 0.1) * 0.5 + 0.5;
+    vAlpha *= (0.5 + 0.5 * twinkle);
+    
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = size * aSize * (1.0 + twinkle * 0.5) * (300.0 / -mvPosition.z);
+}
+`;
+
+const stardustFragmentShader = `
+varying float vAlpha;
+uniform vec3 uColor;
+uniform float uOpacity;
+
+void main() {
+    vec2 uv = gl_PointCoord - 0.5;
+    float dist = length(uv);
+    if (dist > 0.5) discard;
+    
+    // Sharp core, glowy edge
+    float core = 1.0 - smoothstep(0.0, 0.1, dist);
+    float glow = 1.0 - smoothstep(0.1, 0.5, dist);
+    float alpha = core + glow * 0.5;
+    
+    gl_FragColor = vec4(uColor + vec3(0.5), alpha * uOpacity * vAlpha); // Add white tint
+}
+`;
+
+// --- GAS CLOUD SHADER ---
+const gasVertexShader = `
+varying float vAlpha;
+varying vec2 vUv;
+attribute float aSize;
+attribute float aAlpha;
+uniform float uTime;
+
+// Noise function (same as ink or simplified)
+// ... (omitted for brevity, utilizing simple displacement)
+
+void main() {
+    vAlpha = aAlpha;
+    vec3 pos = position;
+    
+    // Slow drift
+    pos.x += sin(uTime * 0.2 + pos.y * 0.1) * 2.0;
+
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = size * aSize * 2.0 * (300.0 / -mvPosition.z); // Larger fluffier
+}
+`;
+
+const gasFragmentShader = `
+varying float vAlpha;
+uniform vec3 uColor;
+uniform float uOpacity;
+
+void main() {
+    vec2 uv = gl_PointCoord - 0.5;
+    float dist = length(uv);
+    
+    // Cloud texture procedural
+    float noise = sin(uv.x * 10.0) * sin(uv.y * 10.0); // Placeholder noise
+    float strength = smoothstep(0.5, 0.2, dist);
+    
+    gl_FragColor = vec4(uColor, strength * 0.5 * uOpacity * vAlpha);
+}
+`;
+
 // ==================== INK MANAGER ====================
 
 export class InkManager {
@@ -196,7 +276,8 @@ export class InkManager {
         }
 
         // 2. Update Canvas State
-        const isEnabled = settings.enabled && settings.mode !== DrawMode.Off;
+        // 2. Update Canvas State
+        const isEnabled = settings.enabled;
         if (this.canvasMesh) {
             this.canvasMesh.visible = isEnabled;
             // Scale based on altitude (Visual feedback)
@@ -217,6 +298,165 @@ export class InkManager {
             }
         }
     }
+
+    // ==================== 4. PROJECTION ENGINE (Dimension Crafter) ====================
+
+    public projectStroke(strokeData: Float32Array) {
+        if (!this.settings || !this.activeLayerId) return;
+
+        const layerMesh = this.layerMeshes.get(this.activeLayerId);
+        if (!layerMesh) return;
+
+        // Find the layer data object (we need to update the source data too, ideally)
+        // For now, we update the MESH directly. 
+        // In a real app, we should update the valid source-of-truth in React/State.
+        // But for performance, we update Mesh here and maybe sync back later?
+        // Let's assume 'layerMesh.userData' holds reference or we just append to geometry.
+
+        const geometry = layerMesh.geometry;
+        const positions = geometry.attributes.position.array as Float32Array;
+        const sizes = geometry.attributes.aSize.array as Float32Array;
+        const alphas = geometry.attributes.aAlpha.array as Float32Array;
+
+        // Get current draw range/count to append
+        let count = geometry.drawRange.count;
+        if (count >= positions.length / 3) {
+            console.warn("Layer Full!"); // Should handle resize/rotation buffer
+            return;
+        }
+
+        // Projection Parameters
+        // For now, assume Sphere Projection default
+        // Start radius = Planet Radius (e.g. 100) + Altitude
+        const baseRadius = 100; // Fixed planet radius assumption or get from targetPlanet bounding box
+        const altitude = this.settings.altitude || 10;
+        const radius = baseRadius + altitude;
+
+        // Symmetry Settings
+        const sym = this.settings.symmetry;
+        const segments = (sym.mode === SymmetryMode.Radial || sym.mode === SymmetryMode.Spiral) ? sym.segments : 1;
+        const mirrors = (sym.mode === SymmetryMode.Mirror) ? (sym.mirrorAxis === 'quad' ? 4 : 2) : 1;
+
+        // Total copies = segments * mirrors (simplified, usually exclusive)
+        // If Mirror Mode: 2 or 4 copies.
+        // If Radial Mode: N segments.
+        // If Spiral Mode: N segments with offset.
+
+        // Iterate Stroke Points
+        for (let i = 0; i < strokeData.length; i += 4) {
+            const uRaw = strokeData[i];
+            const vRaw = strokeData[i + 1];
+            const pressure = strokeData[i + 2];
+
+            if (count >= positions.length / 3) break;
+
+            // Generate Symmetry Points
+            const iterations = (sym.mode === SymmetryMode.Mirror) ? mirrors : segments;
+
+            for (let s = 0; s < iterations; s++) {
+                if (count >= positions.length / 3) break;
+
+                let u = uRaw;
+                let v = vRaw;
+
+                // --- APPY SYMMETRY (UV Space Manipulation) ---
+                if (sym.mode === SymmetryMode.Mirror) {
+                    if (sym.mirrorAxis === 'x' && s === 1) u = 1.0 - u;
+                    if (sym.mirrorAxis === 'y' && s === 1) v = 1.0 - v;
+                    if (sym.mirrorAxis === 'quad') {
+                        if (s === 1) u = 1.0 - u;
+                        if (s === 2) v = 1.0 - v;
+                        if (s === 3) { u = 1.0 - u; v = 1.0 - v; }
+                    }
+                }
+
+                // Radial Symmetry is usually rotational in 3D, not just UV flip.
+                // But for "Kaleidoscope" in 2D, it is UV rot.
+                // For "Radial" in 3D (Planet), it usually means repeating the stroke at different Longitudes.
+
+                // --- PROJECTION (UV -> 3D Local) ---
+                let x = 0, y = 0, z = 0;
+
+                // 3D Offset for Spiral
+                let spiralHeight = 0;
+                let spiralScale = 1.0;
+
+                if (sym.mode === SymmetryMode.Spiral) {
+                    // Spiral logic: Shift Altitude or Y per segment?
+                    // User want "Spiral Ring" or "Spiral Projection"?
+                    // Let's assume logic: Rotate Angle + Shift Height
+                    spiralHeight = (s / segments) * (sym.twist || 50); // Vertical offset ?
+                    // Actually, let's keep it simple: Just rotation for now, handled below.
+                }
+
+                switch (layerMesh.userData.projection) {
+                    case ProjectionMode.Ring:
+                        // RING PROJECTION (Top-down disc)
+                        // U = Angle (0..1 -> 0..2PI)
+                        // V = Radius (0..1 -> Inner..Outer)
+                        const angle = (u - 0.5) * Math.PI * 2;
+                        const r = (v * 50) + radius; // Map V to width of ring
+
+                        x = r * Math.cos(angle);
+                        z = r * Math.sin(angle);
+                        y = 0; // Flat ring? Or allow tilt?
+                        break;
+                    case ProjectionMode.Sphere:
+                    default:
+                        // SPHERE PROJECTION (Default)
+                        const theta = (u - 0.5) * Math.PI * 2; // Longitude
+                        const phi = (v - 0.5) * Math.PI;       // Latitude
+
+                        x = radius * Math.cos(phi) * Math.cos(theta);
+                        y = radius * Math.sin(phi);
+                        z = radius * Math.cos(phi) * Math.sin(theta);
+                        break;
+                }
+
+                // --- APPLY 3D SYMMETRY (Rotation) ---
+                if (sym.mode === SymmetryMode.Radial || sym.mode === SymmetryMode.Spiral) {
+                    const angleStep = (Math.PI * 2) / segments;
+                    const rotAngle = s * angleStep;
+
+                    // Rotate (x,z) around Y axis
+                    const cosA = Math.cos(rotAngle);
+                    const sinA = Math.sin(rotAngle);
+                    const rx = x * cosA - z * sinA;
+                    const rz = x * sinA + z * cosA;
+                    x = rx;
+                    z = rz;
+
+                    // Spiral Twist (Height offset or Radius decay?)
+                    if (sym.mode === SymmetryMode.Spiral) {
+                        y += (s * 2.0); // Simple height stack
+                        // x *= (1.0 - s * 0.05); // Decay radius
+                        // z *= (1.0 - s * 0.05);
+                    }
+                }
+
+                positions[count * 3] = x;
+                positions[count * 3 + 1] = y;
+                positions[count * 3 + 2] = z;
+
+                // Size & Alpha
+                const brush = this.settings.brush;
+                sizes[count] = brush.size * (brush.pressureInfluence.size ? pressure : 1.0);
+                alphas[count] = brush.opacity * (brush.pressureInfluence.opacity ? pressure : 1.0);
+
+                count++;
+            }
+        }
+
+        // Update Geometry
+        geometry.setDrawRange(0, count);
+        geometry.attributes.position.needsUpdate = true;
+        geometry.attributes.aSize.needsUpdate = true;
+        geometry.attributes.aAlpha.needsUpdate = true;
+
+        // Persist count? 
+        // layer.count = count; // Need to sync back to settings somehow if we want persistence
+    }
+
 
     private syncLayers(layers: DrawingLayer[]) {
         const layerIds = new Set(layers.map(l => l.id));
@@ -255,9 +495,20 @@ export class InkManager {
                 geometry.setAttribute('aAlpha', new THREE.BufferAttribute(alphas, 1).setUsage(THREE.DynamicDrawUsage));
                 geometry.setDrawRange(0, layer.count);
 
+                let vShader = inkVertexShader;
+                let fShader = inkFragmentShader;
+
+                if (layer.brushType === BrushType.Stardust) {
+                    vShader = stardustVertexShader;
+                    fShader = stardustFragmentShader;
+                } else if (layer.brushType === BrushType.GasCloud) {
+                    vShader = gasVertexShader;
+                    fShader = gasFragmentShader;
+                }
+
                 const material = new THREE.ShaderMaterial({
-                    vertexShader: inkVertexShader,
-                    fragmentShader: inkFragmentShader,
+                    vertexShader: vShader,
+                    fragmentShader: fShader,
                     uniforms: {
                         uTime: { value: 0 },
                         uColor: { value: new THREE.Color(layer.color) },
@@ -273,7 +524,11 @@ export class InkManager {
                 mesh = new THREE.Points(geometry, material);
                 mesh.frustumCulled = false;
                 mesh.renderOrder = 999;
-                mesh.userData = { layerId: layer.id, rotationSpeed: layer.rotationSpeed };
+                mesh.userData = {
+                    layerId: layer.id,
+                    rotationSpeed: layer.rotationSpeed,
+                    projection: layer.projection || ProjectionMode.Sphere
+                };
                 this.layerMeshes.set(layer.id, mesh);
 
                 // Add to scene (not planet, to avoid scale inheritance issues)
