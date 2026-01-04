@@ -8200,7 +8200,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* 几何参数 */}
                               <div className="space-y-1">
                                 <div className="text-xs text-white/50 mb-1">几何</div>
-                                <RangeControl label="轨道半径" value={currentSilkRing.orbitRadius} min={1} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitRadius: v })} />
+                                <RangeControl label="轨道半径" value={currentSilkRing.orbitRadius} min={50} max={1000} step={10} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitRadius: v })} />
                                 <RangeControl label="线环粗细" value={currentSilkRing.thickness} min={0.01} max={0.2} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { thickness: v })} />
                                 <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={2} max={12} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
                                 <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0.1} max={1} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
@@ -8772,17 +8772,18 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* 波动效果 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs" style={{ color: 'var(--ui-secondary)' }}>波动效果</span>
+                                  <span className="text-xs text-gray-400">波动效果</span>
                                   <button
                                     onClick={() => updateContinuousRing(currentContinuousRing.id, { wobbleEnabled: !currentContinuousRing.wobbleEnabled })}
+                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
                                     style={{
                                       background: currentContinuousRing.wobbleEnabled
-                                        ? 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))'
-                                        : 'rgba(255,255,255,0.1)',
+                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
+                                        : 'rgba(120, 120, 120, 0.3)',
+                                      backdropFilter: 'blur(8px)',
                                       border: currentContinuousRing.wobbleEnabled
-                                        ? 'none'
-                                        : '1px solid rgba(255,255,255,0.3)',
-                                      borderRadius: '4px', padding: '2px 8px', fontSize: '9px',
+                                        ? '1px solid var(--ui-secondary)'
+                                        : '1px solid rgba(255,255,255,0.1)',
                                       color: currentContinuousRing.wobbleEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
                                     }}
                                   >
@@ -8801,17 +8802,18 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* Z轴抖动 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs" style={{ color: 'var(--ui-secondary)' }}>Z轴抖动</span>
+                                  <span className="text-xs text-gray-400">Z轴抖动</span>
                                   <button
                                     onClick={() => updateContinuousRing(currentContinuousRing.id, { zDriftEnabled: !currentContinuousRing.zDriftEnabled })}
+                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
                                     style={{
                                       background: currentContinuousRing.zDriftEnabled
-                                        ? 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))'
-                                        : 'rgba(255,255,255,0.1)',
+                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
+                                        : 'rgba(120, 120, 120, 0.3)',
+                                      backdropFilter: 'blur(8px)',
                                       border: currentContinuousRing.zDriftEnabled
-                                        ? 'none'
-                                        : '1px solid rgba(255,255,255,0.3)',
-                                      borderRadius: '4px', padding: '2px 8px', fontSize: '9px',
+                                        ? '1px solid var(--ui-secondary)'
+                                        : '1px solid rgba(255,255,255,0.1)',
                                       color: currentContinuousRing.zDriftEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
                                     }}
                                   >
@@ -8829,17 +8831,18 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* 菲涅尔边缘发光 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs" style={{ color: 'var(--ui-secondary)' }}>边缘发光</span>
+                                  <span className="text-xs text-gray-400">边缘发光</span>
                                   <button
                                     onClick={() => updateContinuousRing(currentContinuousRing.id, { fresnelEnabled: !currentContinuousRing.fresnelEnabled })}
+                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
                                     style={{
                                       background: currentContinuousRing.fresnelEnabled
-                                        ? 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))'
-                                        : 'rgba(255,255,255,0.1)',
+                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
+                                        : 'rgba(120, 120, 120, 0.3)',
+                                      backdropFilter: 'blur(8px)',
                                       border: currentContinuousRing.fresnelEnabled
-                                        ? 'none'
-                                        : '1px solid rgba(255,255,255,0.3)',
-                                      borderRadius: '4px', padding: '2px 8px', fontSize: '9px',
+                                        ? '1px solid var(--ui-secondary)'
+                                        : '1px solid rgba(255,255,255,0.1)',
                                       color: currentContinuousRing.fresnelEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
                                     }}
                                   >
@@ -10570,7 +10573,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* 轨道参数 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>轨道</span>
-                                <RangeControl label="轨道半径" value={currentOrbitingFirefly.absoluteOrbitRadius} min={50} max={500} step={2} onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { absoluteOrbitRadius: v })} />
+                                <RangeControl label="轨道半径" value={currentOrbitingFirefly.absoluteOrbitRadius} min={50} max={1000} step={2} onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { absoluteOrbitRadius: v })} />
                                 <RangeControl label="公转速度" value={currentOrbitingFirefly.orbitSpeed} min={0.1} max={2} step={0.1} onChange={(v) => updateOrbitingFirefly(currentOrbitingFirefly.id, { orbitSpeed: v })} />
                                 <div className="flex items-center gap-2 my-1">
                                   <input type="checkbox" checked={currentOrbitingFirefly.billboardOrbit || false} onChange={(e) => updateOrbitingFirefly(currentOrbitingFirefly.id, { billboardOrbit: e.target.checked })} className="w-4 h-4 rounded bg-gray-600" />
