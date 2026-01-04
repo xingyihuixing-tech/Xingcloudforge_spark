@@ -1274,17 +1274,7 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* AI Assistant Toggle Button - Redesigned Star */}
-        {!showAIPanel && showControls && (
-          <div className="absolute bottom-6 right-6 z-40">
-            <AIStarButton
-              onClick={() => {
-                if (handDataRef.current.isActive) return;
-                setShowAIPanel(true);
-              }}
-            />
-          </div>
-        )}  {/* 星球场景：planet模式或互通模式下显示（互通模式下同时渲染星球和星云） */}
+        {/* 星球场景：planet模式或互通模式下显示（互通模式下同时渲染星球和星云） */}
         {(appMode === 'planet' || overlayMode) && (
           <div className="w-full h-full">
             <PlanetScene
@@ -1315,6 +1305,20 @@ const App: React.FC = () => {
         >
           <span className="text-white text-base font-light">{showControls ? '›' : '‹'}</span>
         </button>
+
+        {/* AI Assistant Toggle Button - Redesigned Star (Relocated) */}
+        {!showAIPanel && showControls && (
+          <div
+            className={`absolute top-24 z-40 transition-all duration-300 ${showControls ? 'right-[324px]' : 'right-1'}`}
+          >
+            <AIStarButton
+              onClick={() => {
+                if (handDataRef.current.isActive) return;
+                setShowAIPanel(true);
+              }}
+            />
+          </div>
+        )}
 
 
 

@@ -861,7 +861,7 @@ export const createDefaultContinuousRing = (id: string, name: string = '环带')
   eccentricity: 0,
   absoluteInnerRadius: 130,
   absoluteOuterRadius: 180,
-  tilt: { axis: 'x', angle: 90, isCustom: false },  // 默认水平
+  tilt: { ...DEFAULT_TILT_SETTINGS },  // 默认使用与粒子环一致的倾斜设置
   orbitAxis: { ...DEFAULT_ORBIT_AXIS_SETTINGS },
   orbitSpeed: 0.2,
   rotationSpeed: 0.1,
@@ -2262,7 +2262,7 @@ export const createDefaultSilkRing = (id: string, name: string = '丝线环'): S
   zDriftScale: 1,
   seed: Math.random() * 1000,
   orbitAxis: DEFAULT_ORBIT_AXIS_SETTINGS,
-  tilt: { axis: 'x', angle: 90, isCustom: false },  // 默认水平
+  tilt: { ...DEFAULT_TILT_SETTINGS },  // 默认使用与粒子环一致的倾斜设置
   flowSpeed: 2.5,
   rotationSpeed: 0.1,
   orbitSpeed: 0,

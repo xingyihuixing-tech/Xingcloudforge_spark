@@ -5241,9 +5241,9 @@ function createEllipticalRingGeometry(innerRadius: number, outerRadius: number, 
 
       // 璊剖��吔�x�孵�靽脲�嚗𡶶�孵�銋䀝誑bFactor
       const x = radius * cos;
-      const y = radius * sin * bFactor;
+      const z = radius * sin * bFactor;
 
-      positions.push(x, y, 0);
+      positions.push(x, 0, z);
       uvs.push(t, i / segments);
     }
   }
@@ -8173,20 +8173,29 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               if (!visible) return;
 
               // �湔鰵���匧�撅�� uniforms
+              // 湔鰵匧撅 uniforms
               const smoothed = smoothedValuesRef.current;
               child.children.forEach(subChild => {
                 if (subChild instanceof THREE.Points) {
                   const material = subChild.material as THREE.ShaderMaterial;
                   if (material.uniforms) {
-                    material.uniforms.uTime.value = time;
+                    // 更新时间 - 所有粒子都有
+                    if (material.uniforms.uTime) {
+                      material.uniforms.uTime.value = time;
+                    }
 
-                    // �见飵��� uniform �湔鰵嚗���殷�蝖桐��见飵�喲𡡒�嗅��塚�
-                    material.uniforms.uExplosion.value = smoothed.explosion;
-                    material.uniforms.uBlackHole.value = smoothed.blackHole;
-                    material.uniforms.uHandActive.value = smoothed.handActive;
-                    material.uniforms.uTwoHandsActive.value = hand.twoHandsActive ? 1 : 0;
+                    // 点缀装饰使用不同的着色器，没有交互相关uniforms，跳过
+                    if (subChild.userData?.isOrnament) {
+                      return;
+                    }
 
-                    // �嗆眾頧刻蕨 uniform �湔鰵
+                    // 交互效果 uniform 更新（仅主粒子环有）
+                    if (material.uniforms.uExplosion) material.uniforms.uExplosion.value = smoothed.explosion;
+                    if (material.uniforms.uBlackHole) material.uniforms.uBlackHole.value = smoothed.blackHole;
+                    if (material.uniforms.uHandActive) material.uniforms.uHandActive.value = smoothed.handActive;
+                    if (material.uniforms.uTwoHandsActive) material.uniforms.uTwoHandsActive.value = hand.twoHandsActive ? 1 : 0;
+
+                    // 手势轨迹 uniform 更新
                     if (material.uniforms.uTrail && material.uniforms.uTrailLength) {
                       const trail = trailRef.current;
                       material.uniforms.uTrailLength.value = trail.length;
@@ -10255,7 +10264,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   uniform float uFlowSpeed;
   uniform float uWobbleFrequency;
   uniform float uWobbleAmplitude;
-  uniform int uWaveType;        // 0=off, 1=sine, 2=noise, 3=triangle, 4=square, 5=sawtooth, 6=pulse, 7=organic, 8=ripple
+  uniform float uWaveType;        // 0=off, 1=sine, 2=noise, 3=triangle, 4=square, 5=sawtooth, 6=pulse, 7=organic
   uniform float uZDriftScale;
   uniform float uSeed;
   
@@ -10273,29 +10282,29 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     return noise(x + seed) * 0.5 + noise(x * 2.0 + seed * 1.5) * 0.3 + noise(x * 4.0 + seed * 2.0) * 0.2;
   }
   
-  // 计算波形值
+  // 计算波形值 (使用浮点比较避免GPU整数uniform兼容性问题)
   float computeWave(float phase, float seed) {
-    if (uWaveType == 1) {
+    if (uWaveType < 1.5) {
       // 正弦波 - 平滑波动
       return sin(phase);
-    } else if (uWaveType == 2) {
+    } else if (uWaveType < 2.5) {
       // 噪声波 - 随机抖动
       return noise(phase * 0.5 + seed * 100.0) * 2.0 - 1.0;
-    } else if (uWaveType == 3) {
+    } else if (uWaveType < 3.5) {
       // 三角波 - 锯齿折返
       float t = mod(phase, 6.28318);
       return abs(t / 3.14159 - 1.0) * 2.0 - 1.0;
-    } else if (uWaveType == 4) {
+    } else if (uWaveType < 4.5) {
       // 方波 - 阶梯
       return step(3.14159, mod(phase, 6.28318)) * 2.0 - 1.0;
-    } else if (uWaveType == 5) {
+    } else if (uWaveType < 5.5) {
       // 锯齿波 - 上升
       return mod(phase, 6.28318) / 3.14159 - 1.0;
-    } else if (uWaveType == 6) {
+    } else if (uWaveType < 6.5) {
       // 脉冲波 - 周期爆发
       float t = mod(phase, 6.28318);
       return exp(-t * 2.0) * sin(t * 8.0);
-    } else if (uWaveType == 7) {
+    } else if (uWaveType < 7.5) {
       // 有机波 - 多层噪声叠加
       return organicNoise(phase * 0.3, seed) * 2.0 - 1.0;
     }
@@ -10314,7 +10323,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     float phase = angle * uWobbleFrequency + uTime * uFlowSpeed;
     
     // 根据波形类型计算波动
-    if (uWaveType > 0) {
+    if (uWaveType > 0.5) {
       float wave = computeWave(phase, uSeed) * uWobbleAmplitude;
       pos += normal * wave;
     }
@@ -11252,9 +11261,9 @@ void main() {
       ringMesh.userData = { ringId: ring.id, type: 'continuous', rotationSpeed: ring.rotationSpeed ?? 0.1 };
       ringMesh.renderOrder = 20;  // �典�雿𤘪瓲敹���擧葡�?
 
-      // 摨𠉛鍂�暹� - 雿輻鍂�啁�TiltSettings
+      // 应用倾斜 - 使用与粒子环一致的TiltSettings（无偏移）
       const tiltAngles = getTiltAngles(ring.tilt);
-      ringMesh.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x + 90); // 雿輻㴓撣行偌撟?
+      ringMesh.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x);
       ringMesh.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
       ringMesh.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
 
