@@ -39,6 +39,9 @@ interface AIAssistantPanelProps {
     onSaveHeadTexture?: (preset: AIGeneratedPreset) => void;
     onSaveBackground?: (preset: AIGeneratedPreset) => void;
     onSaveMagicCircleTexture?: (preset: AIGeneratedPreset) => void;
+    // XingSpark 配置 (Lifted State from App.tsx)
+    xingConfig: XingSparkConfig;
+    onConfigChange: React.Dispatch<React.SetStateAction<XingSparkConfig>>;
 }
 
 interface ChatMessage {
@@ -108,7 +111,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     userId,
     onSaveHeadTexture,
     onSaveBackground,
-    onSaveMagicCircleTexture
+    onSaveMagicCircleTexture,
+    xingConfig,
+    onConfigChange
 }) => {
     // === 模式状态 ===
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
@@ -139,8 +144,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const [savingId, setSavingId] = useState<string | null>(null);
 
     // === XingSpark 设置 ===
-    const [xingConfig, setXingConfig] = useState<XingSparkConfig>(DEFAULT_XING_CONFIG);
-    const [showXingSettings, setShowXingSettings] = useState(false);
+    const [showSettings, setShowSettings] = useState(false);
+    // xingConfig moved to props
     const [logoState, setLogoState] = useState<'idle' | 'blinking'>('idle');
     const lastDoubleClickRef = useRef(0);
     const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -159,7 +164,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             // 闪烁期间再次双击 -> 打开设置
             if (blinkTimeoutRef.current) clearTimeout(blinkTimeoutRef.current);
             setLogoState('idle');
-            setShowXingSettings(true);
+            setShowSettings(true);
         } else {
             // 第一次双击 -> 开始闪烁
             lastDoubleClickRef.current = now;
@@ -180,7 +185,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     if (data.config?.xingSparkConfig) {
                         const loaded = data.config.xingSparkConfig;
                         // 深度合并默认值，确保旧配置缺少的新字段有默认值
-                        setXingConfig({
+                        onConfigChange({
                             ...DEFAULT_XING_CONFIG,
                             ...loaded,
                             gradient: { ...DEFAULT_XING_CONFIG.gradient, ...loaded.gradient },
@@ -192,7 +197,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 })
                 .catch(err => console.error('加载 XingSpark 配置失败:', err));
         }
-    }, [userId]);
+    }, [userId, onConfigChange]);
 
     // 拖拽处理
     const handleDragStart = (e: React.MouseEvent) => {
@@ -206,7 +211,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     useEffect(() => {
         const handleMove = (e: MouseEvent) => {
             if (isDragging) {
-                setPosition({ x: e.clientX - dragStartPos.current.x, y: e.clientY - dragStartPos.current.y });
+                setPosition({ x: e.clientX - dragStartPos.current.x, y: e.clientY - position.y });
             }
         };
         const handleUp = () => setIsDragging(false);
@@ -219,7 +224,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             window.removeEventListener('mousemove', handleMove);
             window.removeEventListener('mouseup', handleUp);
         };
-    }, [isDragging]);
+    }, [isDragging, position.x, position.y]);
 
     // 自动滚动
     useEffect(() => {
@@ -579,11 +584,19 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // 当前选中的模型名称
     const currentChatModelName = CHAT_MODELS.find(m => m.id === chatModel)?.name || 'Chat';
     const currentImageModelName = IMAGE_MODELS.find(m => m.id === imageModel)?.name || 'Image';
+    // 子模式提示词映射
+    const subModePrompts: Record<InspirationSubMode, string> = {
+        particleShape: '生成粒子形状图案...',
+        background: '生成宇宙背景图...',
+        magicCircle: '生成魔法阵图案...',
+        freeChat: '输入任何内容...'
+    };
 
     const saveButtonText: Record<InspirationSubMode, string> = {
         particleShape: '保存到头部',
         background: '保存到背景',
-        magicCircle: '保存到法阵'
+        magicCircle: '保存到法阵',
+        freeChat: '保存预设'
     };
 
     return createPortal(
@@ -657,12 +670,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     </div>
 
                     {/* XingSpark 设置 - 显示在标题栏下方，无额外外框 */}
-                    {showXingSettings && (
+                    {showSettings && (
                         <div className="flex-1 min-h-0">
                             <XingSparkSettingsPanel
                                 config={xingConfig}
-                                setConfig={setXingConfig}
-                                onBack={() => setShowXingSettings(false)}
+                                setConfig={onConfigChange}
+                                onBack={() => setShowSettings(false)}
                                 userId={userId}
                                 onSave={saveToCloud}
                             />
@@ -670,7 +683,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     )}
 
                     {/* 消息列表 - 当设置面板关闭时显示 */}
-                    {!showXingSettings && (
+                    {!showSettings && (
                         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                             {messages.length === 0 && (
                                 <div className="h-full flex items-center justify-center text-white/10 text-sm italic select-none">
@@ -689,7 +702,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                     className="max-h-[160px] rounded-lg shadow-lg cursor-pointer hover:opacity-95 transition-opacity"
                                                     onClick={() => setPreviewImage(msg.imageUrl!)}
                                                 />
-                                                {msg.subMode && (
+                                                {msg.subMode && msg.subMode !== 'freeChat' && (
                                                     <div className="mt-2 text-left">
                                                         <button
                                                             onClick={() => handleSavePreset(msg)}
@@ -752,7 +765,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     )}
 
                     {/* 上传图片预览 和 输入区域 - 当设置面板关闭时显示 */}
-                    {!showXingSettings && (
+                    {!showSettings && (
                         <>
                             {/* 上传图片预览 */}
                             {uploadedImage && (
@@ -894,8 +907,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                                         setShowModelSelector(false);
                                                                     }}
                                                                     className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${inspirationSubMode === 'freeChat'
-                                                                            ? (freeChatModelType === 'chat' && chatModel === m.id ? 'bg-white/10 text-white ring-1 ring-white/30' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
-                                                                            : (chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                        ? (freeChatModelType === 'chat' && chatModel === m.id ? 'bg-white/10 text-white ring-1 ring-white/30' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                        : (chatModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
                                                                         }`}
                                                                 >
                                                                     {m.name}
@@ -915,8 +928,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                                         setShowModelSelector(false);
                                                                     }}
                                                                     className={`text-left text-[10px] py-1.5 px-2 rounded-lg transition-colors ${inspirationSubMode === 'freeChat'
-                                                                            ? (freeChatModelType === 'image' && imageModel === m.id ? 'bg-white/10 text-white ring-1 ring-white/30' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
-                                                                            : (imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                        ? (freeChatModelType === 'image' && imageModel === m.id ? 'bg-white/10 text-white ring-1 ring-white/30' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
+                                                                        : (imageModel === m.id ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/80 hover:bg-white/5')
                                                                         }`}
                                                                 >
                                                                     {m.name}

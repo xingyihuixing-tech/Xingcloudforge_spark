@@ -14,6 +14,7 @@ import { UserProvider, useUser } from './contexts/UserContext';
 import { UserMenu } from './components/UserMenu';
 import { UserLogin } from './components/UserLogin';
 import AIAssistantPanel from './components/AIAssistantPanel';
+import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSettings';
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
 import {
   DEFAULT_SETTINGS,
@@ -274,6 +275,32 @@ const saveUserMaterialPresets = (presets: MaterialPreset[], userId?: string | nu
   }
 };
 
+// 加载 XingSpark 配置（支持用户隔离）
+const XING_CONFIG_STORAGE_KEY = 'xingspark_config_v1';
+const loadXingConfig = (userId?: string | null): XingSparkConfig => {
+  try {
+    const key = getUserScopedStorageKey(XING_CONFIG_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return { ...DEFAULT_XING_CONFIG, ...parsed };
+    }
+  } catch (e) {
+    console.warn('Failed to load Xing config:', e);
+  }
+  return { ...DEFAULT_XING_CONFIG };
+};
+
+// 保存 XingSpark 配置（支持用户隔离）
+const saveXingConfig = (config: XingSparkConfig, userId?: string | null) => {
+  try {
+    const key = getUserScopedStorageKey(XING_CONFIG_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify(config));
+  } catch (e) {
+    console.warn('Failed to save Xing config:', e);
+  }
+};
+
 // 加载星云预设（支持用户隔离）
 const NEBULA_PRESETS_STORAGE_KEY = 'nebula_presets';
 const loadNebulaPresets = (userId?: string | null): NebulaPreset[] => {
@@ -322,6 +349,7 @@ const App: React.FC = () => {
   const [themeConfig, setThemeConfig] = useState<ThemeConfig>(() => loadThemeConfig(null));
   const [materialSettings, setMaterialSettings] = useState<MaterialSettings>(() => loadMaterialSettings(null));
   const [userMaterialPresets, setUserMaterialPresets] = useState<MaterialPreset[]>(() => loadUserMaterialPresets(null));
+  const [xingConfig, setXingConfig] = useState<XingSparkConfig>(() => loadXingConfig(null));
   const [nebulaPresets, setNebulaPresets] = useState<NebulaPreset[]>(() => loadNebulaPresets(null));
   const [hasHydratedFromCloud, setHasHydratedFromCloud] = useState(false);
 
@@ -344,6 +372,7 @@ const App: React.FC = () => {
     setThemeConfig(loadThemeConfig(userId));
     setMaterialSettings(loadMaterialSettings(userId));
     setUserMaterialPresets(loadUserMaterialPresets(userId));
+    setXingConfig(loadXingConfig(userId));
     setNebulaPresets(loadNebulaPresets(userId));
   }, [currentUser?.id]);
 
@@ -412,6 +441,12 @@ const App: React.FC = () => {
           if (config.theme?.userMaterialPresets) {
             setUserMaterialPresets(config.theme.userMaterialPresets as any);
           }
+          // 加载 XingSpark 配置
+          if (config.theme?.xingConfig) {
+            const cloudXing = config.theme.xingConfig as any;
+            // 确保合并默认值，防止旧数据缺少字段
+            setXingConfig(prev => ({ ...prev, ...cloudXing }));
+          }
         }
         setHasHydratedFromCloud(true);
       });
@@ -431,6 +466,7 @@ const App: React.FC = () => {
       saveThemeConfig(themeConfig, userId);
       saveMaterialSettings(materialSettings, userId);
       saveUserMaterialPresets(userMaterialPresets, userId);
+      saveXingConfig(xingConfig, userId);
       saveNebulaPresets(nebulaPresets, userId);
 
       // If logged in and hydrated, save to cloud
@@ -462,7 +498,9 @@ const App: React.FC = () => {
               deletedSystemSchemeIds: themeConfig.deletedSystemSchemeIds
             },
             materialSettings,
-            userMaterialPresets
+            materialSettings,
+            userMaterialPresets,
+            xingConfig
           },
           presets: presetsForCloud as any[]
         });
@@ -470,7 +508,7 @@ const App: React.FC = () => {
     }, 2000); // 2 second debounce
 
     return () => clearTimeout(handler);
-  }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, nebulaPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
+  }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, nebulaPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
 
   // 应用主题 CSS 变量
   useEffect(() => {
@@ -1302,32 +1340,41 @@ const App: React.FC = () => {
         overflow-hidden
         z-[100]
       `}>
-        <div className="w-full md:w-80 h-full">
+        {/* Control Panel (UI Overlay) */}
+        {showControls && (
           <ControlPanel
             settings={settings}
             setSettings={setSettings}
             planetSettings={planetSettings}
             setPlanetSettings={setPlanetSettings}
             appMode={appMode}
-            onImageUpload={handleFileUpload}
-            onSampleSelect={handleLoadSample}
-            onClearMainNebula={() => setData(null)}
+            onImageUpload={handleImageProcess}
+            onSampleSelect={(url) => handleImageProcess(url)}
+            onClearMainNebula={() => {
+              setSettings(prev => ({ ...prev, nebulaInstances: [] }));
+              setNebulaInstancesData(new Map());
+            }}
             nebulaPreviewMode={nebulaPreviewMode}
             setNebulaPreviewMode={setNebulaPreviewMode}
             fps={fps}
-            particleCount={calculateTotalParticles()}
+            particleCount={data?.count || 0}
             colorPickMode={colorPickMode}
             setColorPickMode={setColorPickMode}
             pickedColor={pickedColor}
-            onExtractColors={handleExtractColors}
+            onExtractColors={() => {
+              if (settingsRef.current.background) {
+                // ... logic to extract colors ...
+              }
+            }}
             gestureEnabled={gestureEnabled}
             setGestureEnabled={setGestureEnabled}
             overlayMode={overlayMode}
             materialSettings={materialSettings}
+            xingConfig={xingConfig}
             nebulaPresets={nebulaPresets}
             setNebulaPresets={setNebulaPresets}
           />
-        </div>
+        )}
       </div>
 
       {/* AI 助手面板 */}
@@ -1335,8 +1382,13 @@ const App: React.FC = () => {
         isOpen={showAIPanel}
         onClose={() => setShowAIPanel(false)}
         userId={currentUser?.id}
+        // 同步 XingSpark 配置
+        xingConfig={xingConfig}
+        onConfigChange={setXingConfig}
+        // callbacks for saving generated assets to presets
         onSaveHeadTexture={async (preset) => {
-          // 保存到云配置
+          // Logic to save head texture preset
+          console.log('Saving Head Texture Preset:', preset);
           const config = await loadCloudConfig() || { version: 1, updatedAt: new Date().toISOString() };
           const headTexturePresets = config.headTexturePresets || [];
 

@@ -8165,15 +8165,25 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   }
                 }
               });
-              // �芾蓮嚗𡁶�撅��?Y 頧湔�頧穿�XZ 撟喲𢒰����煾��?Y 頧湛�
-              const rotSpeed = userData.rotationSpeed ?? ring.rotationSpeed ?? 0.3;
-              child.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotSpeed * 0.01);
-              // �祈蓮嚗𡁶��祈蓮頧湔�頧?
+              // 自转：实时计算 tilt（确保 UI 更改立即生效）
+              userData.totalRotation = (userData.totalRotation || 0) + (ring.rotationSpeed ?? 0.3) * 0.01;
+              const tiltAngles = getTiltAngles(ring.tilt ?? DEFAULT_TILT_SETTINGS);
+              child.rotation.set(
+                THREE.MathUtils.degToRad(tiltAngles.x),
+                THREE.MathUtils.degToRad(tiltAngles.y),
+                THREE.MathUtils.degToRad(tiltAngles.z)
+              );
+              // 使用缓存的 Vector3 避免每帧创建
+              if (!userData.selfRotAxis) userData.selfRotAxis = new THREE.Vector3(0, 1, 0);
+              child.rotateOnAxis(userData.selfRotAxis, userData.totalRotation);
+              // 公转（绕核心旋转位置）
               const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
-              child.rotateOnWorldAxis(new THREE.Vector3(orbitAxis.x, orbitAxis.y, orbitAxis.z), ring.orbitSpeed * 0.01);
+              if (!userData.orbitAxisVec) userData.orbitAxisVec = new THREE.Vector3();
+              userData.orbitAxisVec.set(orbitAxis.x, orbitAxis.y, orbitAxis.z);
+              child.rotateOnWorldAxis(userData.orbitAxisVec, ring.orbitSpeed * 0.01);
             }
           } else if (userData.type === 'continuous') {
-            // �臬蒂嚗㇈esh嚗?
+            // 臬蒂嚗㇈esh嚗?
             const ring = planet.rings.continuousRings.find(r => r.id === userData.ringId);
             if (ring && child instanceof THREE.Mesh) {
               // Solo �航��改�憒���?soloId嚗�蘨�曄內 solo ���銝?
@@ -8265,12 +8275,21 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   material.uniforms.uFresnelIntensity.value = ring.fresnelIntensity ?? 1.0;
                 }
               }
-              // �芾蓮嚗𡁶�撅��?Z 頧湔�頧穿��臬蒂�笔��𥕦遣�?XY 撟喲𢒰嚗峕��煾��?Z 頧湛�
-              const rotSpeed = userData.rotationSpeed ?? ring.rotationSpeed ?? 0.1;
-              child.rotateOnAxis(new THREE.Vector3(0, 0, 1), rotSpeed * 0.01);
-              // �祈蓮嚗𡁶��祈蓮頧湔�頧?
+              // 自转：实时计算 tilt（确保 UI 更改立即生效）
+              userData.totalRotation = (userData.totalRotation || 0) + (ring.rotationSpeed ?? 0.1) * 0.01;
+              const tiltAngles = getTiltAngles(ring.tilt ?? DEFAULT_TILT_SETTINGS);
+              child.rotation.set(
+                THREE.MathUtils.degToRad(tiltAngles.x + 90),
+                THREE.MathUtils.degToRad(tiltAngles.y),
+                THREE.MathUtils.degToRad(tiltAngles.z)
+              );
+              if (!userData.selfRotAxis) userData.selfRotAxis = new THREE.Vector3(0, 0, 1);
+              child.rotateOnAxis(userData.selfRotAxis, userData.totalRotation);
+              // 公转
               const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
-              child.rotateOnWorldAxis(new THREE.Vector3(orbitAxis.x, orbitAxis.y, orbitAxis.z), ring.orbitSpeed * 0.01);
+              if (!userData.orbitAxisVec) userData.orbitAxisVec = new THREE.Vector3();
+              userData.orbitAxisVec.set(orbitAxis.x, orbitAxis.y, orbitAxis.z);
+              child.rotateOnWorldAxis(userData.orbitAxisVec, ring.orbitSpeed * 0.01);
             }
           } else if (userData.type === 'silkRing') {
             // 丝线环更新
@@ -10195,6 +10214,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   uniform float uWobbleFrequency;
   uniform float uWobbleAmplitude;
   uniform float uWobbleEnabled;
+  uniform float uWobbleIntensity;
   uniform float uZDriftScale;
   uniform float uSeed;
   
@@ -10214,20 +10234,19 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     // 基础位置
     vec3 pos = position;
     
-    // 波动效果
+    // 计算角度用于波动效果
+    float angle = atan(pos.y, pos.x);
+    
+    // 基础波动效果（始终生效，不依赖网格抖动开关）
+    float wave = sin(angle * uWobbleFrequency + uTime * uFlowSpeed) * uWobbleAmplitude;
+    float zDrift = cos(angle * 3.0 + uTime * 0.5) * uZDriftScale;
+    pos += normal * wave;
+    pos.z += zDrift;
+    
+    // 网格抖动效果（仅当启用时，基于种子的随机噪声）
     if (uWobbleEnabled > 0.5) {
-      // 基于角度和时间的波动
-      float angle = atan(pos.y, pos.x); // 假设圆环在XY平面
-      float radius = length(pos.xy);
-      
-      float wobble = sin(angle * uWobbleFrequency + uTime * uFlowSpeed + uSeed * 10.0) * uWobbleAmplitude;
-      
-      // Z轴漂移 (使圆环立体化)
-      float zDrift = cos(angle * 3.0 + uTime * 0.5) * uZDriftScale;
-      
-      // 应用偏移 (去掉 *0.5 增强效果)
-      pos += normal * wobble;
-      pos.z += zDrift;
+      float jitter = noise(angle * 10.0 + uTime * 5.0 + uSeed * 100.0) * uWobbleIntensity * 10.0;
+      pos += normal * jitter;
     }
     
     vec4 worldPosition = modelMatrix * vec4(pos, 1.0);

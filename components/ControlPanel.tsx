@@ -8250,12 +8250,12 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 </div>
                                 {currentSilkRing.wobbleEnabled && (
                                   <div className="mt-1">
-                                    <RangeControl label="抖动强度" value={currentSilkRing.wobbleIntensity} min={0} max={0.2} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleIntensity: v })} />
+                                    <RangeControl label="抖动强度" value={currentSilkRing.wobbleIntensity} min={0} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleIntensity: v })} />
                                   </div>
                                 )}
                                 {/* 波动参数 */}
-                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={200} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
-                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={1} max={50} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
+                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={100} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
+                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0.1} max={50} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
                                 <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
                                 {/* 流动速度(原动画效果) */}
                                 <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={1} max={30} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
