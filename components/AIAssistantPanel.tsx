@@ -151,11 +151,63 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const blinkTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // === 窗口拖拽 ===
-    // 默认位置居中
-    const [position, setPosition] = useState({ x: window.innerWidth / 2 - 300, y: window.innerHeight / 2 - 300 });
-    const [isDragging, setIsDragging] = useState(false);
-    const dragStartPos = useRef({ x: 0, y: 0 });
+    const panelRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const [savedPosition, setSavedPosition] = useState({ x: window.innerWidth - 650, y: 80 });
+    const dragRef = useRef({
+        isDragging: false,
+        startX: 0,
+        startY: 0,
+        initialLeft: 0,
+        initialTop: 0
+    });
+
+    const handleDragMove = useCallback((e: MouseEvent) => {
+        if (!dragRef.current.isDragging || !panelRef.current) return;
+        const deltaX = e.clientX - dragRef.current.startX;
+        const deltaY = e.clientY - dragRef.current.startY;
+        panelRef.current.style.left = `${dragRef.current.initialLeft + deltaX}px`;
+        panelRef.current.style.top = `${dragRef.current.initialTop + deltaY}px`;
+    }, []);
+
+    const handleDragEnd = useCallback(() => {
+        if (!dragRef.current.isDragging) return;
+        dragRef.current.isDragging = false;
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mouseup', handleDragEnd);
+        if (panelRef.current) {
+            panelRef.current.style.cursor = 'default';
+            const style = window.getComputedStyle(panelRef.current);
+            setSavedPosition({
+                x: parseInt(style.left || '0', 10),
+                y: parseInt(style.top || '0', 10)
+            });
+        }
+    }, [handleDragMove]);
+
+    const handleDragStart = useCallback((e: React.MouseEvent) => {
+        if (!panelRef.current) return;
+        e.preventDefault();
+        const style = window.getComputedStyle(panelRef.current);
+        dragRef.current = {
+            isDragging: true,
+            startX: e.clientX,
+            startY: e.clientY,
+            initialLeft: parseInt(style.left || '0', 10),
+            initialTop: parseInt(style.top || '0', 10)
+        };
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+        panelRef.current.style.cursor = 'grabbing';
+    }, [handleDragMove, handleDragEnd]);
+
+    // 清理事件监听器
+    useEffect(() => {
+        return () => {
+            document.removeEventListener('mousemove', handleDragMove);
+            document.removeEventListener('mouseup', handleDragEnd);
+        };
+    }, [handleDragMove, handleDragEnd]);
 
     // XingSpark 双击处理
     const handleLogoDoubleClick = useCallback(() => {
@@ -199,36 +251,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [userId, onConfigChange]);
 
-    // 拖拽处理
-    const handleDragStart = (e: React.MouseEvent) => {
-        // 允许通过顶部拖拽区域拖拽 (Header)
-        if ((e.target as HTMLElement).closest('.drag-handle')) {
-            setIsDragging(true);
-            dragStartPos.current = { x: e.clientX - position.x, y: e.clientY - position.y };
-        }
-    };
-
+    // 自动滚动到底部
     useEffect(() => {
-        const handleMove = (e: MouseEvent) => {
-            if (isDragging) {
-                setPosition({ x: e.clientX - dragStartPos.current.x, y: e.clientY - position.y });
-            }
-        };
-        const handleUp = () => setIsDragging(false);
-
-        if (isDragging) {
-            window.addEventListener('mousemove', handleMove);
-            window.addEventListener('mouseup', handleUp);
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-        return () => {
-            window.removeEventListener('mousemove', handleMove);
-            window.removeEventListener('mouseup', handleUp);
-        };
-    }, [isDragging, position.x, position.y]);
-
-    // 自动滚动
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     // 自动调整输入框高度
@@ -605,9 +632,10 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             <ImageModal imageUrl={previewImage} onClose={() => setPreviewImage(null)} />
 
             <div
+                ref={panelRef}
                 className="fixed z-[9999]"
-                style={{ left: position.x, top: position.y }}
-                onMouseDown={handleDragStart}
+                style={{ left: savedPosition.x, top: savedPosition.y }}
+            // onMouseDown removed from here to prevent dragging by content
             >
                 <div
                     className="w-[600px] ai-panel-container"
@@ -637,7 +665,26 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     <div className="ai-panel-border-right" style={{ background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
 
                     {/* 标题栏 (Drag Handle) */}
-                    <div className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5">
+                    <div
+                        className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5"
+                        onMouseDown={(e) => {
+                            // 仅当点击标题栏区域时才允许拖拽
+                            // 这里我们假设整个外部容器作为 wrapper，实际的 drag handle 在内部
+                            // 但为了保持原有行为，我们可以在这里做检查，或者让 handleDragStart 传递给内部
+                            // 目前代码结构是 outer div 绑定了 mouseDown
+                            // 检查 target 是否由于 drag handle 触发?
+                            // 原代码是 outer div 有 onMouseDown={handleDragStart}
+                            // 以及 internal drag handle div 没有任何 mouse down?
+                            // 让我们看 line 640: drag-handle
+                            // 实际上为了更好的 UX，应该把 onMouseDown 移到 drag-handle 上，
+                            // 但为了最少改动且符合原逻辑，我们保持在 outer div 上，但可能需要判断
+                            // 不过原代码似乎就是整个面板可拖拽？不，通常是 title bar.
+                            // 让我们看原代码 640 行: <div className="drag-handle ... cursor-move">
+                            // 如果原代码是 line 610 绑定 onMouseDown，那说明整个面板都能拖？
+                            // 让我们保持原样。
+                            handleDragStart(e);
+                        }}
+                    >
                         <div className="flex items-center gap-2 relative">
                             {/* XingSpark Logo with Dynamic Gradient - 使用 CSS 类名触发动画 */}
                             {(() => {

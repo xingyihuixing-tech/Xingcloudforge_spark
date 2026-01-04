@@ -8879,28 +8879,27 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* 波动效果 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs text-gray-400">波动效果</span>
-                                  <button
-                                    onClick={() => updateContinuousRing(currentContinuousRing.id, { wobbleEnabled: !currentContinuousRing.wobbleEnabled })}
-                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
-                                    style={{
-                                      background: currentContinuousRing.wobbleEnabled
-                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
-                                        : 'rgba(120, 120, 120, 0.3)',
-                                      backdropFilter: 'blur(8px)',
-                                      border: currentContinuousRing.wobbleEnabled
-                                        ? '1px solid var(--ui-secondary)'
-                                        : '1px solid rgba(255,255,255,0.1)',
-                                      color: currentContinuousRing.wobbleEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
-                                    }}
+                                  <span className="text-xs text-gray-400">波形类型</span>
+                                  <select
+                                    value={currentContinuousRing.waveType || 'off'}
+                                    onChange={(e) => updateContinuousRing(currentContinuousRing.id, { waveType: e.target.value as any })}
+                                    className="px-2 py-0.5 text-[10px] rounded bg-gray-700/50 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500"
+                                    style={{ minWidth: '80px' }}
                                   >
-                                    {currentContinuousRing.wobbleEnabled ? '已启用' : '已禁用'}
-                                  </button>
+                                    <option value="off">关闭</option>
+                                    <option value="sine">正弦波</option>
+                                    <option value="noise">噪声波</option>
+                                    <option value="triangle">三角波</option>
+                                    <option value="square">方波</option>
+                                    <option value="sawtooth">锯齿波</option>
+                                    <option value="pulse">脉冲波</option>
+                                    <option value="organic">有机波</option>
+                                  </select>
                                 </div>
-                                {currentContinuousRing.wobbleEnabled && (
+                                {currentContinuousRing.waveType && currentContinuousRing.waveType !== 'off' && (
                                   <div className="space-y-1">
-                                    <RangeControl label="波动频率" value={currentContinuousRing.wobbleFrequency ?? 6} min={1} max={20} step={1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleFrequency: v })} />
-                                    <RangeControl label="波动幅度" value={currentContinuousRing.wobbleAmplitude ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleAmplitude: v })} />
+                                    <RangeControl label="波动频率" value={currentContinuousRing.wobbleFrequency ?? 6} min={1} max={80} step={0.5} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleFrequency: v })} />
+                                    <RangeControl label="波动幅度" value={currentContinuousRing.wobbleAmplitude ?? 0.5} min={0} max={3} step={0.05} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleAmplitude: v })} />
                                     <RangeControl label="波动速度" value={currentContinuousRing.wobbleSpeed ?? 1.0} min={0.1} max={2} step={0.1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleSpeed: v })} />
                                   </div>
                                 )}

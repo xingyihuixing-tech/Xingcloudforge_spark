@@ -1127,10 +1127,10 @@ export interface ContinuousRingSettings {
   tubeRadius?: number;              // 管状截面半径 1-50（垂直模式下生效）
 
   // ===== 几何波动效果 =====
-  wobbleEnabled?: boolean;          // 波动开关
-  wobbleFrequency?: number;         // 波动频率 1-20
-  wobbleAmplitude?: number;         // 波动幅度 0-1
-  wobbleSpeed?: number;             // 波动速度 0.1-2
+  waveType?: SilkWaveType;            // 波形类型（复用 SilkRing 的波形）
+  wobbleFrequency?: number;           // 波动频率 1-80
+  wobbleAmplitude?: number;           // 波动幅度 0-3
+  wobbleSpeed?: number;               // 波动速度 0.1-2
 
   // ===== Z轴抖动效果 =====
   zDriftEnabled?: boolean;          // Z轴抖动开关

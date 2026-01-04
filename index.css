@@ -13,8 +13,8 @@
 .xingspark-logo-title {
   /* 基础排版 - 解决截断问题 & 字体增大 */
   font-family: var(--xing-font), cursive;
-  font-size: 3rem;
-  /* 增大字号 */
+  font-size: 2.5rem;
+  /* 3rem -> 2.5rem (微调增大) */
   line-height: 1.5;
   padding: 0.2em 0;
   display: inline-block;

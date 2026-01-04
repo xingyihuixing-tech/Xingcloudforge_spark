@@ -13,6 +13,7 @@ import GestureHandler from './components/GestureHandler';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { UserMenu } from './components/UserMenu';
 import { UserLogin } from './components/UserLogin';
+import { AIStarButton } from './components/AIStarButton'; // Added import
 import AIAssistantPanel from './components/AIAssistantPanel';
 import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSettings';
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
@@ -1272,7 +1273,18 @@ const App: React.FC = () => {
             />
           </div>
         )}
-        {/* 星球场景：planet模式或互通模式下显示（互通模式下同时渲染星球和星云） */}
+
+        {/* AI Assistant Toggle Button - Redesigned Star */}
+        {!showAIPanel && showControls && (
+          <div className="absolute bottom-6 right-6 z-40">
+            <AIStarButton
+              onClick={() => {
+                if (handDataRef.current.isActive) return;
+                setShowAIPanel(true);
+              }}
+            />
+          </div>
+        )}  {/* 星球场景：planet模式或互通模式下显示（互通模式下同时渲染星球和星云） */}
         {(appMode === 'planet' || overlayMode) && (
           <div className="w-full h-full">
             <PlanetScene
@@ -1304,12 +1316,7 @@ const App: React.FC = () => {
           <span className="text-white text-base font-light">{showControls ? '›' : '‹'}</span>
         </button>
 
-        {/* AI Star Button - Static Shape, Spinning Gradient */}
-        <button
-          onClick={() => setShowAIPanel(!showAIPanel)}
-          className={`absolute top-24 z-[199] w-10 h-10 ai-star-container transition-all duration-300 ${showControls ? 'right-[318px]' : 'right-[1px]'}`}
-          title="打开 AI 助手"
-        />
+
 
         {/* 视角信息面板 - 仅星球模式显示 - 玻璃样式 */}
         {appMode === 'planet' && cameraInfo && (

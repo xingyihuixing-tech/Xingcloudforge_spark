@@ -1,72 +1,45 @@
-﻿[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+﻿
+> version-1@0.0.0 build
+> npm run generate && vite build
+
+
+> version-1@0.0.0 generate
+> node scripts/generate-textures.cjs
+
+馃攳 鎵弿娉曢樀璐村浘鐩綍...
+
+  鉁?cute: 16 寮犲浘鐗?  鉁?magic_circle: 23 寮犲浘鐗?  鉁?star: 16 寮犲浘鐗?  鉁?rings: 11 寮犲浘鐗?  鉁?myth: 23 寮犲浘鐗?
+鉁?瀹屾垚锛佸叡 89 寮犺创鍥?馃搫 閰嶇疆宸插啓鍏? src/generated/magic-textures.json
+
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
 transforming...
-[32m鉁?[39m 23 modules transformed.
-node.exe : [31m鉁?[39m Build 
-failed in 406ms
+[32m鉁?[39m 1746 modules transformed.
+rendering chunks...
+computing gzip size...
+[2mdist/[22m[32mindex.html                 [39m[1m[2m    2.33 kB[22m[1m[22m[2m 鈹?gzip:   0.99 kB[22m
+[2mdist/[22m[35massets/index-NGwb4o1M.css  [39m[1m[2m   11.61 kB[22m[1m[22m[2m 鈹?gzip:   3.18 kB[22m
+[2mdist/[22m[36massets/index-nuePPhxG.js   [39m[1m[33m1,895.52 kB[39m[22m[2m 鈹?gzip: 489.50 kB[22m
+node.exe : [33m
 所在位置 行:1 字符: 1
-+ & "D:\programmenew/node.exe
-" "D:\programmenew/node_modul
-es/npm/bin/np ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-~~~~~~~~~~~~~
-    + CategoryInfo           
-   : NotSpecified: ([31m鉁?  
-  [39m Build failed in 406   
- ms:String) [], RemoteExc    
-eption
-    + FullyQualifiedErrorId  
-   : NativeCommandError
++ & "D:\programmenew/node.exe" "D:\prog
+rammenew/node_modules/npm/bin/np ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpeci 
+   fied: ([33m:String) [], RemoteExc  
+  eption
+    + FullyQualifiedErrorId : NativeCo 
+   mmandError
  
-[31merror during build:
-[31m[vite:esbuild] Transform
- failed with 1 error:
-D:/chrome涓嬭浇/version-1/compon
-ents/ControlPanel.tsx:1244:16
-: ERROR: Unterminated regular
- expression[31m
-file: [36mD:/chrome涓嬭浇/versi
-on-1/components/ControlPanel.
-tsx:1244:16[31m
-[33m
-[33mUnterminated regular exp
-ression[33m
-1242|              </div>
-1243|            </div>
-1244|            </div>
-   |                  ^
-1245|          )}
-1246|      </div>
-[31m
-    at failureErrorWithLog (D
-:\chrome涓嬭浇\version-1\node_mo
-dules\esbuild\lib\main.js:146
-7:15)
-    at D:\chrome涓嬭浇\version-1
-\node_modules\esbuild\lib\mai
-n.js:736:50
-    at responseCallbacks.<com
-puted> (D:\chrome涓嬭浇\version-
-1\node_modules\esbuild\lib\ma
-in.js:603:9)
-    at handleIncomingPacket (
-D:\chrome涓嬭浇\version-1\node_m
-odules\esbuild\lib\main.js:65
-8:12)
-    at Socket.readFromStdout 
-(D:\chrome涓嬭浇\version-1\node_
-modules\esbuild\lib\main.js:5
-81:7)
-    at Socket.emit (node:even
-ts:508:28)
-    at addChunk (node:interna
-l/streams/readable:559:12)
-    at readableAddChunkPushBy
-teMode (node:internal/streams
-/readable:510:3)
-    at Readable.push (node:in
-ternal/streams/readable:390:5
-)
-    at Pipe.onStreamRead (nod
-e:internal/stream_base_common
-s:189:23)[39m
+(!) Some chunks are larger than 500 kB 
+after minification. Consider:
+- Using dynamic import() to code-split 
+the application
+- Use build.rollupOptions.output.manual
+Chunks to improve chunking: https://rol
+lupjs.org/configuration-options/#output
+-manualchunks
+- Adjust chunk size limit for this warn
+ing via build.chunkSizeWarningLimit.[3
+9m
+[32m鉁?built in 5.32s[39m

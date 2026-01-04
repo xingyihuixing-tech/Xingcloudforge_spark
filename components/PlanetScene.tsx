@@ -2423,13 +2423,48 @@ varying vec3 vNormal;
 varying vec3 vViewPosition;
 
 uniform float uTime;
-uniform float uWobbleEnabled;
+uniform int uWaveType;           // 0=off, 1=sine, 2=noise, 3=triangle, 4=square, 5=sawtooth, 6=pulse, 7=organic
 uniform float uWobbleFrequency;
 uniform float uWobbleAmplitude;
 uniform float uWobbleSpeed;
 uniform float uZDriftEnabled;
 uniform float uZDriftScale;
 uniform float uZDriftSpeed;
+
+// 伪随机函数
+float hash(float n) { return fract(sin(n) * 43758.5453123); }
+float noise(float x) {
+  float i = floor(x);
+  float f = fract(x);
+  float u = f * f * (3.0 - 2.0 * f);
+  return mix(hash(i), hash(i + 1.0), u);
+}
+
+float organicNoise(float x) {
+  return noise(x) * 0.5 + noise(x * 2.0) * 0.3 + noise(x * 4.0) * 0.2;
+}
+
+// 计算波形值
+float computeWave(float phase) {
+  if (uWaveType == 1) {
+    return sin(phase);
+  } else if (uWaveType == 2) {
+    return noise(phase * 0.5) * 2.0 - 1.0;
+  } else if (uWaveType == 3) {
+    float t = mod(phase, 6.28318);
+    return abs(t / 3.14159 - 1.0) * 2.0 - 1.0;
+  } else if (uWaveType == 4) {
+    return step(3.14159, mod(phase, 6.28318)) * 2.0 - 1.0;
+  } else if (uWaveType == 5) {
+    return mod(phase, 6.28318) / 3.14159 - 1.0;
+  } else if (uWaveType == 6) {
+    float t = mod(phase, 6.28318);
+    return exp(-t * 2.0) * sin(t * 8.0);
+  } else if (uWaveType == 7) {
+    return organicNoise(phase * 0.3) * 2.0 - 1.0;
+  }
+  return 0.0;
+}
 
 void main() {
   vUv = uv;
@@ -2440,9 +2475,10 @@ void main() {
   float angle = atan(pos.y, pos.x);
   float radius = length(pos.xy);
   
-  // 波动效果 - 沿径向方向偏移（更明显的放大缩小环的局部半径）
-  if (uWobbleEnabled > 0.5 && radius > 0.001) {
-    float wobble = sin(angle * uWobbleFrequency + uTime * uWobbleSpeed) * uWobbleAmplitude;
+  // 波动效果 - 基于波形类型
+  if (uWaveType > 0 && radius > 0.001) {
+    float phase = angle * uWobbleFrequency + uTime * uWobbleSpeed;
+    float wobble = computeWave(phase) * uWobbleAmplitude;
     vec2 radialDir = normalize(pos.xy);
     pos.xy += radialDir * wobble * radius * 0.15;
   }
@@ -8256,10 +8292,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   material.uniforms.uStreakBrightness.value = streak?.brightness ?? 1.5;
                 }
                 // 波动效果 uniforms 动态更新
-                if (material.uniforms.uWobbleEnabled !== undefined) {
-                  material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
+                if (material.uniforms.uWaveType !== undefined) {
+                  const waveTypeIdx = { 'off': 0, 'sine': 1, 'noise': 2, 'triangle': 3, 'square': 4, 'sawtooth': 5, 'pulse': 6, 'organic': 7 }[ring.waveType || 'off'] ?? 0;
+                  material.uniforms.uWaveType.value = waveTypeIdx;
                   material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 6;
-                  material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.3;
+                  material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.5;
                   material.uniforms.uWobbleSpeed.value = ring.wobbleSpeed ?? 1.0;
                 }
                 // Z轴抖动 uniforms 动态更新
@@ -8275,15 +8312,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   material.uniforms.uFresnelIntensity.value = ring.fresnelIntensity ?? 1.0;
                 }
               }
-              // 自转：实时计算 tilt（确保 UI 更改立即生效）
+              // 自转：实时计算 tilt（确保 UI 更改立即生效）- 与粒子环一致
               userData.totalRotation = (userData.totalRotation || 0) + (ring.rotationSpeed ?? 0.1) * 0.01;
               const tiltAngles = getTiltAngles(ring.tilt ?? DEFAULT_TILT_SETTINGS);
               child.rotation.set(
-                THREE.MathUtils.degToRad(tiltAngles.x + 90),
+                THREE.MathUtils.degToRad(tiltAngles.x),
                 THREE.MathUtils.degToRad(tiltAngles.y),
                 THREE.MathUtils.degToRad(tiltAngles.z)
               );
-              if (!userData.selfRotAxis) userData.selfRotAxis = new THREE.Vector3(0, 0, 1);
+              if (!userData.selfRotAxis) userData.selfRotAxis = new THREE.Vector3(0, 1, 0);
               child.rotateOnAxis(userData.selfRotAxis, userData.totalRotation);
               // 公转
               const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
@@ -8382,9 +8419,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                 strandMesh.rotateZ(strandUserData.totalSelfRotation);
               });
 
-              // Group 只负责 tilt 和公转，不再做自转
+              // Group 只负责 tilt 和公转 - 与粒子环一致（无偏移）
               const tiltAngles = getTiltAngles(ring.tilt ?? DEFAULT_TILT_SETTINGS);
-              const baseTiltX = THREE.MathUtils.degToRad(tiltAngles.x + 90);
+              const baseTiltX = THREE.MathUtils.degToRad(tiltAngles.x);
               const baseTiltY = THREE.MathUtils.degToRad(tiltAngles.y);
               const baseTiltZ = THREE.MathUtils.degToRad(tiltAngles.z);
               child.rotation.set(baseTiltX, baseTiltY, baseTiltZ);
@@ -10578,9 +10615,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       group.add(mesh);
     }
 
-    // 应用 tilt 变换（TorusGeometry 默认在 XY 平面，+90度才能水平）
+    // 应用 tilt 变换 - 与粒子环一致（无偏移）
     const tiltAngles = getTiltAngles(settings.tilt ?? DEFAULT_TILT_SETTINGS);
-    group.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x + 90);
+    group.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x);
     group.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
     group.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
 
@@ -11192,9 +11229,9 @@ void main() {
           uStreakDirection: { value: ring.streakMode?.flowDirection === 'ccw' ? -1.0 : 1.0 },
           uStreakBrightness: { value: ring.streakMode?.brightness ?? 1.5 },
           // 波动效果 uniforms
-          uWobbleEnabled: { value: ring.wobbleEnabled ? 1.0 : 0.0 },
+          uWaveType: { value: getWaveTypeIndex(ring.waveType) },
           uWobbleFrequency: { value: ring.wobbleFrequency ?? 6 },
-          uWobbleAmplitude: { value: ring.wobbleAmplitude ?? 0.3 },
+          uWobbleAmplitude: { value: ring.wobbleAmplitude ?? 0.5 },
           uWobbleSpeed: { value: ring.wobbleSpeed ?? 1.0 },
           // Z轴抖动 uniforms
           uZDriftEnabled: { value: ring.zDriftEnabled ? 1.0 : 0.0 },
