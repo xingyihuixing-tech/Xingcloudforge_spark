@@ -8315,10 +8315,10 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   if (material.uniforms.uFresnelPower) material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.5;
                   if (material.uniforms.uStrandDensity) material.uniforms.uStrandDensity.value = ring.strandDensity ?? 30;
 
-                  // 波形波动
+                  // 波形波动 (使用缓存的 WAVE_TYPE_MAP)
                   if (material.uniforms.uWaveType) {
-                    const waveTypeMap: Record<string, number> = { 'off': 0, 'sine': 1, 'noise': 2, 'triangle': 3, 'square': 4, 'sawtooth': 5, 'pulse': 6, 'organic': 7, 'ripple': 8 };
-                    material.uniforms.uWaveType.value = waveTypeMap[ring.waveType || 'sine'] ?? 1;
+                    const waveTypeIdx = { 'off': 0, 'sine': 1, 'noise': 2, 'triangle': 3, 'square': 4, 'sawtooth': 5, 'pulse': 6, 'organic': 7 }[ring.waveType || 'sine'] ?? 1;
+                    material.uniforms.uWaveType.value = waveTypeIdx;
                   }
                   if (material.uniforms.uWobbleFrequency) material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 6;
                   if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 2;
@@ -8368,29 +8368,31 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                     material.uniforms.uProceduralAxis.value = axisMap[colorSettings?.proceduralAxis || 'radial'] ?? 3;
                   }
                 }
+
+                // 每条丝带独立自转（在自己的平面上旋转）
+                const strandUserData = strandMesh.userData;
+                const rotSpeed = ring.rotationSpeed ?? 0.1;
+                strandUserData.totalSelfRotation = (strandUserData.totalSelfRotation || 0) + rotSpeed * 0.01;
+
+                // 恢复初始偏移旋转
+                if (strandUserData.initialRotation) {
+                  strandMesh.rotation.copy(strandUserData.initialRotation);
+                }
+                // 在局部 Z 轴上累加自转
+                strandMesh.rotateZ(strandUserData.totalSelfRotation);
               });
 
-              // 自转（使用累计旋转，保持 tilt 设置）
-              const rotSpeed = ring.rotationSpeed ?? 0.1;
-              userData.totalSelfRotation = (userData.totalSelfRotation || 0) + rotSpeed * 0.01;
-
-              // 实时计算 tilt（确保 UI 更改立即生效）
+              // Group 只负责 tilt 和公转，不再做自转
               const tiltAngles = getTiltAngles(ring.tilt ?? DEFAULT_TILT_SETTINGS);
               const baseTiltX = THREE.MathUtils.degToRad(tiltAngles.x + 90);
               const baseTiltY = THREE.MathUtils.degToRad(tiltAngles.y);
               const baseTiltZ = THREE.MathUtils.degToRad(tiltAngles.z);
-
-              // 先重置到 tilt 基础旋转，再应用自转
               child.rotation.set(baseTiltX, baseTiltY, baseTiltZ);
-              // 使用缓存的 Vector3 避免每帧创建新对象
-              if (!userData.selfRotAxis) userData.selfRotAxis = new THREE.Vector3(0, 0, 1);
-              child.rotateOnAxis(userData.selfRotAxis, userData.totalSelfRotation);
 
               // 公转（绕核心旋转位置）
               const orbitSpeed = ring.orbitSpeed ?? 0;
               if (orbitSpeed !== 0) {
                 const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
-                // 使用缓存的 Vector3 避免每帧创建新对象
                 if (!userData.orbitAxisVec) userData.orbitAxisVec = new THREE.Vector3();
                 userData.orbitAxisVec.set(orbitAxis.x, orbitAxis.y, orbitAxis.z);
                 child.rotateOnWorldAxis(userData.orbitAxisVec, orbitSpeed * 0.01);
@@ -10259,10 +10261,6 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     } else if (uWaveType == 7) {
       // 有机波 - 多层噪声叠加
       return organicNoise(phase * 0.3, seed) * 2.0 - 1.0;
-    } else if (uWaveType == 8) {
-      // 涟漪波 - 向外扩散
-      float r = length(vec2(cos(phase * 0.3), sin(phase * 0.3)));
-      return sin(phase + r * 10.0) * exp(-r * 0.5);
     }
     return 0.0;
   }
@@ -10468,7 +10466,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     return geometry;
   }
 
-  // 波形类型转换为 shader int 值
+  // 波形类型转换为 shader int 值 (缓存避免每帧创建)
   const WAVE_TYPE_MAP: Record<string, number> = {
     'off': 0,
     'sine': 1,
@@ -10477,8 +10475,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     'square': 4,
     'sawtooth': 5,
     'pulse': 6,
-    'organic': 7,
-    'ripple': 8
+    'organic': 7
   };
   function getWaveTypeIndex(waveType: string | undefined): number {
     return WAVE_TYPE_MAP[waveType || 'sine'] ?? 1;
@@ -10571,7 +10568,13 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         mesh.rotation.z = THREE.MathUtils.degToRad(axisOffsetZ);
       }
 
-      mesh.userData = { strandIndex: i, totalStrands: clusterCount };
+      // 保存初始旋转供动画循环恢复使用
+      mesh.userData = {
+        strandIndex: i,
+        totalStrands: clusterCount,
+        initialRotation: mesh.rotation.clone(),
+        totalSelfRotation: 0
+      };
       group.add(mesh);
     }
 

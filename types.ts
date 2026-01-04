@@ -1356,8 +1356,7 @@ export type SilkWaveType =
   | 'square'     // 方波 - 阶梯波动
   | 'sawtooth'   // 锯齿波 - 上升波动
   | 'pulse'      // 脉冲波 - 周期爆发
-  | 'organic'    // 有机波 - 多层噪声叠加
-  | 'ripple';    // 涟漪波 - 向外扩散
+  | 'organic';   // 有机波 - 多层噪声叠加
 
 export interface SilkRingSettings {
   id: string;

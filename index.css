@@ -11,18 +11,17 @@
 
 /* XingSpark Logo 通用标题样式 (核心视觉) */
 .xingspark-logo-title {
-  /* 基础排版 - 解决截断问题 */
+  /* 基础排版 - 解决截断问题 & 字体增大 */
   font-family: var(--xing-font), cursive;
+  font-size: 3rem;
+  /* 增大字号 */
   line-height: 1.5;
-  /* 防止削头去尾 */
   padding: 0.2em 0;
   display: inline-block;
-  /* 确保 padding 生效 */
 
   /* 核心视觉 */
   background-image: var(--xing-bg-image);
-  /* 由 JS 动态构建 */
-  background-size: 200% auto;
+  background-size: var(--xing-bg-size, 200% auto);
 
   background-clip: text;
   -webkit-background-clip: text;
@@ -31,6 +30,26 @@
   /* 动态效果 */
   filter: var(--xing-filter) drop-shadow(var(--xing-glow));
   animation: xing-flow var(--xing-speed) linear infinite;
+
+  cursor: pointer;
+  user-select: none;
+}
+
+/* 闪烁动画类 */
+.xingspark-logo-title.blinking {
+  animation: xing-flow var(--xing-speed) linear infinite, logo-blink 0.5s ease-in-out infinite;
+}
+
+@keyframes logo-blink {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
 }
 
 @keyframes xing-flow {
@@ -597,6 +616,8 @@ canvas {
   -webkit-backdrop-filter: blur(6px);
   border-radius: 16px;
   overflow: hidden;
+  /* 禁止 geometry transition 以防止拖拽抖动 */
+  transition: opacity 0.3s ease, border-color 0.3s ease, background 0.3s ease;
 }
 
 /* Top Border Segment */
@@ -732,4 +753,48 @@ canvas {
 .ai-input-container.refining {
   border-color: rgba(113, 176, 255, 0.5);
   animation: glowFlowDual 6s ease-in-out infinite;
+}
+
+/* AI Star Button (Redesigned) */
+.ai-star-btn {
+  /* 基础尺寸 (缩小一圈) */
+  width: 2.5rem;
+  /* w-10 */
+  height: 2.5rem;
+  /* h-10 */
+
+  /* 核心视觉: 流动波浪渐变 */
+  /* 使用 App.tsx 注入的全局变量 */
+  background-image: var(--xing-bg-image);
+  background-size: var(--xing-bg-size, 200% auto);
+  animation: xing-flow var(--xing-speed) linear infinite, breathe 3s ease-in-out infinite;
+
+  /* 核心形状: 圆钝四芒星遮罩 */
+  /* SVG Path: M12 2 C14 8 16 10 22 12 C16 14 14 16 12 22 C10 16 8 14 2 12 C8 10 10 8 12 2 Z (简化版四芒星) */
+  /* 使用更加圆润的 Path: M12 0 C14 8 16 8 24 12 C16 16 14 16 12 24 C10 16 8 16 0 12 C8 8 10 8 12 0 Z */
+  /* 这里的 Data URI 是一个圆润的四芒星形状 */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2C14.5 9 15 9.5 22 12C15 14.5 14.5 15 12 22C9.5 15 9 14.5 2 12C9 9.5 9.5 9 12 2Z' fill='black'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12 2C14.5 9 15 9.5 22 12C15 14.5 14.5 15 12 22C9.5 15 9 14.5 2 12C9 9.5 9.5 9 12 2Z' fill='black'/%3E%3C/svg%3E");
+
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+
+  /* 光晕 (填充光晕) */
+  /* 使用 drop-shadow 投射与主色一致的光晕 */
+  filter: drop-shadow(0 0 8px var(--xing-c1)) drop-shadow(0 0 16px var(--xing-c2));
+
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.ai-star-btn:hover {
+  transform: scale(1.1) rotate(5deg);
+}
+
+.ai-star-btn:active {
+  transform: scale(0.95);
 }

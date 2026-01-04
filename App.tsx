@@ -551,17 +551,18 @@ const App: React.FC = () => {
     const colorStr = colors.join(', ');
     const { type, angle } = xingConfig.gradient;
 
+    // Default background size
+    let bgSize = '200% auto';
+
     // 为了支持 flow 效果，我们需要让背景足够大 (200%) 并且包含重复颜色
-    // 构建一个循环颜色串: c1, c2, c3, c4, c1, c2 ... (平滑连接)
-    // 简单的做法是把 colors 复制一遍连接起来
     const flowColors = [...colors, ...colors].join(', ');
 
     if (type === 'conic') {
-      // 漩涡模式: conic-gradient 通常不支持 background-position 移动产生的流动
-      // 但我们可以用 conic-gradient 做静态背景，或者尝试旋转
-      // 这里的策略: 使用 conic，且中心点根据 flow 移动? 不太容易
-      // 简单策略: 使用重复的 conic 扇形
-      bgImage = `conic-gradient(from ${angle}deg at 50% 50%, ${colorStr}, ${colors[0]})`;
+      // 漩涡模式修复: 
+      // 1. 必须使用 100% 100% 尺寸，否则中心点偏离
+      // 2. 必须使用 repeating-conic-gradient 才能做出好的条纹感
+      bgImage = `repeating-conic-gradient(from ${angle}deg at 50% 50%, ${colorStr}, ${colors[0]})`;
+      bgSize = '100% 100%';
     } else if (type === 'radial') {
       // 放射模式
       bgImage = `radial-gradient(circle at 50% 50%, ${flowColors})`;
@@ -570,19 +571,19 @@ const App: React.FC = () => {
       bgImage = `linear-gradient(${angle}deg, ${flowColors})`;
     }
     root.style.setProperty('--xing-bg-image', bgImage);
+    root.style.setProperty('--xing-bg-size', bgSize);
 
     // 4. 动画速度
-    // 用户界面: 1(慢) -> 10(快)
-    // CSS duration: 大(慢) -> 小(快)
-    // 映射算法: speed 1 => 20s, speed 10 => 2s
     const speed = xingConfig.gradient.flowSpeed;
     const duration = Math.max(2, 22 - (speed * 2));
     root.style.setProperty('--xing-speed', `${duration}s`);
 
-    // 5. 发光效果
+    // 5. 发光效果 (Boosted)
     const glow = xingConfig.gradient.glow;
+    // 增加系数 * 1.5 增强可见度
+    const intensity = glow.intensity * 1.5;
     const glowValue = glow.enabled
-      ? `0 0 ${glow.intensity}px ${glow.color === 'auto' ? colors[0] : glow.color}`
+      ? `0 0 ${intensity}px ${glow.color === 'auto' ? colors[0] : glow.color}`
       : 'none';
     root.style.setProperty('--xing-glow', glowValue);
 

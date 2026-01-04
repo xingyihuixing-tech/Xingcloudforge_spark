@@ -8241,12 +8241,11 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                     <option value="sawtooth">锯齿波</option>
                                     <option value="pulse">脉冲波</option>
                                     <option value="organic">有机波</option>
-                                    <option value="ripple">涟漪波</option>
                                   </select>
                                 </div>
                                 {currentSilkRing.waveType !== 'off' && (
                                   <>
-                                    <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={100} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
+                                    <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={90} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
                                     <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0.1} max={50} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
                                   </>
                                 )}
