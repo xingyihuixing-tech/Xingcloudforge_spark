@@ -7054,7 +7054,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         const vKey = v?.enabled ? `${v.armCount}:${v.twist}:${v.rotationSpeed}:${v.radialDirection}:${v.radialSpeed}:${v.hardness}:${v.colors?.join(',')}` : '';
         return `${r.id}:${r.enabled}:${r.eccentricity}:${r.absoluteInnerRadius}:${r.absoluteOuterRadius}:${r.color}:${r.opacity}:${r.opacityGradient}:${r.opacityGradientStrength ?? 0.5}:${r.brightness}:${r.tilt?.axis}:${r.tilt?.angle}:${r.rotationSpeed}:${r.orbitAxis?.axis}:${r.orbitAxis?.angle}:${g?.enabled}:${gKey}:${v?.enabled}:${vKey}`;
       }).join('|') + `/sr:${p.rings.silkRingsEnabled}|` + (p.rings.silkRings || []).map(r => {
-        return `${r.id}:${r.enabled}:${r.orbitRadius}:${r.thickness}:${r.tubeSegments}:${r.radialSegments}`;
+        return `${r.id}:${r.enabled}:${r.orbitRadius}:${r.thickness}:${r.tubeSegments}:${r.radialSegments}:${r.clusterCount ?? 1}:${r.axisSpread ?? 0}:${r.radiusSpread ?? 0}`;
       }).join('|');
       // 颲𣂼���㺭 - �舀�憭帋葵嚗���怠�撅�撘��?
       // 瘜冽�嚗𡁶�摮𣂼𪃾撠���冽����堆�emissionRangeMin/Max, fadeOutStrength蝑㚁��典𢆡�餃儐�臭葉摰墧𧒄霂餃�嚗䔶���閬�𦆮�?geometryKey
@@ -8309,8 +8309,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   if (material.uniforms.uTime) material.uniforms.uTime.value = time;
 
                   // 基础属性
-                  const clusterCount = ring.clusterCount || 1;
-                  if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = (ring.opacity ?? 0.8) / Math.sqrt(clusterCount);
+                  if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = ring.opacity ?? 0.8;
                   if (material.uniforms.uEmissive) material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
                   if (material.uniforms.uFlowSpeed) material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
                   if (material.uniforms.uFresnelPower) material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.5;
@@ -10474,7 +10473,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         fragmentShader: silkRingFragmentShader,
         uniforms: {
           uTime: { value: 0 },
-          uOpacity: { value: (settings.opacity ?? 0.8) / Math.sqrt(clusterCount) }, // 多条时降低透明度
+          uOpacity: { value: settings.opacity ?? 0.8 },
           uEmissive: { value: settings.emissive ?? 1.0 },
           uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
           uStrandDensity: { value: settings.strandDensity ?? 30.0 },

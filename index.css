@@ -1,5 +1,14 @@
 /* Global styles - most styles are in index.html inline or via Tailwind */
 
+/* 注册自定义字体 - 楷体 (解决 iPad 不显示问题) */
+@font-face {
+  font-family: 'CustomKaiTi';
+  src: url('/fonts/kaiti.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /* ===== 莫兰迪主题变量 ===== */
 
 /* ... (Existing variables kept as is) ... */

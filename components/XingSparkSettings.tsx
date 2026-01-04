@@ -94,7 +94,7 @@ export const DEFAULT_XING_CONFIG: XingSparkConfig = {
         borderOpacity: 0.5
     },
     theme: {
-        chatFont: 'default',
+        chatFont: 'kaiti',
         chatFontSize: 14
     },
     userMsg: {
@@ -124,7 +124,7 @@ const FONT_OPTIONS = [
 // 对话字体选项
 const CHAT_FONT_OPTIONS = [
     { id: 'default', name: '默认', family: '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, system-ui, sans-serif' },
-    { id: 'kaiti', name: '楷体', family: '"Kaiti SC", "Kaiti TC", "DFKai-SB", "KaiTi", "楷体", "STKaiti", "华文楷体", serif' },
+    { id: 'kaiti', name: '楷体', family: '"CustomKaiTi", "Kaiti SC", "Kaiti TC", "DFKai-SB", "KaiTi", "楷体", "STKaiti", "华文楷体", serif' },
     { id: 'xingkai', name: '行楷', family: '"Xingkai SC", "STXingkai", "行楷", "华文行楷", "Kaiti SC", cursive' },
     { id: 'songti', name: '宋体', family: '"Songti SC", "Songti TC", "STSong", "SimSun", "宋体", "Noto Serif SC", serif' },
 ];
