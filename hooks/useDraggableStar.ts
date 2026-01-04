@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState } from 'react';
-import { XingSparkConfig } from './components/XingSparkSettings';
+import { XingSparkConfig } from '../components/XingSparkSettings';
 
 /**
  * Hook for Draggable Star Logic (Direct DOM Manipulation)
