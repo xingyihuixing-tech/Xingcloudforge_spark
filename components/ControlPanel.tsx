@@ -8175,73 +8175,116 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                           {currentSilkRing && (
                             <div className="mt-2 space-y-2">
-                              {/* 预设选择器 */}
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs text-white/60 w-16">预设</span>
-                                <select
-                                  value={currentSilkRing.preset || 'custom'}
-                                  onChange={(e) => {
-                                    const preset = SILK_RING_PRESETS[e.target.value];
-                                    if (preset) {
-                                      updateSilkRing(currentSilkRing.id, { ...preset, preset: e.target.value });
-                                    }
-                                  }}
-                                  className="flex-1 text-xs bg-black/30 border border-white/10 rounded px-2 py-1 text-white"
-                                >
-                                  <option value="dataStream">数据流</option>
-                                  <option value="silkRibbon">丝绸飘带</option>
-                                  <option value="energyFiber">能量纤维</option>
-                                  <option value="nebulaSilk">星云丝带</option>
-                                  <option value="fireSilk">烈焰丝绸</option>
-                                  <option value="custom">自定义</option>
-                                </select>
+                              {/* 预设选择 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs text-gray-400">预设风格</span>
+                                  <select
+                                    value={currentSilkRing.preset || 'custom'}
+                                    onChange={(e) => {
+                                      const preset = SILK_RING_PRESETS[e.target.value];
+                                      if (preset) {
+                                        updateSilkRing(currentSilkRing.id, { ...preset, preset: e.target.value });
+                                      }
+                                    }}
+                                    className="text-xs bg-black/30 border border-white/10 rounded px-2 py-1 text-white"
+                                  >
+                                    <option value="dataStream">数据流</option>
+                                    <option value="silkRibbon">丝绸飘带</option>
+                                    <option value="energyFiber">能量纤维</option>
+                                    <option value="nebulaSilk">星云丝带</option>
+                                    <option value="fireSilk">烈焰丝绸</option>
+                                    <option value="custom">自定义</option>
+                                  </select>
+                                </div>
                               </div>
 
                               {/* 几何参数 */}
-                              <div className="space-y-1">
-                                <div className="text-xs text-white/50 mb-1">几何</div>
-                                <RangeControl label="轨道半径" value={currentSilkRing.orbitRadius} min={50} max={1000} step={10} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitRadius: v })} />
-                                <RangeControl label="线环粗细" value={currentSilkRing.thickness} min={0.01} max={0.2} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { thickness: v })} />
-                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={2} max={12} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
-                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0.1} max={1} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
-                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={0} max={1} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs text-gray-400 block mb-2">几何参数</span>
+                                <RangeControl label="轨道半径" value={currentSilkRing.orbitRadius} min={60} max={1000} step={10} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitRadius: v })} />
+                                <RangeControl label="线环粗细" value={currentSilkRing.thickness} min={0.01} max={1} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { thickness: v })} />
                               </div>
 
-                              {/* 动画参数 */}
-                              <div className="space-y-1">
-                                <div className="text-xs text-white/50 mb-1">动画</div>
-                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={0.5} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
-                                <RangeControl label="自转速度" value={currentSilkRing.rotationSpeed} min={0} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { rotationSpeed: v })} />
-                                <div className="flex items-center gap-2">
-                                  <input type="checkbox" checked={currentSilkRing.wobbleEnabled} onChange={(e) => updateSilkRing(currentSilkRing.id, { wobbleEnabled: e.target.checked })} />
-                                  <span className="text-xs text-white/70">网格抖动</span>
-                                  {currentSilkRing.wobbleEnabled && (
-                                    <RangeControl label="强度" value={currentSilkRing.wobbleIntensity} min={0} max={0.1} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleIntensity: v })} />
-                                  )}
+                              {/* 形态变化 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs text-gray-400 block mb-2">形态波动</span>
+                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={50} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
+                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
+                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={0} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
+                              </div>
+
+                              {/* 动画效果 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs text-gray-400 block mb-2">动画效果</span>
+                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={0} max={10} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
+                                <RangeControl label="自转速度" value={currentSilkRing.rotationSpeed} min={0} max={2} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { rotationSpeed: v })} />
+                                {/* 网格抖动 */}
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className="text-xs text-gray-400">网格抖动</span>
+                                  <button
+                                    onClick={() => updateSilkRing(currentSilkRing.id, { wobbleEnabled: !currentSilkRing.wobbleEnabled })}
+                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
+                                    style={{
+                                      background: currentSilkRing.wobbleEnabled
+                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
+                                        : 'rgba(120, 120, 120, 0.3)',
+                                      backdropFilter: 'blur(8px)',
+                                      border: currentSilkRing.wobbleEnabled
+                                        ? '1px solid var(--ui-secondary)'
+                                        : '1px solid rgba(255,255,255,0.1)',
+                                      color: currentSilkRing.wobbleEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
+                                    }}
+                                  >
+                                    {currentSilkRing.wobbleEnabled ? '已启用' : '已禁用'}
+                                  </button>
                                 </div>
+                                {currentSilkRing.wobbleEnabled && (
+                                  <div className="mt-1">
+                                    <RangeControl label="抖动强度" value={currentSilkRing.wobbleIntensity} min={0} max={0.2} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleIntensity: v })} />
+                                  </div>
+                                )}
                               </div>
 
                               {/* 视觉效果 */}
-                              <div className="space-y-1">
-                                <div className="text-xs text-white/50 mb-1">视觉</div>
-                                <RangeControl label="丝线密度" value={currentSilkRing.strandDensity} min={10} max={50} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { strandDensity: v })} />
-                                <div className="flex items-center gap-2">
-                                  <input type="checkbox" checked={currentSilkRing.sparkleEnabled} onChange={(e) => updateSilkRing(currentSilkRing.id, { sparkleEnabled: e.target.checked })} />
-                                  <span className="text-xs text-white/70">闪点效果</span>
-                                  {currentSilkRing.sparkleEnabled && (
-                                    <RangeControl label="阈值" value={currentSilkRing.sparkleThreshold} min={0.9} max={0.99} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { sparkleThreshold: v })} />
-                                  )}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs text-gray-400 block mb-2">视觉效果</span>
+                                <RangeControl label="丝线密度" value={currentSilkRing.strandDensity} min={5} max={100} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { strandDensity: v })} />
+                                {/* 闪点效果 */}
+                                <div className="flex items-center justify-between mt-2">
+                                  <span className="text-xs text-gray-400">闪点效果</span>
+                                  <button
+                                    onClick={() => updateSilkRing(currentSilkRing.id, { sparkleEnabled: !currentSilkRing.sparkleEnabled })}
+                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
+                                    style={{
+                                      background: currentSilkRing.sparkleEnabled
+                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
+                                        : 'rgba(120, 120, 120, 0.3)',
+                                      backdropFilter: 'blur(8px)',
+                                      border: currentSilkRing.sparkleEnabled
+                                        ? '1px solid var(--ui-secondary)'
+                                        : '1px solid rgba(255,255,255,0.1)',
+                                      color: currentSilkRing.sparkleEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
+                                    }}
+                                  >
+                                    {currentSilkRing.sparkleEnabled ? '已启用' : '已禁用'}
+                                  </button>
                                 </div>
-                                <RangeControl label="菲涅尔指数" value={currentSilkRing.fresnelPower} min={1} max={5} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { fresnelPower: v })} />
-                                <RangeControl label="透明度" value={currentSilkRing.opacity} min={0.3} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { opacity: v })} />
-                                <RangeControl label="发光强度" value={currentSilkRing.emissive} min={0.5} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { emissive: v })} />
-                                <RangeControl label="Bloom增强" value={currentSilkRing.bloomBoost} min={0} max={2} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { bloomBoost: v })} />
+                                {currentSilkRing.sparkleEnabled && (
+                                  <div className="mt-1">
+                                    <RangeControl label="闪点阈值" value={currentSilkRing.sparkleThreshold} min={0.8} max={0.99} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { sparkleThreshold: v })} />
+                                  </div>
+                                )}
+                                <RangeControl label="菲涅尔指数" value={currentSilkRing.fresnelPower} min={0.5} max={8} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { fresnelPower: v })} />
+                                <RangeControl label="透明度" value={currentSilkRing.opacity} min={0.1} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { opacity: v })} />
+                                <RangeControl label="发光强度" value={currentSilkRing.emissive} min={0} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { emissive: v })} />
+                                <RangeControl label="Bloom增强" value={currentSilkRing.bloomBoost} min={0} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { bloomBoost: v })} />
                               </div>
 
                               {/* 颜色模式 */}
-                              <div className="space-y-1">
-                                <div className="text-xs text-white/50 mb-1">颜色</div>
-                                <div className="flex gap-1">
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs text-gray-400 block mb-2">颜色设置</span>
+                                <div className="flex gap-1 mb-2">
                                   {[
                                     { key: 'none', label: '单色' },
                                     { key: 'twoColor', label: '双色' },
@@ -8258,7 +8301,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                   ))}
                                 </div>
                                 {/* 颜色输入 */}
-                                <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-2">
                                   <span className="text-xs text-white/60 w-12">颜色1</span>
                                   <input
                                     type="color"

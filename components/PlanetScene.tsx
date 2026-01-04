@@ -8288,8 +8288,13 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                 if (material.uniforms.uEmissive) material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
                 if (material.uniforms.uFlowSpeed) material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
                 if (material.uniforms.uWobbleEnabled) material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
-                if (material.uniforms.uWobbleFrequency) material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 5.0;
-                if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.1;
+                if (material.uniforms.uWobbleIntensity) material.uniforms.uWobbleIntensity.value = ring.wobbleIntensity ?? 0.05;
+                // 闪点效果即时更新
+                if (material.uniforms.uSparkleEnabled) material.uniforms.uSparkleEnabled.value = ring.sparkleEnabled ? 1.0 : 0.0;
+                if (material.uniforms.uSparkleThreshold) material.uniforms.uSparkleThreshold.value = ring.sparkleThreshold ?? 0.95;
+                if (material.uniforms.uFresnelPower) material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.5;
+                if (material.uniforms.uStrandDensity) material.uniforms.uStrandDensity.value = ring.strandDensity ?? 30;
+                if (material.uniforms.uBloomBoost) material.uniforms.uBloomBoost.value = ring.bloomBoost ?? 1.0;
 
                 // 更新颜色
                 if (ring.color?.baseColor && material.uniforms.uColor) {

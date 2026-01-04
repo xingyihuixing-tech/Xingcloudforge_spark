@@ -2139,7 +2139,7 @@ export const SILK_RING_PRESETS: Record<string, Partial<SilkRingSettings>> = {
   // 数据流 (Data Stream) - 科技感
   dataStream: {
     preset: 'dataStream',
-    orbitRadius: 1.3,
+    orbitRadius: 130,
     thickness: 0.05,
     wobbleFrequency: 6,
     wobbleAmplitude: 0.4,
@@ -2157,7 +2157,7 @@ export const SILK_RING_PRESETS: Record<string, Partial<SilkRingSettings>> = {
   // 丝绸飘带 (Silk Ribbon) - 柔和飘逸
   silkRibbon: {
     preset: 'silkRibbon',
-    orbitRadius: 1.5,
+    orbitRadius: 150,
     thickness: 0.08,
     wobbleFrequency: 4,
     wobbleAmplitude: 0.6,
@@ -2175,7 +2175,7 @@ export const SILK_RING_PRESETS: Record<string, Partial<SilkRingSettings>> = {
   // 能量纤维 (Energy Fiber) - 强烈流动
   energyFiber: {
     preset: 'energyFiber',
-    orbitRadius: 1.2,
+    orbitRadius: 120,
     thickness: 0.03,
     wobbleFrequency: 8,
     wobbleAmplitude: 0.3,
@@ -2193,7 +2193,7 @@ export const SILK_RING_PRESETS: Record<string, Partial<SilkRingSettings>> = {
   // 星云丝带 (Nebula Silk) - 柔和混色
   nebulaSilk: {
     preset: 'nebulaSilk',
-    orbitRadius: 1.6,
+    orbitRadius: 160,
     thickness: 0.1,
     wobbleFrequency: 3,
     wobbleAmplitude: 0.8,
@@ -2211,7 +2211,7 @@ export const SILK_RING_PRESETS: Record<string, Partial<SilkRingSettings>> = {
   // 烈焰丝绸 (Fire Silk) - 炽热流动
   fireSilk: {
     preset: 'fireSilk',
-    orbitRadius: 1.25,
+    orbitRadius: 125,
     thickness: 0.06,
     wobbleFrequency: 5,
     wobbleAmplitude: 0.5,
@@ -2229,7 +2229,7 @@ export const SILK_RING_PRESETS: Record<string, Partial<SilkRingSettings>> = {
   // 自定义
   custom: {
     preset: 'custom',
-    orbitRadius: 1.4,
+    orbitRadius: 140,
     thickness: 0.05,
     wobbleFrequency: 6,
     wobbleAmplitude: 0.4,
@@ -2252,7 +2252,7 @@ export const createDefaultSilkRing = (id: string, name: string = '丝线环'): S
   name,
   enabled: true,
   preset: 'dataStream',
-  orbitRadius: 1.3,
+  orbitRadius: 130,
   thickness: 0.05,
   tubeSegments: 100,
   radialSegments: 6,
