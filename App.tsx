@@ -944,6 +944,15 @@ const App: React.FC = () => {
 
 
 
+  // 处理AI生成完成回调，触发星星闪烁效果
+  const handleGenerationComplete = useCallback(() => {
+    if (!showAIPanel) {
+      // 如果AI面板关闭，触发星星闪烁提示用户
+      setStarBlinking(true);
+      setTimeout(() => setStarBlinking(false), 3000);
+    }
+  }, [showAIPanel]);
+
   // 提取主色调
   const handleExtractColors = async () => {
     // 优先使用主星云图片，否则尝试使用当前选中的星云实例图片
