@@ -757,11 +757,11 @@ canvas {
 
 /* AI Star Button (Redesigned) */
 .ai-star-btn {
-  /* 基础尺寸 (缩小一圈) */
-  width: 2.5rem;
-  /* w-10 */
-  height: 2.5rem;
-  /* h-10 */
+  /* 基础尺寸 (缩小一圈: 2.5rem -> 1.5rem) */
+  width: 1.5rem;
+  /* w-6 */
+  height: 1.5rem;
+  /* h-6 */
 
   /* 核心视觉: 流动波浪渐变 */
   /* 使用 App.tsx 注入的全局变量 */

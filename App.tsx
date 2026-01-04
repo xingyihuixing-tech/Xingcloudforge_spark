@@ -99,7 +99,7 @@ const savePlanetSceneSettings = (settings: PlanetSceneSettings, userId?: string 
 };
 
 // Load settings from localStorage（支持用户隔离）
-const loadSavedSettings = (userId?: string | null): AppSettings => {
+const loadSavedSettings = (userId: string | null): AppSettings => {
   try {
     const key = getUserScopedStorageKey(SETTINGS_STORAGE_KEY, userId);
     const saved = localStorage.getItem(key);
@@ -936,12 +936,7 @@ const App: React.FC = () => {
     handleImageProcess(file);
   };
 
-  // AI 生成完成回调
-  const handleGenerationComplete = useCallback(() => {
-    console.log('AI Generation Completed');
-    // 如果需要，可以在这里刷新预设列表
-    // loadCloudConfig().then(...)
-  }, []);
+
 
   // 提取主色调
   const handleExtractColors = async () => {
@@ -1314,15 +1309,26 @@ const App: React.FC = () => {
           <span className="text-white text-base font-light">{showControls ? '›' : '‹'}</span>
         </button>
 
-        {/* AI Assistant Toggle Button - Redesigned Star (Relocated) */}
-        {!showAIPanel && showControls && (
+        {/* AI Assistant Toggle Button - Redesigned Star (Relocated & Draggable) */}
+        {showControls && (
           <div
-            className={`absolute top-24 z-40 transition-all duration-300 ${showControls ? 'right-[324px]' : 'right-1'}`}
+            ref={starRef}
+            className={`absolute z-40 transition-all duration-300 cursor-grab ${starBlinking ? 'animate-bounce' : ''} ${!isStarCustomPos
+              ? (showControls ? 'right-[324px]' : 'right-1')
+              : ''
+              } ${!isStarCustomPos ? 'top-24' : ''
+              }`}
+            style={
+              isStarCustomPos ? { transition: 'none' } : {}
+            }
+            onMouseDown={handleStarDragStart}
           >
             <AIStarButton
+              className={starBlinking ? 'ring-4 ring-yellow-400 ring-opacity-50' : ''}
               onClick={() => {
                 if (handDataRef.current.isActive) return;
                 setShowAIPanel(true);
+                setStarBlinking(false);
               }}
             />
           </div>

@@ -8185,8 +8185,45 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                       material.uniforms.uTime.value = time;
                     }
 
-                    // 点缀装饰使用不同的着色器，没有交互相关uniforms，跳过
+                    // 点缀装饰：实时更新所有相关uniforms
                     if (subChild.userData?.isOrnament) {
+                      const orn = ring.ornament;
+                      if (orn && material.uniforms) {
+                        // 外观参数实时更新
+                        if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = orn.opacity ?? 1.0;
+                        if (material.uniforms.uBrightness) material.uniforms.uBrightness.value = orn.brightness ?? 1.5;
+                        if (material.uniforms.uGlowIntensity) material.uniforms.uGlowIntensity.value = orn.glowIntensity ?? 0.8;
+                        if (material.uniforms.uBaseSize) material.uniforms.uBaseSize.value = orn.baseSize ?? 15;
+                        // 形状参数实时更新
+                        if (material.uniforms.uShape) {
+                          const styleToShape: Record<string, number> = {
+                            'plain': 0, 'flare': 1, 'spark': 2, 'texture': 3,
+                            'star': 4, 'snowflake': 5, 'heart': 6, 'crescent': 7,
+                            'crossGlow': 8, 'sakura': 9, 'sun': 10, 'sun2': 11,
+                            'plum': 12, 'lily': 13, 'lotus': 14, 'prism': 15
+                          };
+                          material.uniforms.uShape.value = styleToShape[orn.style] ?? 0;
+                        }
+                        if (material.uniforms.uFlareLeaves) material.uniforms.uFlareLeaves.value = orn.flareLeaves ?? 4;
+                        if (material.uniforms.uFlareWidth) material.uniforms.uFlareWidth.value = orn.flareWidth ?? 0.5;
+                        // 脉冲参数实时更新
+                        if (material.uniforms.uPulseEnabled) material.uniforms.uPulseEnabled.value = orn.pulseEnabled ? 1.0 : 0.0;
+                        if (material.uniforms.uPulseSpeed) material.uniforms.uPulseSpeed.value = orn.pulseSpeed ?? 1.0;
+                        if (material.uniforms.uPulseIntensity) material.uniforms.uPulseIntensity.value = orn.pulseIntensity ?? 0.3;
+                        if (material.uniforms.uPulseSync) material.uniforms.uPulseSync.value = orn.pulseSync ? 1.0 : 0.0;
+                        // 颜色实时更新
+                        if (material.uniforms.uColor) {
+                          let ornColor: [number, number, number] = [1, 1, 1];
+                          if (orn.colorMode === 'inherit') {
+                            ornColor = hexToRgb(ring.color);
+                          } else if (orn.colorMode === 'solid') {
+                            ornColor = hexToRgb(orn.color || '#ffffff');
+                          }
+                          material.uniforms.uColor.value.set(ornColor[0], ornColor[1], ornColor[2]);
+                        }
+                        // 更新公转速度倍率（存储在userData中）
+                        subChild.userData.orbitSpeedMultiplier = orn.orbitSpeedMultiplier ?? 1.0;
+                      }
                       return;
                     }
 
@@ -11031,62 +11068,218 @@ void main() {
 
 #define PI 3.14159265359
 
-            // 星芒形状
-            float flareShape(vec2 uv, float leaves, float width) {
-              float angle = atan(uv.y, uv.x);
-              float r = length(uv);
-              float flare = abs(cos(angle * leaves * 0.5));
+// 星芒形状 (1)
+float flareShape(vec2 uv, float leaves, float width) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float flare = abs(cos(angle * leaves * 0.5));
   flare = pow(flare, 1.0 / width);
   return smoothstep(1.0, 0.0, r / (flare * 0.5 + 0.1));
 }
 
-            // 星形
-            float starShape(vec2 uv) {
-              float angle = atan(uv.y, uv.x);
-              float r = length(uv);
-              float star = abs(cos(angle * 2.5));
+// 火花形状 (2)
+float sparkShape(vec2 uv) {
+  float r = length(uv);
+  float angle = atan(uv.y, uv.x);
+  float rays = pow(abs(sin(angle * 4.0)), 3.0) * 0.3;
+  return smoothstep(0.5 + rays, 0.0, r);
+}
+
+// 星形 (4)
+float starShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float star = abs(cos(angle * 2.5));
   star = 0.3 + star * 0.4;
   return smoothstep(star, star - 0.1, r);
 }
 
-            // 火花形状
-            float sparkShape(vec2 uv) {
-              float r = length(uv);
-              float angle = atan(uv.y, uv.x);
-              float rays = pow(abs(sin(angle * 4.0)), 3.0) * 0.3;
-  return smoothstep(0.5 + rays, 0.0, r);
+// 雪花形状 (5)
+float snowflakeShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float branches = 6.0;
+  float arm = abs(cos(angle * branches * 0.5));
+  arm = pow(arm, 0.3);
+  float cross = max(abs(uv.x), abs(uv.y));
+  float diagonal = max(abs(uv.x + uv.y), abs(uv.x - uv.y)) * 0.707;
+  float pattern = min(cross, diagonal);
+  float shape = smoothstep(0.08, 0.02, pattern) * smoothstep(0.8, 0.2, r);
+  shape += smoothstep(0.6, 0.0, r / (arm * 0.4 + 0.1)) * 0.6;
+  return clamp(shape, 0.0, 1.0);
+}
+
+// 爱心形状 (6)
+float heartShape(vec2 uv) {
+  uv.y -= 0.25;
+  uv.x = abs(uv.x);
+  float a = atan(uv.x, uv.y) / PI;
+  float r = length(uv);
+  float h = abs(a);
+  float d = (13.0 * h - 22.0 * h * h + 10.0 * h * h * h) / (6.0 - 5.0 * h);
+  return smoothstep(d * 0.5 + 0.1, d * 0.5 - 0.05, r);
+}
+
+// 月牙形状 (7)
+float crescentShape(vec2 uv) {
+  float r1 = length(uv);
+  float r2 = length(uv - vec2(0.3, 0.0));
+  float crescent = smoothstep(0.6, 0.5, r1) - smoothstep(0.55, 0.45, r2);
+  return clamp(crescent, 0.0, 1.0);
+}
+
+// 十字光芒 (8)
+float crossGlowShape(vec2 uv) {
+  float cross = min(abs(uv.x), abs(uv.y));
+  float r = length(uv);
+  float glow = smoothstep(0.15, 0.0, cross) * smoothstep(1.0, 0.0, r);
+  float core = smoothstep(0.2, 0.0, r);
+  return glow + core;
+}
+
+// 樱花形状 (9)
+float sakuraShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float petals = 5.0;
+  float petal = abs(cos(angle * petals * 0.5));
+  petal = pow(petal, 0.6);
+  float notch = 1.0 - smoothstep(0.0, 0.15, abs(mod(angle + PI / petals, PI * 2.0 / petals) - PI / petals));
+  float shape = smoothstep(0.5, 0.2, r / (petal * 0.4 + 0.2)) * (1.0 - notch * 0.3);
+  return clamp(shape, 0.0, 1.0);
+}
+
+// 太阳形状 (10)
+float sunShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float rays = abs(sin(angle * 8.0));
+  rays = pow(rays, 2.0);
+  float core = smoothstep(0.35, 0.25, r);
+  float corona = smoothstep(0.7, 0.3, r / (rays * 0.3 + 0.4)) * 0.6;
+  return core + corona;
+}
+
+// 太阳2形状 (11)
+float sun2Shape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float rays = abs(cos(angle * 12.0));
+  rays = pow(rays, 4.0);
+  float core = smoothstep(0.25, 0.15, r);
+  float beam = smoothstep(0.9, 0.0, r / (rays * 0.5 + 0.15)) * 0.7;
+  return core + beam;
+}
+
+// 梅花形状 (12)
+float plumShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float petals = 5.0;
+  float petal = abs(cos(angle * petals * 0.5));
+  petal = pow(petal, 0.4);
+  float shape = smoothstep(0.55, 0.2, r / (petal * 0.35 + 0.25));
+  float core = smoothstep(0.15, 0.05, r);
+  return shape + core * 0.5;
+}
+
+// 百合形状 (13)
+float lilyShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float petals = 6.0;
+  float petal = abs(cos(angle * petals * 0.5));
+  petal = pow(petal, 0.5);
+  float elongate = 1.0 + 0.3 * cos(angle * petals);
+  float shape = smoothstep(0.6 * elongate, 0.2, r / (petal * 0.4 + 0.2));
+  return clamp(shape, 0.0, 1.0);
+}
+
+// 莲花形状 (14)
+float lotusShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float layer1 = abs(cos(angle * 4.0));
+  float layer2 = abs(cos(angle * 4.0 + PI * 0.25));
+  layer1 = pow(layer1, 0.5);
+  layer2 = pow(layer2, 0.5);
+  float shape1 = smoothstep(0.55, 0.25, r / (layer1 * 0.35 + 0.25));
+  float shape2 = smoothstep(0.45, 0.2, r / (layer2 * 0.3 + 0.2)) * 0.7;
+  return shape1 + shape2;
+}
+
+// 棱镜晶体 (15)
+float prismShape(vec2 uv) {
+  float angle = atan(uv.y, uv.x);
+  float r = length(uv);
+  float sides = 6.0;
+  float a = mod(angle, PI * 2.0 / sides) - PI / sides;
+  float polygon = cos(a) * r;
+  float shape = smoothstep(0.45, 0.35, polygon);
+  float highlight = smoothstep(0.3, 0.0, abs(uv.x - 0.1)) * smoothstep(0.5, 0.2, r) * 0.4;
+  return shape + highlight;
 }
 
 void main() {
-              vec2 uv = gl_PointCoord * 2.0 - 1.0;
-              float r = length(uv);
-              
-              float alpha = 0.0;
+  vec2 uv = gl_PointCoord * 2.0 - 1.0;
+  float r = length(uv);
+  float alpha = 0.0;
 
   if (uShape < 0.5) {
-    // plain - 圆形
+    // plain - 圆形 (0)
     alpha = smoothstep(1.0, 0.3, r);
   } else if (uShape < 1.5) {
-    // flare - 星芒
+    // flare - 星芒 (1)
     alpha = flareShape(uv, uFlareLeaves, uFlareWidth);
   } else if (uShape < 2.5) {
-    // spark - 火花
+    // spark - 火花 (2)
     alpha = sparkShape(uv);
-  } else if (uShape < 4.5) {
-    // texture/star
+  } else if (uShape < 3.5) {
+    // texture - 使用星形代替 (3)
     alpha = starShape(uv);
+  } else if (uShape < 4.5) {
+    // star - 星形 (4)
+    alpha = starShape(uv);
+  } else if (uShape < 5.5) {
+    // snowflake - 雪花 (5)
+    alpha = snowflakeShape(uv);
+  } else if (uShape < 6.5) {
+    // heart - 爱心 (6)
+    alpha = heartShape(uv);
+  } else if (uShape < 7.5) {
+    // crescent - 月牙 (7)
+    alpha = crescentShape(uv);
+  } else if (uShape < 8.5) {
+    // crossGlow - 十字光芒 (8)
+    alpha = crossGlowShape(uv);
+  } else if (uShape < 9.5) {
+    // sakura - 樱花 (9)
+    alpha = sakuraShape(uv);
+  } else if (uShape < 10.5) {
+    // sun - 太阳 (10)
+    alpha = sunShape(uv);
+  } else if (uShape < 11.5) {
+    // sun2 - 太阳2 (11)
+    alpha = sun2Shape(uv);
+  } else if (uShape < 12.5) {
+    // plum - 梅花 (12)
+    alpha = plumShape(uv);
+  } else if (uShape < 13.5) {
+    // lily - 百合 (13)
+    alpha = lilyShape(uv);
+  } else if (uShape < 14.5) {
+    // lotus - 莲花 (14)
+    alpha = lotusShape(uv);
   } else {
-                // 其他形状使用基础圆形 + 发光
-                float core = smoothstep(0.5, 0.0, r);
-                float glow = smoothstep(1.0, 0.0, r) * 0.5;
-    alpha = core + glow * uGlowIntensity;
+    // prism - 棱镜 (15)
+    alpha = prismShape(uv);
   }
 
-              // 发光效果
-              float glow = smoothstep(1.2, 0.0, r) * uGlowIntensity * 0.3;
+  // 发光效果
+  float glow = smoothstep(1.2, 0.0, r) * uGlowIntensity * 0.3;
   alpha = alpha + glow;
-              
-              vec3 finalColor = uColor * uBrightness;
+  
+  vec3 finalColor = uColor * uBrightness;
   gl_FragColor = vec4(finalColor, alpha * uOpacity);
 }
 `,
