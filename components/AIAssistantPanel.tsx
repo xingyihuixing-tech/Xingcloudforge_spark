@@ -482,7 +482,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             const typeMap: Record<InspirationSubMode, string> = {
                 particleShape: 'headTexture',
                 background: 'background',
-                magicCircle: 'magicCircleTexture'
+                magicCircle: 'magicCircleTexture',
+                freeChat: 'chat'
             };
             const fileType = typeMap[msg.subMode || 'magicCircle'];
 
@@ -644,15 +645,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 const normalized = colors.length >= 4 ? colors : [...colors, ...Array(4 - colors.length).fill(colors[colors.length - 1])];
                                 return (
                                     <span
-                                        className={`xingspark-logo ${logoState === 'blinking' ? 'blinking' : ''}`}
-                                        style={{
-                                            '--xing-font': `'${xingConfig.font}'`,
-                                            '--xing-c1': normalized[0],
-                                            '--xing-c2': normalized[1],
-                                            '--xing-c3': normalized[2],
-                                            '--xing-c4': normalized[3],
-                                            '--xing-filter': `saturate(${xingConfig.gradient.saturation}%) brightness(${xingConfig.gradient.brightness}%)`,
-                                        } as React.CSSProperties}
+                                        className={`xingspark-logo-title ${logoState === 'blinking' ? 'blinking' : ''}`}
                                         onDoubleClick={handleLogoDoubleClick}
                                         title="双击打开设置"
                                     >

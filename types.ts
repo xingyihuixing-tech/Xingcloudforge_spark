@@ -1347,6 +1347,18 @@ export interface EnergyBodySettings {
 }
 
 // 丝线环设置
+// 丝线环波动类型
+export type SilkWaveType =
+  | 'off'        // 关闭波动
+  | 'sine'       // 正弦波 - 平滑波动
+  | 'noise'      // 噪声波 - 随机抖动
+  | 'triangle'   // 三角波 - 锯齿波动
+  | 'square'     // 方波 - 阶梯波动
+  | 'sawtooth'   // 锯齿波 - 上升波动
+  | 'pulse'      // 脉冲波 - 周期爆发
+  | 'organic'    // 有机波 - 多层噪声叠加
+  | 'ripple';    // 涟漪波 - 向外扩散
+
 export interface SilkRingSettings {
   id: string;
   name: string;
@@ -1360,9 +1372,10 @@ export interface SilkRingSettings {
   radialSegments: number;     // 径向分段数 3-8
 
   // 形态变化
-  wobbleFrequency: number;    // 波动频率 2-12
-  wobbleAmplitude: number;    // 波动幅度 0.1-1.0
-  zDriftScale: number;        // Z轴飘移 0-1（使曲线立体化）
+  waveType: SilkWaveType;     // 波动类型
+  wobbleFrequency: number;    // 波动频率 1-100
+  wobbleAmplitude: number;    // 波动幅度 0.1-50
+  zDriftScale: number;        // Z轴飘移 0-20
   seed: number;               // 随机种子
 
   // 轨道轴向
@@ -1370,9 +1383,7 @@ export interface SilkRingSettings {
   tilt: TiltSettings;
 
   // 动画参数
-  flowSpeed: number;          // 流动速度 0.5-5
-  wobbleEnabled: boolean;     // 网格抖动开关
-  wobbleIntensity: number;    // 抖动强度 0-0.1
+  flowSpeed: number;          // 流动速度 1-30
   rotationSpeed: number;      // 整体自转速度 0-1
   orbitSpeed: number;         // 公转速度 -2~2
 
@@ -1390,8 +1401,8 @@ export interface SilkRingSettings {
 
   // 簇效果参数（多丝线叠加）
   clusterCount: number;       // 簇内丝线数量 1-12（1=单条，>1形成丝带）
-  axisSpread: number;         // 轴向偏移范围 0-0.2
-  radiusSpread: number;       // 半径偏移范围 0-5
+  axisSpread: number;         // 轴向偏移范围 0-0.3
+  radiusSpread: number;       // 半径偏移范围 0-80
 }
 
 // 光环系统配置

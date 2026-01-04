@@ -535,18 +535,60 @@ const App: React.FC = () => {
   // 应用 XingSpark CSS 变量
   useEffect(() => {
     const root = document.documentElement;
-    // 字体
+
+    // 1. 字体
     root.style.setProperty('--xing-font', xingConfig.font);
 
-    // 渐变颜色 (确保至少4色)
+    // 2. 基础颜色 (用于某些需要单色的地方)
     const colors = xingConfig.gradient.colors;
     root.style.setProperty('--xing-c1', colors[0]);
     root.style.setProperty('--xing-c2', colors[1]);
     root.style.setProperty('--xing-c3', colors[2]);
-    root.style.setProperty('--xing-c4', colors[3] || colors[0]); // Fallback
+    root.style.setProperty('--xing-c4', colors[3] || colors[0]);
 
-    // 滤镜效果
+    // 3. 构建渐变背景图像
+    let bgImage = '';
+    const colorStr = colors.join(', ');
+    const { type, angle } = xingConfig.gradient;
+
+    // 为了支持 flow 效果，我们需要让背景足够大 (200%) 并且包含重复颜色
+    // 构建一个循环颜色串: c1, c2, c3, c4, c1, c2 ... (平滑连接)
+    // 简单的做法是把 colors 复制一遍连接起来
+    const flowColors = [...colors, ...colors].join(', ');
+
+    if (type === 'conic') {
+      // 漩涡模式: conic-gradient 通常不支持 background-position 移动产生的流动
+      // 但我们可以用 conic-gradient 做静态背景，或者尝试旋转
+      // 这里的策略: 使用 conic，且中心点根据 flow 移动? 不太容易
+      // 简单策略: 使用重复的 conic 扇形
+      bgImage = `conic-gradient(from ${angle}deg at 50% 50%, ${colorStr}, ${colors[0]})`;
+    } else if (type === 'radial') {
+      // 放射模式
+      bgImage = `radial-gradient(circle at 50% 50%, ${flowColors})`;
+    } else {
+      // 线性模式 (默认)
+      bgImage = `linear-gradient(${angle}deg, ${flowColors})`;
+    }
+    root.style.setProperty('--xing-bg-image', bgImage);
+
+    // 4. 动画速度
+    // 用户界面: 1(慢) -> 10(快)
+    // CSS duration: 大(慢) -> 小(快)
+    // 映射算法: speed 1 => 20s, speed 10 => 2s
+    const speed = xingConfig.gradient.flowSpeed;
+    const duration = Math.max(2, 22 - (speed * 2));
+    root.style.setProperty('--xing-speed', `${duration}s`);
+
+    // 5. 发光效果
+    const glow = xingConfig.gradient.glow;
+    const glowValue = glow.enabled
+      ? `0 0 ${glow.intensity}px ${glow.color === 'auto' ? colors[0] : glow.color}`
+      : 'none';
+    root.style.setProperty('--xing-glow', glowValue);
+
+    // 6. 滤镜效果
     root.style.setProperty('--xing-filter', `saturate(${xingConfig.gradient.saturation}%) brightness(${xingConfig.gradient.brightness}%)`);
+
   }, [xingConfig]);
 
   const [isProcessing, setIsProcessing] = useState(false);

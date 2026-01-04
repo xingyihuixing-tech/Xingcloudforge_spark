@@ -8315,14 +8315,14 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   if (material.uniforms.uFresnelPower) material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.5;
                   if (material.uniforms.uStrandDensity) material.uniforms.uStrandDensity.value = ring.strandDensity ?? 30;
 
-                  // 网格抖动
-                  if (material.uniforms.uWobbleEnabled) material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
-                  if (material.uniforms.uWobbleIntensity) material.uniforms.uWobbleIntensity.value = ring.wobbleIntensity ?? 0.05;
-
-                  // 形态波动参数
+                  // 波形波动
+                  if (material.uniforms.uWaveType) {
+                    const waveTypeMap: Record<string, number> = { 'off': 0, 'sine': 1, 'noise': 2, 'triangle': 3, 'square': 4, 'sawtooth': 5, 'pulse': 6, 'organic': 7, 'ripple': 8 };
+                    material.uniforms.uWaveType.value = waveTypeMap[ring.waveType || 'sine'] ?? 1;
+                  }
                   if (material.uniforms.uWobbleFrequency) material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 6;
-                  if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.3;
-                  if (material.uniforms.uZDriftScale) material.uniforms.uZDriftScale.value = ring.zDriftScale ?? 0.5;
+                  if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 2;
+                  if (material.uniforms.uZDriftScale) material.uniforms.uZDriftScale.value = ring.zDriftScale ?? 1;
 
                   // 闪点效果
                   if (material.uniforms.uSparkleEnabled) material.uniforms.uSparkleEnabled.value = ring.sparkleEnabled ? 1.0 : 0.0;
@@ -10216,8 +10216,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   uniform float uFlowSpeed;
   uniform float uWobbleFrequency;
   uniform float uWobbleAmplitude;
-  uniform float uWobbleEnabled;
-  uniform float uWobbleIntensity;
+  uniform int uWaveType;        // 0=off, 1=sine, 2=noise, 3=triangle, 4=square, 5=sawtooth, 6=pulse, 7=organic, 8=ripple
   uniform float uZDriftScale;
   uniform float uSeed;
   
@@ -10229,6 +10228,44 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     float u = f * f * (3.0 - 2.0 * f);
     return mix(hash(i), hash(i + 1.0), u);
   }
+  
+  // 多层有机噪声
+  float organicNoise(float x, float seed) {
+    return noise(x + seed) * 0.5 + noise(x * 2.0 + seed * 1.5) * 0.3 + noise(x * 4.0 + seed * 2.0) * 0.2;
+  }
+  
+  // 计算波形值
+  float computeWave(float phase, float seed) {
+    if (uWaveType == 1) {
+      // 正弦波 - 平滑波动
+      return sin(phase);
+    } else if (uWaveType == 2) {
+      // 噪声波 - 随机抖动
+      return noise(phase * 0.5 + seed * 100.0) * 2.0 - 1.0;
+    } else if (uWaveType == 3) {
+      // 三角波 - 锯齿折返
+      float t = mod(phase, 6.28318);
+      return abs(t / 3.14159 - 1.0) * 2.0 - 1.0;
+    } else if (uWaveType == 4) {
+      // 方波 - 阶梯
+      return step(3.14159, mod(phase, 6.28318)) * 2.0 - 1.0;
+    } else if (uWaveType == 5) {
+      // 锯齿波 - 上升
+      return mod(phase, 6.28318) / 3.14159 - 1.0;
+    } else if (uWaveType == 6) {
+      // 脉冲波 - 周期爆发
+      float t = mod(phase, 6.28318);
+      return exp(-t * 2.0) * sin(t * 8.0);
+    } else if (uWaveType == 7) {
+      // 有机波 - 多层噪声叠加
+      return organicNoise(phase * 0.3, seed) * 2.0 - 1.0;
+    } else if (uWaveType == 8) {
+      // 涟漪波 - 向外扩散
+      float r = length(vec2(cos(phase * 0.3), sin(phase * 0.3)));
+      return sin(phase + r * 10.0) * exp(-r * 0.5);
+    }
+    return 0.0;
+  }
 
   void main() {
     vUv = uv;
@@ -10239,18 +10276,17 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     
     // 计算角度用于波动效果
     float angle = atan(pos.y, pos.x);
+    float phase = angle * uWobbleFrequency + uTime * uFlowSpeed;
     
-    // 基础波动效果（始终生效，不依赖网格抖动开关）
-    float wave = sin(angle * uWobbleFrequency + uTime * uFlowSpeed) * uWobbleAmplitude;
-    float zDrift = cos(angle * 3.0 + uTime * 0.5) * uZDriftScale;
-    pos += normal * wave;
-    pos.z += zDrift;
-    
-    // 网格抖动效果（仅当启用时，基于种子的随机噪声）
-    if (uWobbleEnabled > 0.5) {
-      float jitter = noise(angle * 10.0 + uTime * 5.0 + uSeed * 100.0) * uWobbleIntensity * 10.0;
-      pos += normal * jitter;
+    // 根据波形类型计算波动
+    if (uWaveType > 0) {
+      float wave = computeWave(phase, uSeed) * uWobbleAmplitude;
+      pos += normal * wave;
     }
+    
+    // Z轴飘移（独立效果）
+    float zDrift = cos(angle * 3.0 + uTime * 0.5) * uZDriftScale;
+    pos.z += zDrift;
     
     vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
     vWorldPosition = worldPosition.xyz;
@@ -10432,6 +10468,22 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     return geometry;
   }
 
+  // 波形类型转换为 shader int 值
+  const WAVE_TYPE_MAP: Record<string, number> = {
+    'off': 0,
+    'sine': 1,
+    'noise': 2,
+    'triangle': 3,
+    'square': 4,
+    'sawtooth': 5,
+    'pulse': 6,
+    'organic': 7,
+    'ripple': 8
+  };
+  function getWaveTypeIndex(waveType: string | undefined): number {
+    return WAVE_TYPE_MAP[waveType || 'sine'] ?? 1;
+  }
+
   function createSilkRingMesh(settings: SilkRingSettings, isMobile: boolean): THREE.Group {
     const group = new THREE.Group();
     const clusterCount = settings.clusterCount || 1;
@@ -10496,12 +10548,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
           uProceduralAxis: { value: { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 }[colorSettings?.proceduralAxis || 'radial'] ?? 3 },
           uOrbitRadius: { value: adjustedSettings.orbitRadius ?? 150 },
 
-          // 几何波动
-          uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },
-          uWobbleIntensity: { value: settings.wobbleIntensity ?? 0.05 },
+          // 波形波动 (统一波形类型系统)
+          uWaveType: { value: getWaveTypeIndex(settings.waveType) },
           uWobbleFrequency: { value: settings.wobbleFrequency ?? 6.0 },
-          uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.3 },
-          uZDriftScale: { value: settings.zDriftScale ?? 0.5 },
+          uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 2.0 },
+          uZDriftScale: { value: settings.zDriftScale ?? 1.0 },
           uSeed: { value: seedOffset },
         },
         transparent: true,

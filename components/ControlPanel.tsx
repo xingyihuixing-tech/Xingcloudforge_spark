@@ -3984,14 +3984,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
       {/* 标题栏 - 星云模式 */}
       {appMode === 'nebula' && (
         <div className="mb-4 pt-1">
-          <h1 className="text-4xl font-bold mb-2 text-center" style={{
-            fontFamily: "var(--xing-font, 'Great Vibes'), cursive",
-            background: 'linear-gradient(90deg, var(--xing-c1, #60a5fa), var(--xing-c2, #e879f9), var(--xing-c3, #2bf6a5), var(--xing-c4, #37f1d2))',
-            backgroundSize: '200% 200%',
-            animation: 'xing-gradient-flow 6s ease infinite',
-            WebkitBackgroundClip: 'text',
-            color: 'transparent'
-          }}>
+          <h1 className="text-3xl font-bold mb-2 text-center xingspark-logo-title">
             XingCloud
           </h1>
           <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>
@@ -4004,14 +3997,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
       {/* 标题栏 - 星球模式 */}
       {appMode === 'planet' && (
         <div className="mb-4 pt-1">
-          <h1 className="text-4xl font-bold mb-2 text-center" style={{
-            fontFamily: "var(--xing-font, 'Great Vibes'), cursive",
-            background: 'linear-gradient(90deg, var(--xing-c1, #60a5fa), var(--xing-c2, #e879f9), var(--xing-c3, #2bf6a5), var(--xing-c4, #37f1d2))',
-            backgroundSize: '200% 200%',
-            animation: 'xing-gradient-flow 6s ease infinite',
-            WebkitBackgroundClip: 'text',
-            color: 'transparent'
-          }}>
+          <h1 className="text-3xl font-bold mb-2 text-center xingspark-logo-title">
             XingForge
           </h1>
           <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>
@@ -8231,44 +8217,41 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">丝带效果</span>
                                 <RangeControl label="丝线数量" value={currentSilkRing.clusterCount ?? 1} min={1} max={12} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { clusterCount: v })} />
-                                <RangeControl label="轴向偏移" value={currentSilkRing.axisSpread ?? 0.02} min={0} max={0.2} step={0.005} onChange={(v) => updateSilkRing(currentSilkRing.id, { axisSpread: v })} />
-                                <RangeControl label="半径偏移" value={currentSilkRing.radiusSpread ?? 0.5} min={0} max={10} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { radiusSpread: v })} />
+                                <RangeControl label="轴向偏移" value={currentSilkRing.axisSpread ?? 0.02} min={0} max={0.3} step={0.005} onChange={(v) => updateSilkRing(currentSilkRing.id, { axisSpread: v })} />
+                                <RangeControl label="半径偏移" value={currentSilkRing.radiusSpread ?? 1} min={0} max={80} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { radiusSpread: v })} />
                               </div>
 
-                              {/* 形态波动 (合并了原动画效果) */}
+                              {/* 形态波动 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">形态波动</span>
-                                {/* 网格抖动开关置顶 */}
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-gray-400">网格抖动</span>
-                                  <button
-                                    onClick={() => updateSilkRing(currentSilkRing.id, { wobbleEnabled: !currentSilkRing.wobbleEnabled })}
-                                    className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
-                                    style={{
-                                      background: currentSilkRing.wobbleEnabled
-                                        ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)'
-                                        : 'rgba(120, 120, 120, 0.3)',
-                                      backdropFilter: 'blur(8px)',
-                                      border: currentSilkRing.wobbleEnabled
-                                        ? '1px solid var(--ui-secondary)'
-                                        : '1px solid rgba(255,255,255,0.1)',
-                                      color: currentSilkRing.wobbleEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
-                                    }}
+                                {/* 波形类型选择器 */}
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs text-gray-400">波形类型</span>
+                                  <select
+                                    value={currentSilkRing.waveType || 'sine'}
+                                    onChange={(e) => updateSilkRing(currentSilkRing.id, { waveType: e.target.value as any })}
+                                    className="px-2 py-0.5 text-[10px] rounded bg-gray-700/50 border border-gray-600 text-gray-200 focus:outline-none focus:border-blue-500"
+                                    style={{ minWidth: '80px' }}
                                   >
-                                    {currentSilkRing.wobbleEnabled ? '已启用' : '已禁用'}
-                                  </button>
+                                    <option value="off">关闭</option>
+                                    <option value="sine">正弦波</option>
+                                    <option value="noise">噪声波</option>
+                                    <option value="triangle">三角波</option>
+                                    <option value="square">方波</option>
+                                    <option value="sawtooth">锯齿波</option>
+                                    <option value="pulse">脉冲波</option>
+                                    <option value="organic">有机波</option>
+                                    <option value="ripple">涟漪波</option>
+                                  </select>
                                 </div>
-                                {currentSilkRing.wobbleEnabled && (
-                                  <div className="mt-1">
-                                    <RangeControl label="抖动强度" value={currentSilkRing.wobbleIntensity} min={0} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleIntensity: v })} />
-                                  </div>
+                                {currentSilkRing.waveType !== 'off' && (
+                                  <>
+                                    <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={100} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
+                                    <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0.1} max={50} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
+                                  </>
                                 )}
-                                {/* 波动参数 */}
-                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={100} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
-                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0.1} max={50} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
-                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
-                                {/* 流动速度(原动画效果) */}
-                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={1} max={30} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
+                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={0} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
+                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={0} max={30} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
                               </div>
 
                               {/* 视觉效果 */}

@@ -2256,15 +2256,14 @@ export const createDefaultSilkRing = (id: string, name: string = '丝线环'): S
   thickness: 0.05,
   tubeSegments: 100,
   radialSegments: 6,
+  waveType: 'sine',        // 默认正弦波
   wobbleFrequency: 6,
-  wobbleAmplitude: 0.4,
-  zDriftScale: 0.5,
+  wobbleAmplitude: 2,
+  zDriftScale: 1,
   seed: Math.random() * 1000,
   orbitAxis: DEFAULT_ORBIT_AXIS_SETTINGS,
   tilt: DEFAULT_TILT_SETTINGS,
   flowSpeed: 2.5,
-  wobbleEnabled: true,
-  wobbleIntensity: 0.05,
   rotationSpeed: 0.1,
   orbitSpeed: 0,
   color: createDefaultSilkColor('#00ffff'),
@@ -2276,9 +2275,9 @@ export const createDefaultSilkRing = (id: string, name: string = '丝线环'): S
   emissive: 1.5,
   bloomBoost: 1.0,
   // 簇效果参数
-  clusterCount: 1,       // 默认单条
-  axisSpread: 0.02,      // 轴向偏移范围
-  radiusSpread: 0.5      // 半径偏移范围
+  clusterCount: 1,
+  axisSpread: 0.02,
+  radiusSpread: 1
 });
 
 // 创建默认表面火焰

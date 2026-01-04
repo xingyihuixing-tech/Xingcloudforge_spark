@@ -9,6 +9,44 @@
   font-display: swap;
 }
 
+/* XingSpark Logo 通用标题样式 (核心视觉) */
+.xingspark-logo-title {
+  /* 基础排版 - 解决截断问题 */
+  font-family: var(--xing-font), cursive;
+  line-height: 1.5;
+  /* 防止削头去尾 */
+  padding: 0.2em 0;
+  display: inline-block;
+  /* 确保 padding 生效 */
+
+  /* 核心视觉 */
+  background-image: var(--xing-bg-image);
+  /* 由 JS 动态构建 */
+  background-size: 200% auto;
+
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+
+  /* 动态效果 */
+  filter: var(--xing-filter) drop-shadow(var(--xing-glow));
+  animation: xing-flow var(--xing-speed) linear infinite;
+}
+
+@keyframes xing-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 /* ===== 莫兰迪主题变量 ===== */
 
 /* ... (Existing variables kept as is) ... */
