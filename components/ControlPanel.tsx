@@ -7673,7 +7673,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 <RangeControl label="轨道半径" value={currentParticleRing.absoluteRadius} min={60} max={1000} step={10} onChange={(v) => updateParticleRing(currentParticleRing.id, { absoluteRadius: v })} />
                                 <RangeControl label="离心率" value={currentParticleRing.eccentricity} min={0} max={0.9} step={0.1} onChange={(v) => updateParticleRing(currentParticleRing.id, { eccentricity: v })} />
                                 <RangeControl label="环宽度" value={currentParticleRing.bandwidth} min={1} max={500} step={5} onChange={(v) => updateParticleRing(currentParticleRing.id, { bandwidth: v })} />
-                                <RangeControl label="环厚度" value={currentParticleRing.thickness} min={0} max={20} step={1} onChange={(v) => updateParticleRing(currentParticleRing.id, { thickness: v })} />
+                                <RangeControl label="环厚度" value={currentParticleRing.thickness} min={0} max={100} step={1} onChange={(v) => updateParticleRing(currentParticleRing.id, { thickness: v })} />
                               </div>
 
                               {/* 粒子外观 */}
@@ -7948,29 +7948,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                       <RangeControl label="分散指数" value={gal.randomnessPower ?? 3} min={1} max={5} step={0.5} onChange={(v) => updateGal({ randomnessPower: v })} />
 
                                       {/* 核心参数 */}
-                                      <RangeControl label="核心膨胀" value={gal.coreSize ?? 0.2} min={0} max={2} step={0.1} onChange={(v) => updateGal({ coreSize: v })} />
-                                      <RangeControl label="核心亮度" value={gal.coreBrightness ?? 1.5} min={1} max={3} step={0.1} onChange={(v) => updateGal({ coreBrightness: v })} />
-
-                                      {/* 径向颜色渐变 */}
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400">径向渐变</span>
-                                        <button
-                                          onClick={() => updateGal({ useRadialGradient: !gal.useRadialGradient })}
-                                          className="px-2 py-0.5 text-[10px] rounded"
-                                          style={getOptionButtonStyle(gal.useRadialGradient ?? true)}
-                                        >
-                                          {gal.useRadialGradient ? '开启' : '关闭'}
-                                        </button>
-                                      </div>
-                                      {gal.useRadialGradient && (
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-gray-400">内</span>
-                                          <input type="color" value={gal.insideColor ?? '#f8d090'} onChange={(e) => updateGal({ insideColor: e.target.value })} className="w-8 h-6 rounded cursor-pointer" />
-                                          <span className="text-gray-500">→</span>
-                                          <span className="text-xs text-gray-400">外</span>
-                                          <input type="color" value={gal.outsideColor ?? '#2b1d42'} onChange={(e) => updateGal({ outsideColor: e.target.value })} className="w-8 h-6 rounded cursor-pointer" />
-                                        </div>
-                                      )}
+                                      <RangeControl label="核心膨胀" value={gal.coreSize ?? 2} min={1} max={5} step={0.5} onChange={(v) => updateGal({ coreSize: v })} />
+                                      <RangeControl label="亮度衰减强度" value={gal.coreBrightness ?? 2} min={0.5} max={5} step={0.25} onChange={(v) => updateGal({ coreBrightness: v })} />
                                     </div>
                                   );
                                 })()}

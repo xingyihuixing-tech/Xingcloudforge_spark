@@ -5297,14 +5297,16 @@ function generateGalaxyParticles(
     randomness: number;
     randomnessPower: number;
     coreSize: number;
+    coreBrightness: number;
   }
-): Float32Array {
+): { positions: Float32Array; brightnessFactors: Float32Array } {
   // 计算粒子数量（基于密度和周长）
   const perimeter = 2 * Math.PI * radius;
   const count = Math.floor(density * perimeter);
   const positions: number[] = [];
+  const brightnessFactors: number[] = [];
 
-  const { branches, spin, randomness, randomnessPower, coreSize } = galaxy;
+  const { branches, spin, randomness, randomnessPower, coreSize, coreBrightness } = galaxy;
 
   for (let i = 0; i < count; i++) {
     // 随机半径分布（从中心到边缘）
@@ -5319,7 +5321,7 @@ function generateGalaxyParticles(
     const randomZ = Math.pow(Math.random(), randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * randomness * r;
 
     // 核心膨胀（Y方向厚度，中心更厚）
-    const coreFactor = Math.exp(-r / radius * 3) * coreSize * 2;
+    const coreFactor = Math.exp(-r / radius * 3) * coreSize;
     const randomY = Math.pow(Math.random(), randomnessPower) * (Math.random() < 0.5 ? 1 : -1) * randomness * r
       + (Math.random() - 0.5) * coreFactor * thickness;
 
@@ -5328,15 +5330,20 @@ function generateGalaxyParticles(
     const z = Math.sin(branchAngle + spinAngle) * r + randomZ;
     const y = randomY;
 
-    // 限制在bandwidth范围内
-    const clampedX = Math.max(-bandwidth, Math.min(bandwidth, x));
-    const clampedZ = Math.max(-bandwidth, Math.min(bandwidth, z));
-    const clampedY = Math.max(-thickness / 2, Math.min(thickness / 2, y));
+    // 不进行正方形裁剪，立体圆形分布更自然
+    positions.push(x, y, z);
 
-    positions.push(clampedX, clampedY, clampedZ);
+    // 计算亮度因子：距离中心越近越亮
+    // coreBrightness 控制衰减速度：值越高，远离中心的亮度衰减越快
+    const normalizedR = r / radius; // 0-1
+    const brightnessFactor = Math.exp(-normalizedR * coreBrightness);
+    brightnessFactors.push(brightnessFactor);
   }
 
-  return new Float32Array(positions);
+  return {
+    positions: new Float32Array(positions),
+    brightnessFactors: new Float32Array(brightnessFactors)
+  };
 }
 
 // 生成点缀粒子数据 - 在粒子环范围内随机分布装饰粒子
@@ -6988,7 +6995,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         const v = r.vortex;
         const vKey = v?.enabled ? `${v.armCount}:${v.twist}:${v.hardness}:${v.colors?.join(',')}` : '';
         const gal = r.galaxy;
-        const galKey = gal?.enabled ? `${gal.preset}:${gal.branches}:${gal.spin}:${gal.randomness}:${gal.randomnessPower}:${gal.coreSize}:${gal.coreBrightness}:${gal.useRadialGradient}:${gal.insideColor}:${gal.outsideColor}` : '';
+        const galKey = gal?.enabled ? `${gal.preset}:${gal.branches}:${gal.spin}:${gal.randomness}:${gal.randomnessPower}:${gal.coreSize}:${gal.coreBrightness}` : '';
         const orn = r.ornament;
         const ornKey = orn?.enabled ? `${orn.count}:${orn.baseSize}:${orn.colorMode}:${orn.color}:${orn.sizeRandomness}` : '';
         return `${r.id}:${r.enabled}:${r.eccentricity}:${r.absoluteRadius}:${r.particleDensity}:${r.bandwidth}:${r.thickness}:${r.color}:${r.brightness}:${r.particleSize}:${r.tilt?.axis}:${r.tilt?.angle}:${r.trailLength ?? 0}:${r.rotationSpeed}:${r.orbitAxis?.axis}:${r.orbitAxis?.angle}:${g?.enabled}:${gKey}:${v?.enabled}:${vKey}:${gal?.enabled}:${galKey}:${orn?.enabled}:${ornKey}`;
@@ -11198,9 +11205,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 
     // 根据是否启用银河效果选择不同的粒子分布算法
     let basePositions: Float32Array;
+    let galaxyBrightnessFactors: Float32Array | null = null;
+
     if (ring.galaxy?.enabled) {
       // 银河系螺旋臂分布
-      basePositions = generateGalaxyParticles(
+      const galaxyResult = generateGalaxyParticles(
         radius,
         ring.particleDensity,
         ring.bandwidth,
@@ -11210,9 +11219,12 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
           spin: ring.galaxy.spin ?? 0.8,
           randomness: ring.galaxy.randomness ?? 0.25,
           randomnessPower: ring.galaxy.randomnessPower ?? 3,
-          coreSize: ring.galaxy.coreSize ?? 0.2
+          coreSize: ring.galaxy.coreSize ?? 2,
+          coreBrightness: ring.galaxy.coreBrightness ?? 2
         }
       );
+      basePositions = galaxyResult.positions;
+      galaxyBrightnessFactors = galaxyResult.brightnessFactors;
     } else {
       // 默认椭圆轨道分布
       basePositions = generateRingParticles(
@@ -11456,9 +11468,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         sizes[i] = (1 + Math.random() * 2) * sizeScale;
       }
 
-      colors[i * 3] = finalR * brightness;
-      colors[i * 3 + 1] = finalG * brightness;
-      colors[i * 3 + 2] = finalB * brightness;
+      // 应用银河系亮度因子（如果存在）
+      let galaxyBrightnessMult = 1.0;
+      if (galaxyBrightnessFactors && i < baseCount) {
+        galaxyBrightnessMult = galaxyBrightnessFactors[i];
+      }
+
+      colors[i * 3] = finalR * brightness * galaxyBrightnessMult;
+      colors[i * 3 + 1] = finalG * brightness * galaxyBrightnessMult;
+      colors[i * 3 + 2] = finalB * brightness * galaxyBrightnessMult;
       ids[i] = i;
     }
 

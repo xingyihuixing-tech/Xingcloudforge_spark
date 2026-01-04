@@ -1066,13 +1066,8 @@ export interface GalaxySettings {
   randomnessPower: number;       // 分散指数曲线 1-5
 
   // ===== 核心参数 =====
-  coreSize: number;              // 核心膨胀程度 0-2
-  coreBrightness: number;        // 核心亮度增强 1-3
-
-  // ===== 颜色 =====
-  useRadialGradient: boolean;    // 使用径向渐变（否则使用粒子环原色）
-  insideColor: string;           // 内部颜色（靠近中心）
-  outsideColor: string;          // 外部颜色（远离中心）
+  coreSize: number;              // 核心膨胀程度 1-5
+  coreBrightness: number;        // 核心亮度衰减强度 0.5-5（值越大，远离核心的亮度衰减越快）
 }
 
 // 角度显隐区域
