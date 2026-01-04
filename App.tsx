@@ -498,7 +498,6 @@ const App: React.FC = () => {
               deletedSystemSchemeIds: themeConfig.deletedSystemSchemeIds
             },
             materialSettings,
-            materialSettings,
             userMaterialPresets,
             xingConfig
           },
@@ -532,6 +531,23 @@ const App: React.FC = () => {
     };
     root.style.setProperty('--custom-secondary-rgb', hexToRgb(activeColors.secondary));
   }, [themeConfig.activeColors, themeConfig.consoleBg]);
+
+  // 应用 XingSpark CSS 变量
+  useEffect(() => {
+    const root = document.documentElement;
+    // 字体
+    root.style.setProperty('--xing-font', xingConfig.font);
+
+    // 渐变颜色 (确保至少4色)
+    const colors = xingConfig.gradient.colors;
+    root.style.setProperty('--xing-c1', colors[0]);
+    root.style.setProperty('--xing-c2', colors[1]);
+    root.style.setProperty('--xing-c3', colors[2]);
+    root.style.setProperty('--xing-c4', colors[3] || colors[0]); // Fallback
+
+    // 滤镜效果
+    root.style.setProperty('--xing-filter', `saturate(${xingConfig.gradient.saturation}%) brightness(${xingConfig.gradient.brightness}%)`);
+  }, [xingConfig]);
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [showControls, setShowControls] = useState(true);

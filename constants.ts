@@ -2274,7 +2274,11 @@ export const createDefaultSilkRing = (id: string, name: string = '丝线环'): S
   fresnelPower: 2.5,
   opacity: 0.8,
   emissive: 1.5,
-  bloomBoost: 1.0
+  bloomBoost: 1.0,
+  // 簇效果参数
+  clusterCount: 1,       // 默认单条
+  axisSpread: 0.02,      // 轴向偏移范围
+  radiusSpread: 0.5      // 半径偏移范围
 });
 
 // 创建默认表面火焰

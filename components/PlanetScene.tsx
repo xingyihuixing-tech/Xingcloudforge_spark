@@ -8292,80 +8292,84 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               child.rotateOnWorldAxis(userData.orbitAxisVec, ring.orbitSpeed * 0.01);
             }
           } else if (userData.type === 'silkRing') {
-            // 丝线环更新
+            // 丝线环更新（现在是 Group 包含多个 Mesh）
             const ring = planet.rings.silkRings?.find(r => r.id === userData.silkRingId);
-            if (ring && child instanceof THREE.Mesh) {
+            if (ring && child instanceof THREE.Group) {
               // Solo 检查
               const soloId = planet.rings.silkRingsSoloId;
               const visible = (planet.rings.enabled !== false) && (planet.rings.silkRingsEnabled !== false) && ring.enabled && (!soloId || soloId === ring.id);
               child.visible = visible;
               if (!visible) return;
 
-              const material = child.material as THREE.ShaderMaterial;
-              if (material?.uniforms) {
-                if (material.uniforms.uTime) material.uniforms.uTime.value = time;
+              // 遍历 Group 内所有 Mesh 更新 uniforms
+              child.children.forEach(strandMesh => {
+                if (!(strandMesh instanceof THREE.Mesh)) return;
+                const material = strandMesh.material as THREE.ShaderMaterial;
+                if (material?.uniforms) {
+                  if (material.uniforms.uTime) material.uniforms.uTime.value = time;
 
-                // 基础属性
-                if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = ring.opacity ?? 0.8;
-                if (material.uniforms.uEmissive) material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
-                if (material.uniforms.uFlowSpeed) material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
-                if (material.uniforms.uFresnelPower) material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.5;
-                if (material.uniforms.uStrandDensity) material.uniforms.uStrandDensity.value = ring.strandDensity ?? 30;
+                  // 基础属性
+                  const clusterCount = ring.clusterCount || 1;
+                  if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = (ring.opacity ?? 0.8) / Math.sqrt(clusterCount);
+                  if (material.uniforms.uEmissive) material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
+                  if (material.uniforms.uFlowSpeed) material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
+                  if (material.uniforms.uFresnelPower) material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.5;
+                  if (material.uniforms.uStrandDensity) material.uniforms.uStrandDensity.value = ring.strandDensity ?? 30;
 
-                // 网格抖动
-                if (material.uniforms.uWobbleEnabled) material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
-                if (material.uniforms.uWobbleIntensity) material.uniforms.uWobbleIntensity.value = ring.wobbleIntensity ?? 0.05;
+                  // 网格抖动
+                  if (material.uniforms.uWobbleEnabled) material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
+                  if (material.uniforms.uWobbleIntensity) material.uniforms.uWobbleIntensity.value = ring.wobbleIntensity ?? 0.05;
 
-                // 形态波动参数
-                if (material.uniforms.uWobbleFrequency) material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 6;
-                if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.3;
-                if (material.uniforms.uZDriftScale) material.uniforms.uZDriftScale.value = ring.zDriftScale ?? 0.5;
+                  // 形态波动参数
+                  if (material.uniforms.uWobbleFrequency) material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 6;
+                  if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.3;
+                  if (material.uniforms.uZDriftScale) material.uniforms.uZDriftScale.value = ring.zDriftScale ?? 0.5;
 
-                // 闪点效果
-                if (material.uniforms.uSparkleEnabled) material.uniforms.uSparkleEnabled.value = ring.sparkleEnabled ? 1.0 : 0.0;
-                if (material.uniforms.uSparkleThreshold) material.uniforms.uSparkleThreshold.value = ring.sparkleThreshold ?? 0.95;
+                  // 闪点效果
+                  if (material.uniforms.uSparkleEnabled) material.uniforms.uSparkleEnabled.value = ring.sparkleEnabled ? 1.0 : 0.0;
+                  if (material.uniforms.uSparkleThreshold) material.uniforms.uSparkleThreshold.value = ring.sparkleThreshold ?? 0.95;
 
-                // 颜色系统更新
-                const colorSettings = ring.color;
-                const colors = colorSettings?.colors || ['#00ffff', '#ffffff', '#00ffff'];
-                const colorModeMap: Record<string, number> = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
-                if (material.uniforms.uColorMode) material.uniforms.uColorMode.value = colorModeMap[colorSettings?.mode || 'none'] ?? 0;
-                if (material.uniforms.uColorMidPos) material.uniforms.uColorMidPos.value = colorSettings?.colorMidPosition ?? 0.5;
-                if (material.uniforms.uProceduralIntensity) material.uniforms.uProceduralIntensity.value = colorSettings?.proceduralIntensity ?? 1.0;
+                  // 颜色系统更新
+                  const colorSettings = ring.color;
+                  const colors = colorSettings?.colors || ['#00ffff', '#ffffff', '#00ffff'];
+                  const colorModeMap: Record<string, number> = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
+                  if (material.uniforms.uColorMode) material.uniforms.uColorMode.value = colorModeMap[colorSettings?.mode || 'none'] ?? 0;
+                  if (material.uniforms.uColorMidPos) material.uniforms.uColorMidPos.value = colorSettings?.colorMidPosition ?? 0.5;
+                  if (material.uniforms.uProceduralIntensity) material.uniforms.uProceduralIntensity.value = colorSettings?.proceduralIntensity ?? 1.0;
 
-                // 更新颜色
-                if (material.uniforms.uColor) {
-                  const baseColor = colorSettings?.baseColor || colors[0] || '#00ffff';
-                  const c = new THREE.Color(baseColor);
-                  material.uniforms.uColor.value.set(c.r, c.g, c.b);
+                  // 更新颜色
+                  if (material.uniforms.uColor) {
+                    const baseColor = colorSettings?.baseColor || colors[0] || '#00ffff';
+                    const c = new THREE.Color(baseColor);
+                    material.uniforms.uColor.value.set(c.r, c.g, c.b);
+                  }
+                  if (material.uniforms.uColor1 && colors[0]) {
+                    const c = new THREE.Color(colors[0]);
+                    material.uniforms.uColor1.value.set(c.r, c.g, c.b);
+                  }
+                  if (material.uniforms.uColor2 && colors[1]) {
+                    const c = new THREE.Color(colors[1]);
+                    material.uniforms.uColor2.value.set(c.r, c.g, c.b);
+                  }
+                  if (material.uniforms.uColor3 && colors[2]) {
+                    const c = new THREE.Color(colors[2]);
+                    material.uniforms.uColor3.value.set(c.r, c.g, c.b);
+                  }
+
+                  // 更新颜色相关 uniforms
+                  if (material.uniforms.uBlendStrength) material.uniforms.uBlendStrength.value = colorSettings?.blendStrength ?? 1.0;
+                  if (material.uniforms.uGradientDirection) {
+                    const dirMap: Record<string, number> = { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 };
+                    material.uniforms.uGradientDirection.value = dirMap[colorSettings?.direction || 'radial'] ?? 0;
+                  }
+                  if (material.uniforms.uColorMidWidth) material.uniforms.uColorMidWidth.value = colorSettings?.colorMidWidth ?? 0;
+                  if (material.uniforms.uSpiralDensity) material.uniforms.uSpiralDensity.value = colorSettings?.spiralDensity ?? 2;
+                  if (material.uniforms.uProceduralAxis) {
+                    const axisMap: Record<string, number> = { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 };
+                    material.uniforms.uProceduralAxis.value = axisMap[colorSettings?.proceduralAxis || 'radial'] ?? 3;
+                  }
                 }
-                if (material.uniforms.uColor1 && colors[0]) {
-                  const c = new THREE.Color(colors[0]);
-                  material.uniforms.uColor1.value.set(c.r, c.g, c.b);
-                }
-                if (material.uniforms.uColor2 && colors[1]) {
-                  const c = new THREE.Color(colors[1]);
-                  material.uniforms.uColor2.value.set(c.r, c.g, c.b);
-                }
-                if (material.uniforms.uColor3 && colors[2]) {
-                  const c = new THREE.Color(colors[2]);
-                  material.uniforms.uColor3.value.set(c.r, c.g, c.b);
-                }
-              }
-
-              // 更新颜色相关 uniforms
-              const colorSettings = ring.color;
-              if (material.uniforms.uBlendStrength) material.uniforms.uBlendStrength.value = colorSettings?.blendStrength ?? 1.0;
-              if (material.uniforms.uGradientDirection) {
-                const dirMap: Record<string, number> = { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 };
-                material.uniforms.uGradientDirection.value = dirMap[colorSettings?.direction || 'radial'] ?? 0;
-              }
-              if (material.uniforms.uColorMidWidth) material.uniforms.uColorMidWidth.value = colorSettings?.colorMidWidth ?? 0;
-              if (material.uniforms.uSpiralDensity) material.uniforms.uSpiralDensity.value = colorSettings?.spiralDensity ?? 2;
-              if (material.uniforms.uProceduralAxis) {
-                const axisMap: Record<string, number> = { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 };
-                material.uniforms.uProceduralAxis.value = axisMap[colorSettings?.proceduralAxis || 'radial'] ?? 3;
-              }
+              });
 
               // 自转（使用累计旋转，保持 tilt 设置）
               const rotSpeed = ring.rotationSpeed ?? 0.1;
@@ -10429,8 +10433,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     return geometry;
   }
 
-  function createSilkRingMesh(settings: SilkRingSettings, isMobile: boolean): THREE.Mesh {
-    const geometry = createSilkRingGeometry(settings);
+  function createSilkRingMesh(settings: SilkRingSettings, isMobile: boolean): THREE.Group {
+    const group = new THREE.Group();
+    const clusterCount = settings.clusterCount || 1;
+    const axisSpread = settings.axisSpread || 0;
+    const radiusSpread = settings.radiusSpread || 0;
 
     // 解析颜色
     const parseColor = (hex: string) => {
@@ -10444,62 +10451,90 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     const colorMode = colorSettings?.mode || 'none';
     const colorModeMap: Record<string, number> = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
 
-    const material = new THREE.ShaderMaterial({
-      vertexShader: silkRingVertexShader,
-      fragmentShader: silkRingFragmentShader,
-      uniforms: {
-        uTime: { value: 0 },
-        uOpacity: { value: settings.opacity ?? 0.8 },
-        uEmissive: { value: settings.emissive ?? 1.0 },
-        uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
-        uStrandDensity: { value: settings.strandDensity ?? 30.0 },
-        uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
-        uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
-        uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
+    // 为每条丝线生成 mesh
+    for (let i = 0; i < clusterCount; i++) {
+      // 计算偏移量（基于 seed 和索引）
+      const seedOffset = settings.seed + i * 137.5; // 黄金角偏移避免重叠
+      const normalizedI = clusterCount > 1 ? (i / (clusterCount - 1) - 0.5) : 0;
 
-        // 颜色系统 (仿照环带, 使用int类型)
-        uColor: { value: parseColor(colorSettings?.baseColor || colors[0] || '#00ffff') },
-        uColorMode: { value: colorModeMap[colorMode] ?? 0 },
-        uGradientDirection: { value: { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 }[colorSettings?.direction || 'radial'] ?? 0 },
-        uColor1: { value: parseColor(colors[0] || '#00ffff') },
-        uColor2: { value: parseColor(colors[1] || '#ffffff') },
-        uColor3: { value: parseColor(colors[2] || '#00ffff') },
-        uColorMidPos: { value: colorSettings?.colorMidPosition ?? 0.5 },
-        uColorMidWidth: { value: colorSettings?.colorMidWidth ?? 0 },
-        uBlendStrength: { value: colorSettings?.blendStrength ?? 1.0 },
-        uSpiralDensity: { value: colorSettings?.spiralDensity ?? 2 },
-        uProceduralIntensity: { value: colorSettings?.proceduralIntensity ?? 1.0 },
-        uProceduralAxis: { value: { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 }[colorSettings?.proceduralAxis || 'radial'] ?? 3 },
-        uOrbitRadius: { value: settings.orbitRadius ?? 150 },
+      // 轴向微调（轻微旋转偏移）
+      const axisOffsetX = (Math.random() * 2 - 1) * axisSpread * 180; // 转换为角度
+      const axisOffsetY = (Math.random() * 2 - 1) * axisSpread * 180;
+      const axisOffsetZ = (Math.random() * 2 - 1) * axisSpread * 180;
 
-        // 几何波动
-        uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },
-        uWobbleIntensity: { value: settings.wobbleIntensity ?? 0.05 },
-        uWobbleFrequency: { value: settings.wobbleFrequency ?? 6.0 },
-        uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.3 },
-        uZDriftScale: { value: settings.zDriftScale ?? 0.5 },
-        uSeed: { value: settings.seed ?? Math.random() },
-      },
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide
-    });
+      // 半径偏移
+      const radiusOffset = normalizedI * radiusSpread + (Math.random() - 0.5) * radiusSpread * 0.3;
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.renderOrder = 25; // 确保渲染顺序
+      // 创建带偏移的几何体
+      const adjustedSettings = { ...settings, orbitRadius: settings.orbitRadius + radiusOffset, seed: seedOffset };
+      const geometry = createSilkRingGeometry(adjustedSettings);
 
-    // 应用 tilt 变换（TorusGeometry 默认在 XZ 平面，+90度才能水平放置）
+      const material = new THREE.ShaderMaterial({
+        vertexShader: silkRingVertexShader,
+        fragmentShader: silkRingFragmentShader,
+        uniforms: {
+          uTime: { value: 0 },
+          uOpacity: { value: (settings.opacity ?? 0.8) / Math.sqrt(clusterCount) }, // 多条时降低透明度
+          uEmissive: { value: settings.emissive ?? 1.0 },
+          uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
+          uStrandDensity: { value: settings.strandDensity ?? 30.0 },
+          uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
+          uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
+          uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
+
+          // 颜色系统
+          uColor: { value: parseColor(colorSettings?.baseColor || colors[0] || '#00ffff') },
+          uColorMode: { value: colorModeMap[colorMode] ?? 0 },
+          uGradientDirection: { value: { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 }[colorSettings?.direction || 'radial'] ?? 0 },
+          uColor1: { value: parseColor(colors[0] || '#00ffff') },
+          uColor2: { value: parseColor(colors[1] || '#ffffff') },
+          uColor3: { value: parseColor(colors[2] || '#00ffff') },
+          uColorMidPos: { value: colorSettings?.colorMidPosition ?? 0.5 },
+          uColorMidWidth: { value: colorSettings?.colorMidWidth ?? 0 },
+          uBlendStrength: { value: colorSettings?.blendStrength ?? 1.0 },
+          uSpiralDensity: { value: colorSettings?.spiralDensity ?? 2 },
+          uProceduralIntensity: { value: colorSettings?.proceduralIntensity ?? 1.0 },
+          uProceduralAxis: { value: { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 }[colorSettings?.proceduralAxis || 'radial'] ?? 3 },
+          uOrbitRadius: { value: adjustedSettings.orbitRadius ?? 150 },
+
+          // 几何波动
+          uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },
+          uWobbleIntensity: { value: settings.wobbleIntensity ?? 0.05 },
+          uWobbleFrequency: { value: settings.wobbleFrequency ?? 6.0 },
+          uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.3 },
+          uZDriftScale: { value: settings.zDriftScale ?? 0.5 },
+          uSeed: { value: seedOffset },
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.renderOrder = 25;
+
+      // 应用轴向偏移（每条丝线略微不同的倾斜）
+      if (clusterCount > 1) {
+        mesh.rotation.x = THREE.MathUtils.degToRad(axisOffsetX);
+        mesh.rotation.y = THREE.MathUtils.degToRad(axisOffsetY);
+        mesh.rotation.z = THREE.MathUtils.degToRad(axisOffsetZ);
+      }
+
+      mesh.userData = { strandIndex: i, totalStrands: clusterCount };
+      group.add(mesh);
+    }
+
+    // 应用 tilt 变换（TorusGeometry 默认在 XY 平面，+90度才能水平）
     const tiltAngles = getTiltAngles(settings.tilt ?? DEFAULT_TILT_SETTINGS);
-    mesh.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x + 90);
-    mesh.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
-    mesh.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
+    group.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x + 90);
+    group.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
+    group.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
 
-    // 保存初始旋转以供动画循环使用
-    mesh.userData.initialRotation = mesh.rotation.clone();
-    mesh.userData.totalSelfRotation = 0; // 累计自转角度
+    // 保存用于动画循环
+    group.userData.totalSelfRotation = 0;
 
-    return mesh;
+    return group;
   }
 
   // ==================== 创建星球 Mesh ====================

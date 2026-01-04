@@ -1387,6 +1387,11 @@ export interface SilkRingSettings {
   opacity: number;            // 透明度 0.3-1
   emissive: number;           // 发光强度 0.5-3
   bloomBoost: number;         // Bloom增强 0-2
+
+  // 簇效果参数（多丝线叠加）
+  clusterCount: number;       // 簇内丝线数量 1-12（1=单条，>1形成丝带）
+  axisSpread: number;         // 轴向偏移范围 0-0.2
+  radiusSpread: number;       // 半径偏移范围 0-5
 }
 
 // 光环系统配置

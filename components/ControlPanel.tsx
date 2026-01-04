@@ -117,6 +117,7 @@ import {
 
 import { createThumbnail } from '../services/imageProcessing';
 import { useLocalStorage } from '../utils/storage';
+import { XingSparkConfig } from './XingSparkSettings';
 
 import { ButtonMaterialConfig } from '../types';
 
@@ -145,6 +146,7 @@ interface ControlPanelProps {
   setGestureEnabled: (enabled: boolean) => void;
   overlayMode?: boolean;  // 互通模式状态
   materialSettings?: import('../types').MaterialSettings;  // 从 App 传入的材质配置（用于样式生成）
+  xingConfig?: XingSparkConfig; // 用于 Logo 样式同步
 }
 
 const DepthModeLabels: Record<DepthMode, string> = {
@@ -8223,6 +8225,14 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 <span className="text-xs text-gray-400 block mb-2">几何参数</span>
                                 <RangeControl label="轨道半径" value={currentSilkRing.orbitRadius} min={60} max={1000} step={10} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitRadius: v })} />
                                 <RangeControl label="线环粗细" value={currentSilkRing.thickness} min={0.01} max={5} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { thickness: v })} />
+                              </div>
+
+                              {/* 簇效果 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs text-gray-400 block mb-2">丝带效果</span>
+                                <RangeControl label="丝线数量" value={currentSilkRing.clusterCount ?? 1} min={1} max={12} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { clusterCount: v })} />
+                                <RangeControl label="轴向偏移" value={currentSilkRing.axisSpread ?? 0.02} min={0} max={0.2} step={0.005} onChange={(v) => updateSilkRing(currentSilkRing.id, { axisSpread: v })} />
+                                <RangeControl label="半径偏移" value={currentSilkRing.radiusSpread ?? 0.5} min={0} max={10} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { radiusSpread: v })} />
                               </div>
 
                               {/* 形态波动 (合并了原动画效果) */}
