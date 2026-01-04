@@ -8166,37 +8166,55 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               updatePlanet({ rings: { ...planet.rings, silkRings: [...silkRings, newRing] } });
                               setSelectedSilkRingId(id);
                             }}
+                            globalEnabled={planet.rings.silkRingsEnabled}
+                            onGlobalToggle={(enabled) => updatePlanet({ rings: { ...planet.rings, silkRingsEnabled: enabled } })}
+                            soloId={planet.rings.silkRingsSoloId}
+                            onSoloToggle={(id) => updatePlanet({ rings: { ...planet.rings, silkRingsSoloId: id } })}
                             title="线环"
-                            accentColor="#f472b6"
+                            titleStyle={{ color: 'var(--ui-secondary)' }}
+                            addButtonColor="bg-pink-600 hover:bg-pink-500"
                             emptyText="暂无线环"
-                            enabledKey={planet.rings.silkRingsEnabled ?? true}
-                            onToggleMasterEnabled={(enabled) => updatePlanet({ rings: { ...planet.rings, silkRingsEnabled: enabled } })}
+                          />
+
+                          {/* 预设列表 */}
+                          <PresetListBox
+                            storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.silkRing)}
+                            builtInPresets={Object.entries(SILK_RING_PRESETS).map(([id, data]) => ({
+                              id,
+                              name: { dataStream: '数据流', silkRibbon: '丝绸飘带', energyFiber: '能量纤维', nebulaSilk: '星云丝带', fireSilk: '烈焰丝绸', custom: '自定义' }[id] || id,
+                              data
+                            }))}
+                            currentData={currentSilkRing ? { ...currentSilkRing, id: undefined, name: undefined, enabled: undefined } : null}
+                            hasInstance={!!currentSilkRing}
+                            instanceName="线环"
+                            onApplyToInstance={(data) => { if (currentSilkRing) updateSilkRing(currentSilkRing.id, { ...data }); }}
+                            onCreateInstance={(data, presetName) => {
+                              const id = Date.now().toString();
+                              const newRing = { ...createDefaultSilkRing(id, `${presetName.replace(/^[^\s]+\s/, '')} ${silkRings.length + 1}`), ...data, enabled: true };
+                              updatePlanet({ rings: { ...planet.rings, silkRings: [...silkRings, newRing] } });
+                              setSelectedSilkRingId(id);
+                            }}
+                            title="预设"
+                            accentColor="#f472b6"
+                            moduleName="silkRing"
                           />
 
                           {currentSilkRing && (
-                            <div className="mt-2 space-y-2">
-                              {/* 预设选择 */}
-                              <div className="p-2 bg-gray-800/50 rounded">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs text-gray-400">预设风格</span>
-                                  <select
-                                    value={currentSilkRing.preset || 'custom'}
-                                    onChange={(e) => {
-                                      const preset = SILK_RING_PRESETS[e.target.value];
-                                      if (preset) {
-                                        updateSilkRing(currentSilkRing.id, { ...preset, preset: e.target.value });
-                                      }
-                                    }}
-                                    className="text-xs bg-black/30 border border-white/10 rounded px-2 py-1 text-white"
-                                  >
-                                    <option value="dataStream">数据流</option>
-                                    <option value="silkRibbon">丝绸飘带</option>
-                                    <option value="energyFiber">能量纤维</option>
-                                    <option value="nebulaSilk">星云丝带</option>
-                                    <option value="fireSilk">烈焰丝绸</option>
-                                    <option value="custom">自定义</option>
-                                  </select>
-                                </div>
+                            <div className="mt-3 space-y-2">
+                              {/* 当前编辑 + 保存预设 */}
+                              <div className="mb-2 p-1.5 rounded flex items-center justify-between" style={{
+                                background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))',
+                                backdropFilter: 'blur(8px)',
+                                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.3)',
+                                border: '1px solid rgba(255,255,255,0.1)'
+                              }}>
+                                <span className="text-xs" style={{ color: 'var(--ui-edit-bar)', textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>编辑: {currentSilkRing.name}</span>
+                                <SavePresetButton
+                                  storageKey={getUserScopedKey(PRESET_STORAGE_KEYS.silkRing)}
+                                  currentData={currentSilkRing}
+                                  defaultName={currentSilkRing.name}
+                                  accentColor="#f472b6"
+                                />
                               </div>
 
                               {/* 几何参数 */}
@@ -8283,7 +8301,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                               {/* 颜色模式 */}
                               <div className="p-2 bg-gray-800/50 rounded">
-                                <span className="text-xs text-gray-400 block mb-2">颜色设置</span>
+                                <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>颜色模式</span>
                                 <div className="grid grid-cols-4 gap-1 mb-2">
                                   {[
                                     { id: 'none', label: '单色' },
@@ -8301,50 +8319,102 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                     </button>
                                   ))}
                                 </div>
-                                {/* 颜色输入 */}
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-white/60 w-12">颜色1</span>
-                                  <input
-                                    type="color"
-                                    value={currentSilkRing.color?.colors?.[0] || '#00ffff'}
-                                    onChange={(e) => {
-                                      const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])];
-                                      colors[0] = e.target.value;
-                                      updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors, baseColor: e.target.value } as any });
-                                    }}
-                                    className="w-8 h-6 rounded border-0"
-                                  />
-                                  {(currentSilkRing.color?.mode === 'twoColor' || currentSilkRing.color?.mode === 'threeColor' || currentSilkRing.color?.mode === 'procedural') && (
-                                    <>
-                                      <span className="text-xs text-white/60 w-12">颜色2</span>
-                                      <input
-                                        type="color"
-                                        value={currentSilkRing.color?.colors?.[1] || '#ffffff'}
-                                        onChange={(e) => {
-                                          const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])];
-                                          colors[1] = e.target.value;
-                                          updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors } as any });
-                                        }}
-                                        className="w-8 h-6 rounded border-0"
-                                      />
-                                    </>
-                                  )}
-                                  {(currentSilkRing.color?.mode === 'threeColor' || currentSilkRing.color?.mode === 'procedural') && (
-                                    <>
-                                      <span className="text-xs text-white/60 w-12">颜色3</span>
-                                      <input
-                                        type="color"
-                                        value={currentSilkRing.color?.colors?.[2] || '#00ffff'}
-                                        onChange={(e) => {
-                                          const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])];
-                                          colors[2] = e.target.value;
-                                          updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors } as any });
-                                        }}
-                                        className="w-8 h-6 rounded border-0"
-                                      />
-                                    </>
-                                  )}
-                                </div>
+
+                                {/* 单色模式 */}
+                                {(!currentSilkRing.color?.mode || currentSilkRing.color?.mode === 'none') && (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-400">颜色</span>
+                                    <input type="color" value={currentSilkRing.color?.baseColor || currentSilkRing.color?.colors?.[0] || '#00ffff'} onChange={(e) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, baseColor: e.target.value, colors: [e.target.value, currentSilkRing.color?.colors?.[1] || '#ffffff', currentSilkRing.color?.colors?.[2] || '#00ffff'] } as any })} className="w-10 h-6 rounded cursor-pointer" />
+                                  </div>
+                                )}
+
+                                {/* 双色渐变 */}
+                                {currentSilkRing.color?.mode === 'twoColor' && (
+                                  <div className="space-y-2">
+                                    <div className="flex gap-2 items-center justify-center">
+                                      <input type="color" value={currentSilkRing.color?.colors?.[0] || '#00ffff'} onChange={(e) => { const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])]; colors[0] = e.target.value; updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors, baseColor: e.target.value } as any }); }} className="w-10 h-6 rounded cursor-pointer" />
+                                      <span className="text-gray-400">→</span>
+                                      <input type="color" value={currentSilkRing.color?.colors?.[1] || '#ffffff'} onChange={(e) => { const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#00ffff'])]; colors[1] = e.target.value; updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors } as any }); }} className="w-10 h-6 rounded cursor-pointer" />
+                                    </div>
+                                    <select value={currentSilkRing.color?.direction || 'radial'} onChange={(e) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, direction: e.target.value } as any })} className="w-full text-xs bg-gray-700 rounded px-2 py-1 text-white cursor-pointer">
+                                      <option value="radial">径向（中心→外）</option>
+                                      <option value="linearX">X轴线性</option>
+                                      <option value="linearY">Y轴线性</option>
+                                      <option value="linearZ">Z轴线性</option>
+                                      <option value="spiral">螺旋</option>
+                                    </select>
+                                    {currentSilkRing.color?.direction === 'spiral' && (
+                                      <div className="flex gap-2 items-center text-xs">
+                                        <span className="text-gray-400">旋转轴</span>
+                                        <select value={currentSilkRing.color?.spiralAxis || 'y'} onChange={(e) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, spiralAxis: e.target.value } as any })} className="bg-gray-700 rounded px-1 py-0.5 text-white cursor-pointer">
+                                          <option value="x">X</option>
+                                          <option value="y">Y</option>
+                                          <option value="z">Z</option>
+                                        </select>
+                                        <span className="text-gray-400">圈数</span>
+                                        <input type="number" value={currentSilkRing.color?.spiralDensity ?? 2} min={0.5} max={10} step={0.5} onChange={(e) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, spiralDensity: parseFloat(e.target.value) || 2 } as any })} className="w-12 bg-gray-700 rounded px-1 text-white text-center" />
+                                      </div>
+                                    )}
+                                    <RangeControl label="过渡强度" value={currentSilkRing.color?.blendStrength ?? 1.0} min={0} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, blendStrength: v } as any })} />
+                                  </div>
+                                )}
+
+                                {/* 三色渐变 */}
+                                {currentSilkRing.color?.mode === 'threeColor' && (
+                                  <div className="space-y-2">
+                                    <div className="flex gap-1 items-center justify-center">
+                                      <input type="color" value={currentSilkRing.color?.colors?.[0] || '#00ffff'} onChange={(e) => { const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#ff00ff'])]; colors[0] = e.target.value; updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors, baseColor: e.target.value } as any }); }} className="w-8 h-6 rounded cursor-pointer" />
+                                      <span className="text-gray-500">→</span>
+                                      <input type="color" value={currentSilkRing.color?.colors?.[1] || '#ffffff'} onChange={(e) => { const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#ff00ff'])]; colors[1] = e.target.value; updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors } as any }); }} className="w-8 h-6 rounded cursor-pointer" />
+                                      <span className="text-gray-500">→</span>
+                                      <input type="color" value={currentSilkRing.color?.colors?.[2] || '#ff00ff'} onChange={(e) => { const colors = [...(currentSilkRing.color?.colors || ['#00ffff', '#ffffff', '#ff00ff'])]; colors[2] = e.target.value; updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colors } as any }); }} className="w-8 h-6 rounded cursor-pointer" />
+                                    </div>
+                                    <RangeControl label="中间色位置" value={currentSilkRing.color?.colorMidPosition ?? 0.5} min={0.1} max={0.9} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colorMidPosition: v } as any })} />
+                                    <RangeControl label="中间色宽度" value={currentSilkRing.color?.colorMidWidth ?? 0} min={0} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, colorMidWidth: v } as any })} />
+                                    <select value={currentSilkRing.color?.direction || 'radial'} onChange={(e) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, direction: e.target.value } as any })} className="w-full text-xs bg-gray-700 rounded px-2 py-1 text-white cursor-pointer">
+                                      <option value="radial">径向（中心→外）</option>
+                                      <option value="linearX">X轴线性</option>
+                                      <option value="linearY">Y轴线性</option>
+                                      <option value="linearZ">Z轴线性</option>
+                                      <option value="spiral">螺旋</option>
+                                    </select>
+                                    <RangeControl label="过渡强度" value={currentSilkRing.color?.blendStrength ?? 1.0} min={0} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, blendStrength: v } as any })} />
+                                  </div>
+                                )}
+
+                                {/* 混色模式 */}
+                                {currentSilkRing.color?.mode === 'procedural' && (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-400">基础色</span>
+                                      <input type="color" value={currentSilkRing.color?.baseColor || '#00ffff'} onChange={(e) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, baseColor: e.target.value } as any })} className="w-10 h-6 rounded cursor-pointer" />
+                                    </div>
+                                    <div className="flex gap-2 items-center">
+                                      <span className="text-xs text-gray-400">混色轴向</span>
+                                      <select value={currentSilkRing.color?.proceduralAxis || 'y'} onChange={(e) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, proceduralAxis: e.target.value } as any })} className="flex-1 text-xs bg-gray-700 rounded px-2 py-1 text-white cursor-pointer">
+                                        <option value="x">X轴</option>
+                                        <option value="y">Y轴</option>
+                                        <option value="z">Z轴</option>
+                                        <option value="radial">径向</option>
+                                      </select>
+                                    </div>
+                                    <RangeControl label="渐变强度" value={currentSilkRing.color?.proceduralIntensity ?? 1.0} min={0.1} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { color: { ...currentSilkRing.color, proceduralIntensity: v } as any })} />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 运动速度 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>运动速度</span>
+                                <RangeControl label="公转速度" value={currentSilkRing.orbitSpeed ?? 0} min={-2} max={2} step={0.02} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitSpeed: v })} />
+                                <RangeControl label="自转速度" value={currentSilkRing.rotationSpeed ?? 0.1} min={-2} max={2} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { rotationSpeed: v })} />
+                              </div>
+
+                              {/* 姿态设置 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>姿态设置</span>
+                                <TiltAxisSelector tilt={currentSilkRing.tilt ?? DEFAULT_TILT_SETTINGS} onChange={(tilt) => updateSilkRing(currentSilkRing.id, { tilt })} getButtonStyle={getOptionButtonStyle} />
+                                <OrbitAxisSelector orbitAxis={currentSilkRing.orbitAxis ?? DEFAULT_ORBIT_AXIS_SETTINGS} onChange={(orbitAxis) => updateSilkRing(currentSilkRing.id, { orbitAxis })} getButtonStyle={getOptionButtonStyle} />
                               </div>
                             </div>
                           )}

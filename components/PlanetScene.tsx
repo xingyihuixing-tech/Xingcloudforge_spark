@@ -8337,6 +8337,13 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               // 自转（直接使用ring设置，不使用userData缓存）
               const rotSpeed = ring.rotationSpeed ?? 0.1;
               child.rotateOnAxis(new THREE.Vector3(0, 0, 1), rotSpeed * 0.01);
+
+              // 公转（绕公转轴旋转）
+              const orbitSpeed = ring.orbitSpeed ?? 0;
+              if (orbitSpeed !== 0) {
+                const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
+                child.rotateOnWorldAxis(new THREE.Vector3(orbitAxis.x, orbitAxis.y, orbitAxis.z), orbitSpeed * 0.01);
+              }
             }
           }
         });

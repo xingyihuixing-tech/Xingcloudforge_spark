@@ -1366,7 +1366,7 @@ export interface SilkRingSettings {
   seed: number;               // 随机种子
 
   // 轨道轴向
-  orbitAxis: { x: number; y: number; z: number };
+  orbitAxis: OrbitAxisSettings;
   tilt: TiltSettings;
 
   // 动画参数
@@ -1374,6 +1374,7 @@ export interface SilkRingSettings {
   wobbleEnabled: boolean;     // 网格抖动开关
   wobbleIntensity: number;    // 抖动强度 0-0.1
   rotationSpeed: number;      // 整体自转速度 0-1
+  orbitSpeed: number;         // 公转速度 -2~2
 
   // 颜色系统（支持单色/双色/三色/混色）
   color: SolidCoreColorSettings;
