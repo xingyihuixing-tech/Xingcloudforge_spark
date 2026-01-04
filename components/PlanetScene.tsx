@@ -8206,24 +8206,21 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               if (!visible) return;
 
               const material = child.material as THREE.ShaderMaterial;
-              if (material.uniforms) {
-                material.uniforms.uTime.value = time;
+              if (material?.uniforms) {
+                if (material.uniforms.uTime) material.uniforms.uTime.value = time;
 
-                // 更新动态属性
-                material.uniforms.uOpacity.value = ring.opacity ?? 0.8;
-                material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
-                material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
-                material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
-                material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 5.0;
-                material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.1;
+                // 更新动态属性（添加null检查）
+                if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = ring.opacity ?? 0.8;
+                if (material.uniforms.uEmissive) material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
+                if (material.uniforms.uFlowSpeed) material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
+                if (material.uniforms.uWobbleEnabled) material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
+                if (material.uniforms.uWobbleFrequency) material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 5.0;
+                if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.1;
 
                 // 更新颜色
-                const parseColor = (hex: string) => {
-                  const c = new THREE.Color(hex);
-                  return new THREE.Vector3(c.r, c.g, c.b);
-                };
-                if (ring.color?.baseColor) {
-                  material.uniforms.uColor.value.copy(parseColor(ring.color.baseColor));
+                if (ring.color?.baseColor && material.uniforms.uColor) {
+                  const c = new THREE.Color(ring.color.baseColor);
+                  material.uniforms.uColor.value.set(c.r, c.g, c.b);
                 }
               }
 
