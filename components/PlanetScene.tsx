@@ -8352,14 +8352,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               const rotSpeed = ring.rotationSpeed ?? 0.1;
               userData.totalSelfRotation = (userData.totalSelfRotation || 0) + rotSpeed * 0.01;
 
-              // 重置到初始 tilt 再应用自转
-              if (userData.initialRotation) {
-                child.rotation.copy(userData.initialRotation);
-                child.rotateOnAxis(new THREE.Vector3(0, 0, 1), userData.totalSelfRotation);
-              } else {
-                // 没有初始值时直接累加
-                child.rotateOnAxis(new THREE.Vector3(0, 0, 1), rotSpeed * 0.01);
-              }
+              // 实时计算 tilt（确保 UI 更改立即生效）
+              const tiltAngles = getTiltAngles(ring.tilt ?? DEFAULT_TILT_SETTINGS);
+              const baseTiltX = THREE.MathUtils.degToRad(tiltAngles.x + 90);
+              const baseTiltY = THREE.MathUtils.degToRad(tiltAngles.y);
+              const baseTiltZ = THREE.MathUtils.degToRad(tiltAngles.z);
+
+              // 先重置到 tilt 基础旋转，再应用自转
+              child.rotation.set(baseTiltX, baseTiltY, baseTiltZ);
+              child.rotateOnAxis(new THREE.Vector3(0, 0, 1), userData.totalSelfRotation);
 
               // 公转（绕核心旋转位置）
               const orbitSpeed = ring.orbitSpeed ?? 0;
@@ -10219,8 +10220,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       // Z轴漂移 (使圆环立体化)
       float zDrift = cos(angle * 3.0 + uTime * 0.5) * uZDriftScale;
       
-      // 应用偏移
-      pos += normal * wobble * 0.5;
+      // 应用偏移 (去掉 *0.5 增强效果)
+      pos += normal * wobble;
       pos.z += zDrift;
     }
     
@@ -10257,6 +10258,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   uniform float uSpiralDensity;     // 螺旋密度
   uniform float uProceduralIntensity;
   uniform int uProceduralAxis;      // 0=x, 1=y, 2=z, 3=radial
+  uniform float uOrbitRadius;       // 用于归一化坐标
   
   varying vec2 vUv;
   varying vec3 vWorldPosition;
@@ -10264,6 +10266,22 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   varying vec3 vViewPosition;
 
   #define PI 3.14159265359
+
+  // HSV <-> RGB 转换函数 (与环带一致)
+  vec3 rgb2hsv(vec3 c) {
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+  }
+
+  vec3 hsv2rgb(vec3 c) {
+    vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
+  }
 
   void main() {
     // ===== 计算渐变参数 t (0-1) =====
@@ -10321,15 +10339,27 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         baseColor = uColor2;
       }
     } else if (uColorMode == 3) {
-      // 混色模式 (程序化)
-      float proceduralT = 0.0;
-      if (uProceduralAxis == 0) proceduralT = (vWorldPosition.x * 0.01 + 0.5);
-      else if (uProceduralAxis == 1) proceduralT = (vWorldPosition.y * 0.01 + 0.5);
-      else if (uProceduralAxis == 2) proceduralT = (vWorldPosition.z * 0.01 + 0.5);
-      else proceduralT = vUv.x;
-      
-      float noise = sin(proceduralT * 10.0 + uTime * 0.5) * 0.5 + 0.5;
-      baseColor = uColor * (1.0 + (noise - 0.5) * uProceduralIntensity);
+      // 混色模式 (程序化 - 使用 HSV 色相偏移，与环带一致)
+      float proceduralT = gradientT;
+      float ringRadius = max(uOrbitRadius, 100.0);  // 避免除以0
+      if (uProceduralAxis == 0) {
+        // X轴
+        proceduralT = (vWorldPosition.x / ringRadius + 1.0) * 0.5;
+      } else if (uProceduralAxis == 1) {
+        // Y轴
+        proceduralT = (vWorldPosition.y / ringRadius + 1.0) * 0.5;
+      } else if (uProceduralAxis == 2) {
+        // Z轴
+        proceduralT = (vWorldPosition.z / ringRadius + 1.0) * 0.5;
+      } else {
+        // radial: 使用环绕方向
+        proceduralT = vUv.x;
+      }
+      // HSV 色相偏移
+      vec3 hsv = rgb2hsv(uColor);
+      float hueOffset = proceduralT * uProceduralIntensity * 0.3;
+      hsv.x = fract(hsv.x + hueOffset);
+      baseColor = hsv2rgb(hsv);
     }
     
     // ===== 丝线纹理效果 =====
@@ -10416,6 +10446,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         uSpiralDensity: { value: colorSettings?.spiralDensity ?? 2 },
         uProceduralIntensity: { value: colorSettings?.proceduralIntensity ?? 1.0 },
         uProceduralAxis: { value: { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 }[colorSettings?.proceduralAxis || 'radial'] ?? 3 },
+        uOrbitRadius: { value: settings.orbitRadius ?? 150 },
 
         // 几何波动
         uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },

@@ -8221,23 +8221,14 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">几何参数</span>
                                 <RangeControl label="轨道半径" value={currentSilkRing.orbitRadius} min={60} max={1000} step={10} onChange={(v) => updateSilkRing(currentSilkRing.id, { orbitRadius: v })} />
-                                <RangeControl label="线环粗细" value={currentSilkRing.thickness} min={0.01} max={1} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { thickness: v })} />
+                                <RangeControl label="线环粗细" value={currentSilkRing.thickness} min={0.01} max={5} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { thickness: v })} />
                               </div>
 
-                              {/* 形态变化 */}
+                              {/* 形态波动 (合并了原动画效果) */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">形态波动</span>
-                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={200} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
-                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
-                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
-                              </div>
-
-                              {/* 动画效果 */}
-                              <div className="p-2 bg-gray-800/50 rounded">
-                                <span className="text-xs text-gray-400 block mb-2">动画效果</span>
-                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={1} max={30} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
-                                {/* 网格抖动 */}
-                                <div className="flex items-center justify-between mt-2">
+                                {/* 网格抖动开关置顶 */}
+                                <div className="flex items-center justify-between">
                                   <span className="text-xs text-gray-400">网格抖动</span>
                                   <button
                                     onClick={() => updateSilkRing(currentSilkRing.id, { wobbleEnabled: !currentSilkRing.wobbleEnabled })}
@@ -8261,6 +8252,12 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                     <RangeControl label="抖动强度" value={currentSilkRing.wobbleIntensity} min={0} max={0.2} step={0.01} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleIntensity: v })} />
                                   </div>
                                 )}
+                                {/* 波动参数 */}
+                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={200} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
+                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
+                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
+                                {/* 流动速度(原动画效果) */}
+                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={1} max={30} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
                               </div>
 
                               {/* 视觉效果 */}
