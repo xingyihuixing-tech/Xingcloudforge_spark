@@ -9594,7 +9594,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                           <option value="icosidodecahedron">截半二十面体</option>
                                         </optgroup>
                                         <optgroup label="星形多面体">
-                                          <option value="smallStellatedDodecahedron">星形体</option>
+                                          <option value="smallStellatedDodecahedron">小星形十二面体</option>
+                                          <option value="star">立体五角星</option>
                                         </optgroup>
                                       </select>
                                     </div>

@@ -1148,7 +1148,8 @@ export type PolyhedronType =
   | 'cuboctahedron'          // 截半立方体
   | 'icosidodecahedron'      // 截半二十面体
   // 星形多面体（Kepler-Poinsot）
-  | 'smallStellatedDodecahedron';  // 小星形十二面体（星形体）
+  | 'smallStellatedDodecahedron'   // 小星形十二面体（星形体）
+  | 'star';                        // 立体五角星（双面五角星锥）
 
 // 渲染模式
 export type EnergyBodyRenderMode = 'wireframe' | 'shell' | 'both';

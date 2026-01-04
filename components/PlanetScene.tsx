@@ -36,7 +36,8 @@ import {
   NebulaInstance,
   ParticleShape,
   GlowMode,
-  NebulaBlendMode
+  NebulaBlendMode,
+  SilkRingSettings
 } from '../types';
 import OldNebulaScene from '../OldNebulaScene';
 import { ProcessedData } from '../services/imageProcessing';
@@ -1183,7 +1184,12 @@ void main() {
   float flameNoise = fbm(flamePos, layers);
   
   // 頧祆揢銝箇��啣耦�?[0, 1]
-  float flameMask = (flameNoise + 1.0) * 0.5;
+  float flameMask;
+  if (uNoiseType > 1.5 && uNoiseType < 2.5) {
+    flameMask = flameNoise;
+  } else {
+    flameMask = (flameNoise + 1.0) * 0.5;
+  }
   
   // 摨𠉛鍂撖�漲�批�
   flameMask = smoothstep(1.0 - uDensity, 1.0, flameMask);
@@ -4615,9 +4621,42 @@ const SMALL_STELLATED_DODECAHEDRON_INDICES = [
 
 // �𥕦遣憭𡁻𢒰雿枏�雿蓥�
 // 瘜冽�嚗𡁏⏛閫?�芸�憭𡁻𢒰雿枏撩�?detail=0 隞乩���像�Ｘ��𡢅��踹� EdgesGeometry �𣂼��箏��其�閫垍瑪
+// 立体五角星顶点 (Radius=1, Inner=0.4, Height=0.4)
+const STAR_VERTICES = [
+  0, 0.4, 0,    // Top Pole
+  0, -0.4, 0,   // Bottom Pole
+  // Equator vertices
+  1.0000, 0.0000, 0.0000,   // Outer 0
+  0.3236, 0.0000, 0.2351,   // Inner 36
+  0.3090, 0.0000, 0.9511,   // Outer 72
+  -0.1236, 0.0000, 0.3804,  // Inner 108
+  -0.8090, 0.0000, 0.5878,  // Outer 144
+  -0.4000, 0.0000, 0.0000,  // Inner 180
+  -0.8090, 0.0000, -0.5878, // Outer 216
+  -0.1236, 0.0000, -0.3804, // Inner 252
+  0.3090, 0.0000, -0.9511,  // Outer 288
+  0.3236, 0.0000, -0.2351   // Inner 324
+];
+
+const STAR_INDICES = [
+  // Top Cap
+  0, 2, 3, 0, 3, 4,
+  0, 4, 5, 0, 5, 6,
+  0, 6, 7, 0, 7, 8,
+  0, 8, 9, 0, 9, 10,
+  0, 10, 11, 0, 11, 2,
+  // Bottom Cap
+  1, 3, 2, 1, 4, 3,
+  1, 5, 4, 1, 6, 5,
+  1, 7, 6, 1, 8, 7,
+  1, 9, 8, 1, 10, 9,
+  1, 11, 10, 1, 2, 11
+];
+
 function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivisionLevel: number): THREE.BufferGeometry {
   // �斗鱏�臬炏銝箸⏛閫?�芸�蝐餃�
-  const isTruncatedType = type.startsWith('truncated') || type === 'cuboctahedron' || type === 'icosidodecahedron' || type === 'smallStellatedDodecahedron';
+  // 截角/星形多面体不进行细分
+  const isTruncatedType = type.startsWith('truncated') || type === 'cuboctahedron' || type === 'icosidodecahedron' || type === 'smallStellatedDodecahedron' || type === 'star';
   // 撖寞⏛閫垍掩�见撩�?detail=0
   const effectiveDetail = isTruncatedType ? 0 : subdivisionLevel;
 
@@ -4664,6 +4703,10 @@ function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivis
     case 'smallStellatedDodecahedron':
       // 小星形十二面体（星形体）：32顶点，60个三角面（12个五角星面×5）
       return new THREE.PolyhedronGeometry(SMALL_STELLATED_DODECAHEDRON_VERTICES, SMALL_STELLATED_DODECAHEDRON_INDICES, radius, 0);
+
+    case 'star':
+      // 立体五角星（双面五角星锥）
+      return new THREE.PolyhedronGeometry(STAR_VERTICES, STAR_INDICES, radius, 0);
 
     default:
       return new THREE.IcosahedronGeometry(radius, subdivisionLevel);
@@ -6944,13 +6987,19 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         const gKey = g?.enabled ? `${g.mode}:${g.colors?.join(',')}:${g.colorMidPosition}:${g.colorMidWidth ?? 1}:${g.colorMidWidth2 ?? 0}:${g.direction}:${g.directionCustom?.x},${g.directionCustom?.y},${g.directionCustom?.z}:${g.spiralDensity}:${g.proceduralIntensity}` : '';
         const v = r.vortex;
         const vKey = v?.enabled ? `${v.armCount}:${v.twist}:${v.hardness}:${v.colors?.join(',')}` : '';
-        return `${r.id}:${r.enabled}:${r.eccentricity}:${r.absoluteRadius}:${r.particleDensity}:${r.bandwidth}:${r.thickness}:${r.color}:${r.brightness}:${r.particleSize}:${r.tilt?.axis}:${r.tilt?.angle}:${r.trailLength ?? 0}:${r.rotationSpeed}:${r.orbitAxis?.axis}:${r.orbitAxis?.angle}:${g?.enabled}:${gKey}:${v?.enabled}:${vKey}`;
+        const gal = r.galaxy;
+        const galKey = gal?.enabled ? `${gal.preset}:${gal.branches}:${gal.spin}:${gal.randomness}:${gal.randomnessPower}:${gal.coreSize}:${gal.coreBrightness}:${gal.useRadialGradient}:${gal.insideColor}:${gal.outsideColor}` : '';
+        const orn = r.ornament;
+        const ornKey = orn?.enabled ? `${orn.count}:${orn.baseSize}:${orn.colorMode}:${orn.color}:${orn.sizeRandomness}` : '';
+        return `${r.id}:${r.enabled}:${r.eccentricity}:${r.absoluteRadius}:${r.particleDensity}:${r.bandwidth}:${r.thickness}:${r.color}:${r.brightness}:${r.particleSize}:${r.tilt?.axis}:${r.tilt?.angle}:${r.trailLength ?? 0}:${r.rotationSpeed}:${r.orbitAxis?.axis}:${r.orbitAxis?.angle}:${g?.enabled}:${gKey}:${v?.enabled}:${vKey}:${gal?.enabled}:${galKey}:${orn?.enabled}:${ornKey}`;
       }).join('|') + `/cr:${p.rings.continuousRingsEnabled}|` + p.rings.continuousRings.map(r => {
         const g = r.gradientColor;
         const gKey = g?.enabled ? `${g.mode}:${g.colors?.join(',')}:${g.colorMidPosition}:${g.colorMidWidth ?? 1}:${g.colorMidWidth2 ?? 0}:${g.direction}:${g.directionCustom?.x},${g.directionCustom?.y},${g.directionCustom?.z}:${g.spiralDensity}:${g.proceduralIntensity}` : '';
         const v = r.vortex;
         const vKey = v?.enabled ? `${v.armCount}:${v.twist}:${v.rotationSpeed}:${v.radialDirection}:${v.radialSpeed}:${v.hardness}:${v.colors?.join(',')}` : '';
         return `${r.id}:${r.enabled}:${r.eccentricity}:${r.absoluteInnerRadius}:${r.absoluteOuterRadius}:${r.color}:${r.opacity}:${r.opacityGradient}:${r.opacityGradientStrength ?? 0.5}:${r.brightness}:${r.tilt?.axis}:${r.tilt?.angle}:${r.rotationSpeed}:${r.orbitAxis?.axis}:${r.orbitAxis?.angle}:${g?.enabled}:${gKey}:${v?.enabled}:${vKey}`;
+      }).join('|') + `/sr:${p.rings.silkRingsEnabled}|` + (p.rings.silkRings || []).map(r => {
+        return `${r.id}:${r.enabled}:${r.orbitRadius}:${r.thickness}:${r.tubeSegments}:${r.radialSegments}:${r.wobbleEnabled}:${r.wobbleFrequency}:${r.wobbleAmplitude}:${r.zDriftScale}:${r.seed}:${r.tilt?.axis}:${r.tilt?.angle}:${r.orbitAxis?.x},${r.orbitAxis?.y},${r.orbitAxis?.z}`;
       }).join('|');
       // 颲𣂼���㺭 - �舀�憭帋葵嚗���怠�撅�撘��?
       // 瘜冽�嚗𡁶�摮𣂼𪃾撠���冽����堆�emissionRangeMin/Max, fadeOutStrength蝑㚁��典𢆡�餃儐�臭葉摰墧𧒄霂餃�嚗䔶���閬�𦆮�?geometryKey
@@ -8145,6 +8194,42 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               // �祈蓮嚗𡁶��祈蓮頧湔�頧?
               const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
               child.rotateOnWorldAxis(new THREE.Vector3(orbitAxis.x, orbitAxis.y, orbitAxis.z), ring.orbitSpeed * 0.01);
+            }
+          } else if (userData.type === 'silkRing') {
+            // 丝线环更新
+            const ring = planet.rings.silkRings?.find(r => r.id === userData.silkRingId);
+            if (ring && child instanceof THREE.Mesh) {
+              // Solo 检查
+              const soloId = planet.rings.silkRingsSoloId;
+              const visible = (planet.rings.enabled !== false) && (planet.rings.silkRingsEnabled !== false) && ring.enabled && (!soloId || soloId === ring.id);
+              child.visible = visible;
+              if (!visible) return;
+
+              const material = child.material as THREE.ShaderMaterial;
+              if (material.uniforms) {
+                material.uniforms.uTime.value = time;
+
+                // 更新动态属性
+                material.uniforms.uOpacity.value = ring.opacity ?? 0.8;
+                material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
+                material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
+                material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
+                material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 5.0;
+                material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.1;
+
+                // 更新颜色
+                const parseColor = (hex: string) => {
+                  const c = new THREE.Color(hex);
+                  return new THREE.Vector3(c.r, c.g, c.b);
+                };
+                if (ring.color?.baseColor) {
+                  material.uniforms.uColor.value.copy(parseColor(ring.color.baseColor));
+                }
+              }
+
+              // 自转
+              const rotSpeed = userData.rotationSpeed ?? ring.rotationSpeed ?? 0.1;
+              child.rotateOnAxis(new THREE.Vector3(0, 0, 1), rotSpeed * 0.01);
             }
           }
         });
@@ -9954,6 +10039,182 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   }, [nebulaInstancesData, nebulaSettings?.nebulaInstances, nebulaSettings?.particleShape, nebulaSettings?.glowMode, nebulaSettings?.glowIntensity, nebulaSettings?.overlayBlendMode, nebulaSettings?.overlayBrightness, nebulaSettings?.overlayColorCompensation, overlayMode, sceneReady]);
 
   // �𥕦遣�毺�����厩��?
+  // ==================== 丝滑光环 (Silk Ring) ====================
+
+  const silkRingVertexShader = `
+  varying vec2 vUv;
+  varying vec3 vWorldPosition;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+  
+  uniform float uTime;
+  uniform float uFlowSpeed;
+  uniform float uWobbleFrequency;
+  uniform float uWobbleAmplitude;
+  uniform float uWobbleEnabled;
+  uniform float uZDriftScale;
+  uniform float uSeed;
+  
+  // 伪随机函数
+  float hash(float n) { return fract(sin(n) * 43758.5453123); }
+  float noise(float x) {
+    float i = floor(x);
+    float f = fract(x);
+    float u = f * f * (3.0 - 2.0 * f);
+    return mix(hash(i), hash(i + 1.0), u);
+  }
+
+  void main() {
+    vUv = uv;
+    vNormal = normalize(normalMatrix * normal);
+    
+    // 基础位置
+    vec3 pos = position;
+    
+    // 波动效果
+    if (uWobbleEnabled > 0.5) {
+      // 基于角度和时间的波动
+      float angle = atan(pos.y, pos.x); // 假设圆环在XY平面
+      float radius = length(pos.xy);
+      
+      float wobble = sin(angle * uWobbleFrequency + uTime * uFlowSpeed + uSeed * 10.0) * uWobbleAmplitude;
+      
+      // Z轴漂移 (使圆环立体化)
+      float zDrift = cos(angle * 3.0 + uTime * 0.5) * uZDriftScale;
+      
+      // 应用偏移
+      pos += normal * wobble * 0.5;
+      pos.z += zDrift;
+    }
+    
+    vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
+    vWorldPosition = worldPosition.xyz;
+    vec4 mvPosition = viewMatrix * worldPosition;
+    vViewPosition = -mvPosition.xyz;
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`;
+
+  const silkRingFragmentShader = `
+  uniform vec3 uColor;
+  uniform float uOpacity;
+  uniform float uEmissive;
+  uniform float uFresnelPower;
+  uniform float uStrandDensity;
+  uniform float uSparkleEnabled;
+  uniform float uSparkleThreshold;
+  uniform float uTime;
+  uniform float uFlowSpeed;
+  
+  varying vec2 vUv;
+  varying vec3 vWorldPosition;
+  varying vec3 vNormal;
+  varying vec3 vViewPosition;
+
+  void main() {
+    // 丝线纹理效果
+    float strandNoise = sin(vUv.x * uStrandDensity + uTime * uFlowSpeed) * 0.5 + 0.5;
+    float strand = smoothstep(0.4, 0.6, strandNoise);
+    
+    // 菲涅尔边缘发光
+    vec3 normal = normalize(vNormal);
+    vec3 viewDir = normalize(vViewPosition);
+    float fresnel = pow(1.0 - abs(dot(normal, viewDir)), uFresnelPower);
+    
+    // 基础颜色 + 发光
+    vec3 finalColor = uColor * uEmissive;
+    
+    // 叠加丝线效果
+    finalColor += uColor * strand * 0.5;
+    
+    // 叠加菲涅尔
+    finalColor += uColor * fresnel * 2.0;
+    
+    // 闪烁效果 (Sparkle)
+    float sparkle = 0.0;
+    if (uSparkleEnabled > 0.5) {
+      float noiseVal = fract(sin(dot(vUv, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
+      if (noiseVal > uSparkleThreshold) {
+        sparkle = (noiseVal - uSparkleThreshold) / (1.0 - uSparkleThreshold);
+      }
+    }
+    finalColor += vec3(1.0) * sparkle * 2.0;
+
+    // 透明度处理
+    float alpha = uOpacity * (0.5 + 0.5 * fresnel); // 边缘更不透明
+    
+    gl_FragColor = vec4(finalColor, alpha);
+  }
+`;
+
+  function createSilkRingGeometry(settings: SilkRingSettings): THREE.BufferGeometry {
+    //创建一个圆环几何体
+    // TorusGeometry(radius, tube, radialSegments, tubularSegments)
+    const radius = settings.orbitRadius ?? 1.5;
+    const tube = settings.thickness ?? 0.02;
+    const radialSegments = settings.radialSegments ?? 8;
+    const tubularSegments = settings.tubeSegments ?? 128;
+
+    const geometry = new THREE.TorusGeometry(radius, tube, radialSegments, tubularSegments);
+    return geometry;
+  }
+
+  function createSilkRingMesh(settings: SilkRingSettings, isMobile: boolean): THREE.Mesh {
+    const geometry = createSilkRingGeometry(settings);
+
+    // 解析颜色
+    const parseColor = (hex: string) => {
+      const c = new THREE.Color(hex);
+      return new THREE.Vector3(c.r, c.g, c.b);
+    };
+
+    const material = new THREE.ShaderMaterial({
+      vertexShader: silkRingVertexShader,
+      fragmentShader: silkRingFragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: parseColor(settings.color?.baseColor || '#ffffff') },
+        uOpacity: { value: settings.opacity ?? 0.8 },
+        uEmissive: { value: settings.emissive ?? 1.0 },
+        uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
+        uStrandDensity: { value: settings.strandDensity ?? 20.0 },
+        uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
+        uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
+        uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
+
+        // 几何波动
+        uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },
+        uWobbleFrequency: { value: settings.wobbleFrequency ?? 5.0 },
+        uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.1 },
+        uZDriftScale: { value: settings.zDriftScale ?? 0.2 },
+        uSeed: { value: settings.seed ?? Math.random() },
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide
+    });
+
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.renderOrder = 25; // 确保渲染顺序
+
+    // 应用变换
+    if (settings.tilt) {
+      const tiltAngles = getTiltAngles(settings.tilt);
+      mesh.rotation.set(tiltAngles.x, tiltAngles.y, tiltAngles.z);
+    }
+
+    // 应用自定义轨道轴
+    if (settings.orbitAxis) {
+      // const axis = new THREE.Vector3(settings.orbitAxis.x, settings.orbitAxis.y, settings.orbitAxis.z).normalize();
+      // mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
+    }
+
+    return mesh;
+  }
+
+  // ==================== 创建星球 Mesh ====================
+
   function createPlanetMeshes(planet: PlanetSettings, sceneSettings: PlanetSceneSettings) {
     // 璉�瘚讠宏�刻挽憭?
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -10434,115 +10695,17 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       rings.add(ringGroup);
     });
 
-    // ===== 丝线环 =====
+    // ===== 丝线环 (Silk Ring) =====
     const silkRings = planet.rings.silkRings || [];
+    const silkRingsEnabled = planet.rings.silkRingsEnabled !== false;
+
     silkRings.forEach(silk => {
-      if (!planet.rings.silkRingsEnabled || !silk.enabled) return;
-      // Solo 模式检查
+      if (!silkRingsEnabled || !silk.enabled) return;
       if (planet.rings.silkRingsSoloId && planet.rings.silkRingsSoloId !== silk.id) return;
 
-      const coreRadius = planet.coreSystem?.solidCores?.[0]?.radius || 100;
-      const actualRadius = coreRadius * silk.orbitRadius;
-      const seed = silk.seed || Math.random() * 1000;
-
-      // 1. 建立轨道平面坐标系
-      const axis = new THREE.Vector3(silk.orbitAxis.x, silk.orbitAxis.y, silk.orbitAxis.z).normalize();
-      let u = new THREE.Vector3(0, 1, 0);
-      if (Math.abs(axis.y) > 0.99) u.set(1, 0, 0);
-      u.crossVectors(u, axis).normalize();
-      const v = new THREE.Vector3().crossVectors(axis, u).normalize();
-
-      // 2. 生成有机曲线路径
-      const points: THREE.Vector3[] = [];
-      const segments = silk.tubeSegments || 100;
-
-      for (let i = 0; i <= segments; i++) {
-        const theta = (i / segments) * Math.PI * 2;
-
-        // 基础形变
-        const baseWobble = Math.sin(theta * 3.0 + seed) * 0.4;
-        // 高频波动
-        const wobbleFreq = silk.wobbleFrequency || 6;
-        const wobbleAmp = silk.wobbleAmplitude || 0.4;
-        const spiralRipple = Math.cos(theta * wobbleFreq + seed * 2.0);
-        // 动态半径
-        const r = actualRadius + (baseWobble + spiralRipple) * wobbleAmp * actualRadius * 0.1;
-
-        // 2D平面坐标
-        const x = Math.cos(theta) * r;
-        const y = Math.sin(theta) * r;
-
-        const point = new THREE.Vector3()
-          .addScaledVector(u, x)
-          .addScaledVector(v, y);
-
-        // Z轴飘移使曲线立体化
-        const zDriftScale = silk.zDriftScale || 0.5;
-        const zDrift = Math.sin(theta * 2.0 + seed) * wobbleAmp * actualRadius * 0.1 * zDriftScale;
-        point.addScaledVector(axis, zDrift);
-
-        points.push(point);
-      }
-
-      // 3. 创建闭合曲线和管道几何体
-      const curve = new THREE.CatmullRomCurve3(points, true, 'centripetal', 0.5);
-      const geometry = new THREE.TubeGeometry(
-        curve,
-        silk.tubeSegments || 100,
-        (silk.thickness || 0.05) * coreRadius * 0.01,
-        silk.radialSegments || 6,
-        true
-      );
-
-      // 4. 计算颜色 uniforms
-      const colorSettings = silk.color || { mode: 'none', baseColor: '#00ffff', colors: ['#00ffff', '#ffffff'] };
-      const colorModeIndex = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 }[colorSettings.mode] || 0;
-      const baseCol = hexToRgb(colorSettings.baseColor || '#00ffff');
-      const col1 = hexToRgb(colorSettings.colors?.[0] || '#00ffff');
-      const col2 = hexToRgb(colorSettings.colors?.[1] || '#ffffff');
-      const col3 = hexToRgb(colorSettings.colors?.[2] || '#00ffff');
-
-      // 5. 创建着色器材质
-      const material = new THREE.ShaderMaterial({
-        vertexShader: silkRingVertexShader,
-        fragmentShader: silkRingFragmentShader,
-        uniforms: {
-          uTime: { value: 0 },
-          uFlowSpeed: { value: silk.flowSpeed || 2.5 },
-          uStrandDensity: { value: silk.strandDensity || 30 },
-          uSparkleEnabled: { value: silk.sparkleEnabled ? 1.0 : 0.0 },
-          uSparkleThreshold: { value: silk.sparkleThreshold || 0.95 },
-          uFresnelPower: { value: silk.fresnelPower || 2.5 },
-          uOpacity: { value: silk.opacity || 0.8 },
-          uEmissive: { value: silk.emissive || 1.5 },
-          uBloomBoost: { value: silk.bloomBoost || 1.0 },
-          uWobbleEnabled: { value: silk.wobbleEnabled ? 1.0 : 0.0 },
-          uWobbleIntensity: { value: silk.wobbleIntensity || 0.05 },
-          // 颜色 uniforms
-          uColorMode: { value: colorModeIndex },
-          uBaseColor: { value: new THREE.Vector3(baseCol[0], baseCol[1], baseCol[2]) },
-          uColor1: { value: new THREE.Vector3(col1[0], col1[1], col1[2]) },
-          uColor2: { value: new THREE.Vector3(col2[0], col2[1], col2[2]) },
-          uColor3: { value: new THREE.Vector3(col3[0], col3[1], col3[2]) },
-          uColorMidPos: { value: colorSettings.colorMidPosition || 0.5 },
-          uProceduralIntensity: { value: colorSettings.proceduralIntensity || 1.0 }
-        },
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending
-      });
-
-      const mesh = new THREE.Mesh(geometry, material);
+      const mesh = createSilkRingMesh(silk, isMobile);
       mesh.name = `silkRing_${silk.id}`;
-      mesh.userData = { silkRingId: silk.id, rotationSpeed: silk.rotationSpeed || 0.1 };
-      mesh.renderOrder = 18;
-
-      // 应用倾斜
-      const tiltAngles = getTiltAngles(silk.tilt);
-      mesh.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x);
-      mesh.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
-      mesh.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
+      mesh.userData = { silkRingId: silk.id, type: 'silkRing', rotationSpeed: silk.rotationSpeed || 0.1 };
 
       rings.add(mesh);
     });
@@ -10969,6 +11132,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       colors[i * 3 + 2] = b * brightness;
 
       sizes[i] = (2 + Math.random() * 3) * sizeScale;
+
       ids[i] = i;
     }
 
@@ -11036,10 +11200,10 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     const radius = ring.absoluteRadius;
 
     // 根据是否启用银河效果选择不同的粒子分布算法
-    let positions: Float32Array;
+    let basePositions: Float32Array;
     if (ring.galaxy?.enabled) {
       // 银河系螺旋臂分布
-      positions = generateGalaxyParticles(
+      basePositions = generateGalaxyParticles(
         radius,
         ring.particleDensity,
         ring.bandwidth,
@@ -11054,7 +11218,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       );
     } else {
       // 默认椭圆轨道分布
-      positions = generateRingParticles(
+      basePositions = generateRingParticles(
         radius,
         ring.eccentricity,
         ring.particleDensity,
@@ -11063,15 +11227,53 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       );
     }
 
-    const count = positions.length / 3;
-    const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
-    const ids = new Float32Array(count);
-    const radialDists = new Float32Array(count);  // 敺��敶雴��𤥁�蝳?
+    // 装饰物点缀逻辑
+    const ornamentSettings = ring.ornament;
+    const hasOrnaments = ornamentSettings?.enabled && (ornamentSettings.count || 0) > 0;
+    const ornamentCount = hasOrnaments ? (ornamentSettings.count || 0) : 0;
+    const baseCount = basePositions.length / 3;
+    const totalCount = baseCount + ornamentCount;
+
+    const positions = new Float32Array(totalCount * 3);
+    const colors = new Float32Array(totalCount * 3);
+    const sizes = new Float32Array(totalCount);
+    const ids = new Float32Array(totalCount);
+    const radialDists = new Float32Array(totalCount);
+
+    // 复制基础粒子位置
+    positions.set(basePositions);
+
+    // 生成装饰物位置
+    if (hasOrnaments) {
+      for (let j = 0; j < ornamentCount; j++) {
+        const idx = baseCount + j;
+        const angle = Math.random() * Math.PI * 2;
+        const rOffset = (Math.random() - 0.5) * (ring.bandwidth || 0.5);
+        const r = radius + rOffset;
+        const hOffset = (Math.random() - 0.5) * (ring.thickness || 0.2) * (1.0 + (ornamentSettings.sizeRandomness || 0.5));
+
+        const x = r * Math.cos(angle);
+        const z = r * Math.sin(angle);
+        const y = hOffset;
+
+        positions[idx * 3] = x;
+        positions[idx * 3 + 1] = y;
+        positions[idx * 3 + 2] = z;
+      }
+    }
+
+    const count = totalCount;
 
     const [baseR, baseG, baseB] = hexToRgb(ring.color);
     const brightness = ring.brightness || 1.0;
     const sizeScale = ring.particleSize || 1.0;
+
+    // 装饰物颜色和尺寸
+    const ornSizeScale = hasOrnaments ? (ornamentSettings.baseSize || 2.0) : 2.0;
+    let ornR = baseR, ornG = baseG, ornB = baseB;
+    if (hasOrnaments && ornamentSettings.colorMode === 'custom') {
+      [ornR, ornG, ornB] = hexToRgb(ornamentSettings.color || '#ffffff');
+    }
 
     // 憸𡏭𠧧璅∪�憭��
     const gc = ring.gradientColor;
@@ -11246,10 +11448,20 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         finalB = c1[2] + (c2[2] - c1[2]) * localT;
       }
 
+      // 装饰物特殊处理
+      if (hasOrnaments && i >= baseCount) {
+        if (ornamentSettings.colorMode === 'custom') {
+          finalR = ornR; finalG = ornG; finalB = ornB;
+        }
+        // 装饰物使用更大的尺寸
+        sizes[i] = (1 + Math.random() * 2) * sizeScale * ornSizeScale;
+      } else {
+        sizes[i] = (1 + Math.random() * 2) * sizeScale;
+      }
+
       colors[i * 3] = finalR * brightness;
       colors[i * 3 + 1] = finalG * brightness;
       colors[i * 3 + 2] = finalB * brightness;
-      sizes[i] = (1 + Math.random() * 2) * sizeScale;
       ids[i] = i;
     }
 
