@@ -8337,9 +8337,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               // 更新颜色相关 uniforms
               const colorSettings = ring.color;
               if (material.uniforms.uBlendStrength) material.uniforms.uBlendStrength.value = colorSettings?.blendStrength ?? 1.0;
-              if (material.uniforms.uColorDirection) {
+              if (material.uniforms.uGradientDirection) {
                 const dirMap: Record<string, number> = { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 };
-                material.uniforms.uColorDirection.value = dirMap[colorSettings?.direction || 'radial'] ?? 0;
+                material.uniforms.uGradientDirection.value = dirMap[colorSettings?.direction || 'radial'] ?? 0;
+              }
+              if (material.uniforms.uColorMidWidth) material.uniforms.uColorMidWidth.value = colorSettings?.colorMidWidth ?? 0;
+              if (material.uniforms.uSpiralDensity) material.uniforms.uSpiralDensity.value = colorSettings?.spiralDensity ?? 2;
+              if (material.uniforms.uProceduralAxis) {
+                const axisMap: Record<string, number> = { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 };
+                material.uniforms.uProceduralAxis.value = axisMap[colorSettings?.proceduralAxis || 'radial'] ?? 3;
               }
 
               // 自转（使用累计旋转，保持 tilt 设置）
@@ -10227,6 +10233,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 `;
 
   const silkRingFragmentShader = `
+  precision highp float;
+  
   uniform vec3 uColor;
   uniform float uOpacity;
   uniform float uEmissive;
@@ -10237,85 +10245,108 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   uniform float uTime;
   uniform float uFlowSpeed;
   
-  // 颜色模式 uniforms
-  uniform float uColorMode;       // 0=单色, 1=双色, 2=三色, 3=混色
+  // 颜色模式 uniforms (使用 int 类型与环带一致)
+  uniform int uColorMode;           // 0=单色, 1=双色, 2=三色, 3=混色
+  uniform int uGradientDirection;   // 0=radial, 1=linearX, 2=linearY, 3=linearZ, 4=spiral
   uniform vec3 uColor1;
   uniform vec3 uColor2;
   uniform vec3 uColor3;
-  uniform float uColorMidPos;     // 三色中间位置 0-1
+  uniform float uColorMidPos;       // 三色中间位置 0-1
+  uniform float uColorMidWidth;     // 中间色宽度
+  uniform float uBlendStrength;     // 过渡强度 0-1
+  uniform float uSpiralDensity;     // 螺旋密度
   uniform float uProceduralIntensity;
-  uniform float uBlendStrength;
-  uniform float uColorDirection;   // 0=radial, 1=linearX, 2=linearY, 3=linearZ, 4=spiral
+  uniform int uProceduralAxis;      // 0=x, 1=y, 2=z, 3=radial
   
   varying vec2 vUv;
   varying vec3 vWorldPosition;
   varying vec3 vNormal;
   varying vec3 vViewPosition;
 
+  #define PI 3.14159265359
+
   void main() {
-    // 计算渐变参数 t (0-1)
-    float t;
-    if (uColorDirection < 0.5) {
-      // 径向 (基于UV.x代表环的角度)
-      t = vUv.x;
-    } else if (uColorDirection < 1.5) {
+    // ===== 计算渐变参数 t (0-1) =====
+    float gradientT = vUv.x; // 默认使用环绕方向
+    
+    if (uGradientDirection == 0) {
+      // 径向 (沿环绕方向)
+      gradientT = vUv.x;
+    } else if (uGradientDirection == 1) {
       // X轴线性
-      t = vWorldPosition.x * 0.005 + 0.5;
-    } else if (uColorDirection < 2.5) {
+      gradientT = (vWorldPosition.x * 0.005 + 0.5);
+    } else if (uGradientDirection == 2) {
       // Y轴线性
-      t = vWorldPosition.y * 0.005 + 0.5;
-    } else if (uColorDirection < 3.5) {
+      gradientT = (vWorldPosition.y * 0.005 + 0.5);
+    } else if (uGradientDirection == 3) {
       // Z轴线性
-      t = vWorldPosition.z * 0.005 + 0.5;
-    } else {
+      gradientT = (vWorldPosition.z * 0.005 + 0.5);
+    } else if (uGradientDirection == 4) {
       // 螺旋
       float angle = atan(vWorldPosition.y, vWorldPosition.x);
-      t = fract(angle / 6.28318 + vUv.x * 2.0);
+      gradientT = fract(angle / (2.0 * PI) * uSpiralDensity + vUv.x);
     }
-    t = clamp(t, 0.0, 1.0);
+    gradientT = clamp(gradientT, 0.0, 1.0);
     
-    // 根据颜色模式计算基础颜色
-    vec3 baseColor;
-    if (uColorMode < 0.5) {
+    // ===== 根据颜色模式计算基础颜色 =====
+    vec3 baseColor = uColor;
+    
+    if (uColorMode == 0) {
       // 单色模式
       baseColor = uColor;
-    } else if (uColorMode < 1.5) {
+    } else if (uColorMode == 1) {
       // 双色渐变
-      baseColor = mix(uColor1, uColor2, t * uBlendStrength + (1.0 - uBlendStrength) * 0.5);
-    } else if (uColorMode < 2.5) {
+      float t = gradientT;
+      // 应用 blendStrength: 1=完全渐变, 0=中间色
+      t = mix(0.5, t, uBlendStrength);
+      baseColor = mix(uColor1, uColor2, t);
+    } else if (uColorMode == 2) {
       // 三色渐变
-      if (t < uColorMidPos) {
-        float localT = t / uColorMidPos;
-        baseColor = mix(uColor1, uColor2, localT * uBlendStrength);
+      float t = gradientT;
+      float midPos = uColorMidPos;
+      float midHalfWidth = uColorMidWidth * 0.1; // 中间色展宽
+      
+      if (t < midPos - midHalfWidth) {
+        // 第一段: color1 -> color2
+        float localT = t / max(midPos - midHalfWidth, 0.001);
+        localT = mix(0.5, localT, uBlendStrength);
+        baseColor = mix(uColor1, uColor2, localT);
+      } else if (t > midPos + midHalfWidth) {
+        // 第三段: color2 -> color3
+        float localT = (t - midPos - midHalfWidth) / max(1.0 - midPos - midHalfWidth, 0.001);
+        localT = mix(0.5, localT, uBlendStrength);
+        baseColor = mix(uColor2, uColor3, localT);
       } else {
-        float localT = (t - uColorMidPos) / (1.0 - uColorMidPos);
-        baseColor = mix(uColor2, uColor3, localT * uBlendStrength);
+        // 中间段: 显示 color2
+        baseColor = uColor2;
       }
-    } else {
+    } else if (uColorMode == 3) {
       // 混色模式 (程序化)
-      float noise = sin(vUv.y * 10.0 + uTime * 0.5) * 0.5 + 0.5;
+      float proceduralT = 0.0;
+      if (uProceduralAxis == 0) proceduralT = (vWorldPosition.x * 0.01 + 0.5);
+      else if (uProceduralAxis == 1) proceduralT = (vWorldPosition.y * 0.01 + 0.5);
+      else if (uProceduralAxis == 2) proceduralT = (vWorldPosition.z * 0.01 + 0.5);
+      else proceduralT = vUv.x;
+      
+      float noise = sin(proceduralT * 10.0 + uTime * 0.5) * 0.5 + 0.5;
       baseColor = uColor * (1.0 + (noise - 0.5) * uProceduralIntensity);
     }
     
-    // 丝线纹理效果
+    // ===== 丝线纹理效果 =====
     float strandNoise = sin(vUv.x * uStrandDensity + uTime * uFlowSpeed) * 0.5 + 0.5;
     float strand = smoothstep(0.4, 0.6, strandNoise);
     
-    // 菲涅尔边缘发光
+    // ===== 菲涅尔边缘发光 =====
     vec3 normal = normalize(vNormal);
     vec3 viewDir = normalize(vViewPosition);
     float fresnel = pow(1.0 - abs(dot(normal, viewDir)), uFresnelPower);
     
-    // 基础颜色 + 发光
+    // ===== 最终颜色计算 =====
     vec3 finalColor = baseColor * uEmissive;
-    
-    // 叠加丝线效果
     finalColor += baseColor * strand * 0.5;
-    
-    // 叠加菲涅尔
     finalColor += baseColor * fresnel * 2.0;
     
-    // 闪烁效果 (Sparkle)
+    // ===== 闪烁效果 =====
     float sparkle = 0.0;
     if (uSparkleEnabled > 0.5) {
       float noiseVal = fract(sin(dot(vUv, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
@@ -10325,8 +10356,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     }
     finalColor += vec3(1.0) * sparkle * 2.0;
 
-    // 透明度处理
-    float alpha = uOpacity * (0.5 + 0.5 * fresnel); // 边缘更不透明
+    // ===== 透明度处理 =====
+    float alpha = uOpacity * (0.5 + 0.5 * fresnel);
     
     gl_FragColor = vec4(finalColor, alpha);
   }
@@ -10372,16 +10403,19 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
         uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
 
-        // 颜色系统 (仿照环带)
+        // 颜色系统 (仿照环带, 使用int类型)
         uColor: { value: parseColor(colorSettings?.baseColor || colors[0] || '#00ffff') },
         uColorMode: { value: colorModeMap[colorMode] ?? 0 },
+        uGradientDirection: { value: { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 }[colorSettings?.direction || 'radial'] ?? 0 },
         uColor1: { value: parseColor(colors[0] || '#00ffff') },
         uColor2: { value: parseColor(colors[1] || '#ffffff') },
         uColor3: { value: parseColor(colors[2] || '#00ffff') },
         uColorMidPos: { value: colorSettings?.colorMidPosition ?? 0.5 },
-        uProceduralIntensity: { value: colorSettings?.proceduralIntensity ?? 1.0 },
+        uColorMidWidth: { value: colorSettings?.colorMidWidth ?? 0 },
         uBlendStrength: { value: colorSettings?.blendStrength ?? 1.0 },
-        uColorDirection: { value: { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 }[colorSettings?.direction || 'radial'] ?? 0 },
+        uSpiralDensity: { value: colorSettings?.spiralDensity ?? 2 },
+        uProceduralIntensity: { value: colorSettings?.proceduralIntensity ?? 1.0 },
+        uProceduralAxis: { value: { 'x': 0, 'y': 1, 'z': 2, 'radial': 3 }[colorSettings?.proceduralAxis || 'radial'] ?? 3 },
 
         // 几何波动
         uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },
@@ -10400,11 +10434,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     const mesh = new THREE.Mesh(geometry, material);
     mesh.renderOrder = 25; // 确保渲染顺序
 
-    // 应用 tilt 变换
-    if (settings.tilt) {
-      const tiltAngles = getTiltAngles(settings.tilt);
-      mesh.rotation.set(tiltAngles.x, tiltAngles.y, tiltAngles.z);
-    }
+    // 应用 tilt 变换（TorusGeometry 默认在 XZ 平面，+90度才能水平放置）
+    const tiltAngles = getTiltAngles(settings.tilt ?? DEFAULT_TILT_SETTINGS);
+    mesh.rotation.x = THREE.MathUtils.degToRad(tiltAngles.x + 90);
+    mesh.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
+    mesh.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
 
     // 保存初始旋转以供动画循环使用
     mesh.userData.initialRotation = mesh.rotation.clone();
@@ -10439,7 +10473,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       solidCores.forEach(sc => {
         const visible = solidCoresEnabled && sc.enabled;
         const mesh = createSolidCoreMesh(sc, isMobile);
-        mesh.name = `solidCore_${sc.id}`;
+        mesh.name = `solidCore_${sc.id} `;
         mesh.userData = { solidCoreId: sc.id };
         mesh.visible = visible;
         solidCoreGroup.add(mesh);
@@ -10474,7 +10508,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 
         // �𥕦遣�詨�蝏����鉄銝餃��峕�撠曉�嚗?
         const singleCoreGroup = new THREE.Group();
-        singleCoreGroup.name = `core_${coreConfig.id}`;
+        singleCoreGroup.name = `core_${coreConfig.id} `;
         singleCoreGroup.userData = { coreId: coreConfig.id };
 
         // �硋偏撅�㺭�𧶏��寞旿 trailLength 霈∠�嚗?=�䭾�撠橘�
@@ -10769,25 +10803,25 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             uniform float uPulseSpeed;
             uniform float uPulseIntensity;
             uniform float uPulseSync;
-            
-            void main() {
-              vPhase = aPhase;
-              vRandom = aRandom;
+
+void main() {
+  vPhase = aPhase;
+  vRandom = aRandom;
               
               vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-              
+
               // 脉冲效果
               float pulse = 1.0;
-              if (uPulseEnabled > 0.5) {
+  if (uPulseEnabled > 0.5) {
                 float phaseOffset = uPulseSync > 0.5 ? 0.0 : aPhase;
-                pulse = 1.0 + sin(uTime * uPulseSpeed + phaseOffset) * uPulseIntensity;
-              }
+    pulse = 1.0 + sin(uTime * uPulseSpeed + phaseOffset) * uPulseIntensity;
+  }
               
               float size = uBaseSize * aSize * pulse;
-              gl_PointSize = size * (300.0 / -mvPosition.z);
-              gl_Position = projectionMatrix * mvPosition;
-            }
-          `,
+  gl_PointSize = size * (300.0 / -mvPosition.z);
+  gl_Position = projectionMatrix * mvPosition;
+}
+`,
           fragmentShader: `
             uniform vec3 uColor;
             uniform float uOpacity;
@@ -10798,68 +10832,68 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             uniform float uFlareWidth;
             varying float vPhase;
             varying float vRandom;
-            
-            #define PI 3.14159265359
-            
+
+#define PI 3.14159265359
+
             // 星芒形状
             float flareShape(vec2 uv, float leaves, float width) {
               float angle = atan(uv.y, uv.x);
               float r = length(uv);
               float flare = abs(cos(angle * leaves * 0.5));
-              flare = pow(flare, 1.0 / width);
-              return smoothstep(1.0, 0.0, r / (flare * 0.5 + 0.1));
-            }
-            
+  flare = pow(flare, 1.0 / width);
+  return smoothstep(1.0, 0.0, r / (flare * 0.5 + 0.1));
+}
+
             // 星形
             float starShape(vec2 uv) {
               float angle = atan(uv.y, uv.x);
               float r = length(uv);
               float star = abs(cos(angle * 2.5));
-              star = 0.3 + star * 0.4;
-              return smoothstep(star, star - 0.1, r);
-            }
-            
+  star = 0.3 + star * 0.4;
+  return smoothstep(star, star - 0.1, r);
+}
+
             // 火花形状
             float sparkShape(vec2 uv) {
               float r = length(uv);
               float angle = atan(uv.y, uv.x);
               float rays = pow(abs(sin(angle * 4.0)), 3.0) * 0.3;
-              return smoothstep(0.5 + rays, 0.0, r);
-            }
-            
-            void main() {
+  return smoothstep(0.5 + rays, 0.0, r);
+}
+
+void main() {
               vec2 uv = gl_PointCoord * 2.0 - 1.0;
               float r = length(uv);
               
               float alpha = 0.0;
-              
-              if (uShape < 0.5) {
-                // plain - 圆形
-                alpha = smoothstep(1.0, 0.3, r);
-              } else if (uShape < 1.5) {
-                // flare - 星芒
-                alpha = flareShape(uv, uFlareLeaves, uFlareWidth);
-              } else if (uShape < 2.5) {
-                // spark - 火花
-                alpha = sparkShape(uv);
-              } else if (uShape < 4.5) {
-                // texture/star
-                alpha = starShape(uv);
-              } else {
+
+  if (uShape < 0.5) {
+    // plain - 圆形
+    alpha = smoothstep(1.0, 0.3, r);
+  } else if (uShape < 1.5) {
+    // flare - 星芒
+    alpha = flareShape(uv, uFlareLeaves, uFlareWidth);
+  } else if (uShape < 2.5) {
+    // spark - 火花
+    alpha = sparkShape(uv);
+  } else if (uShape < 4.5) {
+    // texture/star
+    alpha = starShape(uv);
+  } else {
                 // 其他形状使用基础圆形 + 发光
                 float core = smoothstep(0.5, 0.0, r);
                 float glow = smoothstep(1.0, 0.0, r) * 0.5;
-                alpha = core + glow * uGlowIntensity;
-              }
-              
+    alpha = core + glow * uGlowIntensity;
+  }
+
               // 发光效果
               float glow = smoothstep(1.2, 0.0, r) * uGlowIntensity * 0.3;
-              alpha = alpha + glow;
+  alpha = alpha + glow;
               
               vec3 finalColor = uColor * uBrightness;
-              gl_FragColor = vec4(finalColor, alpha * uOpacity);
-            }
-          `,
+  gl_FragColor = vec4(finalColor, alpha * uOpacity);
+}
+`,
           uniforms: {
             uTime: { value: 0 },
             uColor: { value: ornColor },
@@ -10904,7 +10938,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       if (planet.rings.silkRingsSoloId && planet.rings.silkRingsSoloId !== silk.id) return;
 
       const mesh = createSilkRingMesh(silk, isMobile);
-      mesh.name = `silkRing_${silk.id}`;
+      mesh.name = `silkRing_${silk.id} `;
       mesh.userData = { silkRingId: silk.id, type: 'silkRing', rotationSpeed: silk.rotationSpeed || 0.1 };
 
       rings.add(mesh);
@@ -12101,7 +12135,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       group.userData = { type: 'wandering', groupId: groupSettings.id, index: i };
 
       fireflies.push({
-        id: `${groupSettings.id}-${i}`,
+        id: `${groupSettings.id} -${i} `,
         type: 'wandering',
         group,
         headMesh,
@@ -12193,25 +12227,25 @@ function createParticleEmitter(baseRadius: number): ParticleEmitterData {
       attribute float aAlpha;
       varying vec3 vColor;
       varying float vAlpha;
-      void main() {
-        vColor = aColor;
-        vAlpha = aAlpha;
+void main() {
+  vColor = aColor;
+  vAlpha = aAlpha;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = aSize * (300.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
+  gl_PointSize = aSize * (300.0 / -mvPosition.z);
+  gl_Position = projectionMatrix * mvPosition;
+}
+`,
     fragmentShader: `
       varying vec3 vColor;
       varying float vAlpha;
-      void main() {
+void main() {
         vec2 uv = gl_PointCoord - 0.5;
         float dist = length(uv);
-        if (dist > 0.5) discard;
+  if (dist > 0.5) discard;
         float alpha = smoothstep(0.5, 0.0, dist) * vAlpha;
-        gl_FragColor = vec4(vColor, alpha);
-      }
-    `,
+  gl_FragColor = vec4(vColor, alpha);
+}
+`,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false

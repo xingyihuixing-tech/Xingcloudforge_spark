@@ -8417,6 +8417,10 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               </div>
                             </div>
                           )}
+                          {/* 实例计数 */}
+                          <div className="mt-2 text-xs text-gray-500 text-right">
+                            已启用: {silkRings.filter(r => r.enabled).length} / {silkRings.length}
+                          </div>
                         </div>
                       )}
 
@@ -9119,7 +9123,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                           </div>
                         );
                       })()}
-                    </ControlGroup>
+                    </ControlGroup >
                   );
                 })()}
 
@@ -11303,7 +11307,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
             </>
           )}
         </>
-      )}
+      )
+      }
 
       {/* 通用确认弹窗 */}
       <TransparentModal
@@ -11324,7 +11329,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
         placeholder={inputModal.placeholder}
         defaultValue={inputModal.defaultValue}
       />
-    </div>
+    </div >
   );
 };
 
