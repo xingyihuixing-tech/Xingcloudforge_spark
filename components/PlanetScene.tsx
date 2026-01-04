@@ -7054,7 +7054,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         const vKey = v?.enabled ? `${v.armCount}:${v.twist}:${v.rotationSpeed}:${v.radialDirection}:${v.radialSpeed}:${v.hardness}:${v.colors?.join(',')}` : '';
         return `${r.id}:${r.enabled}:${r.eccentricity}:${r.absoluteInnerRadius}:${r.absoluteOuterRadius}:${r.color}:${r.opacity}:${r.opacityGradient}:${r.opacityGradientStrength ?? 0.5}:${r.brightness}:${r.tilt?.axis}:${r.tilt?.angle}:${r.rotationSpeed}:${r.orbitAxis?.axis}:${r.orbitAxis?.angle}:${g?.enabled}:${gKey}:${v?.enabled}:${vKey}`;
       }).join('|') + `/sr:${p.rings.silkRingsEnabled}|` + (p.rings.silkRings || []).map(r => {
-        return `${r.id}:${r.enabled}:${r.orbitRadius}:${r.thickness}:${r.tubeSegments}:${r.radialSegments}:${r.wobbleEnabled}:${r.wobbleFrequency}:${r.wobbleAmplitude}:${r.zDriftScale}:${r.seed}:${r.tilt?.axis}:${r.tilt?.angle}:${r.orbitAxis?.x},${r.orbitAxis?.y},${r.orbitAxis?.z}`;
+        return `${r.id}:${r.enabled}:${r.orbitRadius}:${r.thickness}:${r.tubeSegments}:${r.radialSegments}`;
       }).join('|');
       // 颲𣂼���㺭 - �舀�憭帋葵嚗���怠�撅�撘��?
       // 瘜冽�嚗𡁶�摮𣂼𪃾撠���冽����堆�emissionRangeMin/Max, fadeOutStrength蝑㚁��典𢆡�餃儐�臭葉摰墧𧒄霂餃�嚗䔶���閬�𦆮�?geometryKey
@@ -8334,11 +8334,28 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                 }
               }
 
-              // 自转（直接使用ring设置，不使用userData缓存）
-              const rotSpeed = ring.rotationSpeed ?? 0.1;
-              child.rotateOnAxis(new THREE.Vector3(0, 0, 1), rotSpeed * 0.01);
+              // 更新颜色相关 uniforms
+              const colorSettings = ring.color;
+              if (material.uniforms.uBlendStrength) material.uniforms.uBlendStrength.value = colorSettings?.blendStrength ?? 1.0;
+              if (material.uniforms.uColorDirection) {
+                const dirMap: Record<string, number> = { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 };
+                material.uniforms.uColorDirection.value = dirMap[colorSettings?.direction || 'radial'] ?? 0;
+              }
 
-              // 公转（绕公转轴旋转）
+              // 自转（使用累计旋转，保持 tilt 设置）
+              const rotSpeed = ring.rotationSpeed ?? 0.1;
+              userData.totalSelfRotation = (userData.totalSelfRotation || 0) + rotSpeed * 0.01;
+
+              // 重置到初始 tilt 再应用自转
+              if (userData.initialRotation) {
+                child.rotation.copy(userData.initialRotation);
+                child.rotateOnAxis(new THREE.Vector3(0, 0, 1), userData.totalSelfRotation);
+              } else {
+                // 没有初始值时直接累加
+                child.rotateOnAxis(new THREE.Vector3(0, 0, 1), rotSpeed * 0.01);
+              }
+
+              // 公转（绕核心旋转位置）
               const orbitSpeed = ring.orbitSpeed ?? 0;
               if (orbitSpeed !== 0) {
                 const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
@@ -10220,12 +10237,66 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
   uniform float uTime;
   uniform float uFlowSpeed;
   
+  // 颜色模式 uniforms
+  uniform float uColorMode;       // 0=单色, 1=双色, 2=三色, 3=混色
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform float uColorMidPos;     // 三色中间位置 0-1
+  uniform float uProceduralIntensity;
+  uniform float uBlendStrength;
+  uniform float uColorDirection;   // 0=radial, 1=linearX, 2=linearY, 3=linearZ, 4=spiral
+  
   varying vec2 vUv;
   varying vec3 vWorldPosition;
   varying vec3 vNormal;
   varying vec3 vViewPosition;
 
   void main() {
+    // 计算渐变参数 t (0-1)
+    float t;
+    if (uColorDirection < 0.5) {
+      // 径向 (基于UV.x代表环的角度)
+      t = vUv.x;
+    } else if (uColorDirection < 1.5) {
+      // X轴线性
+      t = vWorldPosition.x * 0.005 + 0.5;
+    } else if (uColorDirection < 2.5) {
+      // Y轴线性
+      t = vWorldPosition.y * 0.005 + 0.5;
+    } else if (uColorDirection < 3.5) {
+      // Z轴线性
+      t = vWorldPosition.z * 0.005 + 0.5;
+    } else {
+      // 螺旋
+      float angle = atan(vWorldPosition.y, vWorldPosition.x);
+      t = fract(angle / 6.28318 + vUv.x * 2.0);
+    }
+    t = clamp(t, 0.0, 1.0);
+    
+    // 根据颜色模式计算基础颜色
+    vec3 baseColor;
+    if (uColorMode < 0.5) {
+      // 单色模式
+      baseColor = uColor;
+    } else if (uColorMode < 1.5) {
+      // 双色渐变
+      baseColor = mix(uColor1, uColor2, t * uBlendStrength + (1.0 - uBlendStrength) * 0.5);
+    } else if (uColorMode < 2.5) {
+      // 三色渐变
+      if (t < uColorMidPos) {
+        float localT = t / uColorMidPos;
+        baseColor = mix(uColor1, uColor2, localT * uBlendStrength);
+      } else {
+        float localT = (t - uColorMidPos) / (1.0 - uColorMidPos);
+        baseColor = mix(uColor2, uColor3, localT * uBlendStrength);
+      }
+    } else {
+      // 混色模式 (程序化)
+      float noise = sin(vUv.y * 10.0 + uTime * 0.5) * 0.5 + 0.5;
+      baseColor = uColor * (1.0 + (noise - 0.5) * uProceduralIntensity);
+    }
+    
     // 丝线纹理效果
     float strandNoise = sin(vUv.x * uStrandDensity + uTime * uFlowSpeed) * 0.5 + 0.5;
     float strand = smoothstep(0.4, 0.6, strandNoise);
@@ -10236,13 +10307,13 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     float fresnel = pow(1.0 - abs(dot(normal, viewDir)), uFresnelPower);
     
     // 基础颜色 + 发光
-    vec3 finalColor = uColor * uEmissive;
+    vec3 finalColor = baseColor * uEmissive;
     
     // 叠加丝线效果
-    finalColor += uColor * strand * 0.5;
+    finalColor += baseColor * strand * 0.5;
     
     // 叠加菲涅尔
-    finalColor += uColor * fresnel * 2.0;
+    finalColor += baseColor * fresnel * 2.0;
     
     // 闪烁效果 (Sparkle)
     float sparkle = 0.0;
@@ -10309,6 +10380,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         uColor3: { value: parseColor(colors[2] || '#00ffff') },
         uColorMidPos: { value: colorSettings?.colorMidPosition ?? 0.5 },
         uProceduralIntensity: { value: colorSettings?.proceduralIntensity ?? 1.0 },
+        uBlendStrength: { value: colorSettings?.blendStrength ?? 1.0 },
+        uColorDirection: { value: { 'radial': 0, 'linearX': 1, 'linearY': 2, 'linearZ': 3, 'spiral': 4 }[colorSettings?.direction || 'radial'] ?? 0 },
 
         // 几何波动
         uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },
@@ -10327,17 +10400,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     const mesh = new THREE.Mesh(geometry, material);
     mesh.renderOrder = 25; // 确保渲染顺序
 
-    // 应用变换
+    // 应用 tilt 变换
     if (settings.tilt) {
       const tiltAngles = getTiltAngles(settings.tilt);
       mesh.rotation.set(tiltAngles.x, tiltAngles.y, tiltAngles.z);
     }
 
-    // 应用自定义轨道轴
-    if (settings.orbitAxis) {
-      // const axis = new THREE.Vector3(settings.orbitAxis.x, settings.orbitAxis.y, settings.orbitAxis.z).normalize();
-      // mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), axis);
-    }
+    // 保存初始旋转以供动画循环使用
+    mesh.userData.initialRotation = mesh.rotation.clone();
+    mesh.userData.totalSelfRotation = 0; // 累计自转角度
 
     return mesh;
   }
