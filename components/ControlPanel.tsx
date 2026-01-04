@@ -6603,6 +6603,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                       key: 'rings' as const, icon: '💫', label: '光环', color: '#a78bfa', count:
                         ((planet.rings.enabled ?? true) && planet.rings.particleRingsEnabled ? planet.rings.particleRings.filter(r => r.enabled).length : 0) +
                         ((planet.rings.enabled ?? true) && planet.rings.continuousRingsEnabled ? planet.rings.continuousRings.filter(r => r.enabled).length : 0) +
+                        ((planet.rings.enabled ?? true) && planet.rings.silkRingsEnabled ? (planet.rings.silkRings || []).filter(r => r.enabled).length : 0) +
                         ((planet.rings.enabled ?? true) && (planet.flameSystem?.spiralFlamesEnabled ?? true) ? (planet.flameSystem?.spiralFlames?.filter(s => s.enabled).length || 0) : 0)
                     },
                     {
@@ -8254,7 +8255,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 )}
                                 {/* 波动参数 */}
                                 <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={200} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
-                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
+                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={1} max={50} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
                                 <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
                                 {/* 流动速度(原动画效果) */}
                                 <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={1} max={30} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />

@@ -8360,13 +8360,18 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 
               // 先重置到 tilt 基础旋转，再应用自转
               child.rotation.set(baseTiltX, baseTiltY, baseTiltZ);
-              child.rotateOnAxis(new THREE.Vector3(0, 0, 1), userData.totalSelfRotation);
+              // 使用缓存的 Vector3 避免每帧创建新对象
+              if (!userData.selfRotAxis) userData.selfRotAxis = new THREE.Vector3(0, 0, 1);
+              child.rotateOnAxis(userData.selfRotAxis, userData.totalSelfRotation);
 
               // 公转（绕核心旋转位置）
               const orbitSpeed = ring.orbitSpeed ?? 0;
               if (orbitSpeed !== 0) {
                 const orbitAxis = ring.orbitAxis ? getOrbitAxisVector(ring.orbitAxis) : { x: 0, y: 1, z: 0 };
-                child.rotateOnWorldAxis(new THREE.Vector3(orbitAxis.x, orbitAxis.y, orbitAxis.z), orbitSpeed * 0.01);
+                // 使用缓存的 Vector3 避免每帧创建新对象
+                if (!userData.orbitAxisVec) userData.orbitAxisVec = new THREE.Vector3();
+                userData.orbitAxisVec.set(orbitAxis.x, orbitAxis.y, orbitAxis.z);
+                child.rotateOnWorldAxis(userData.orbitAxisVec, orbitSpeed * 0.01);
               }
             }
           }
