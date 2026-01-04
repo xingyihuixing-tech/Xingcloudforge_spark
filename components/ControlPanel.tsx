@@ -8209,16 +8209,16 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* 形态变化 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">形态波动</span>
-                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={50} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
-                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={0} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
-                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={0} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
+                                <RangeControl label="波动频率" value={currentSilkRing.wobbleFrequency} min={1} max={200} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleFrequency: v })} />
+                                <RangeControl label="波动幅度" value={currentSilkRing.wobbleAmplitude} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { wobbleAmplitude: v })} />
+                                <RangeControl label="Z轴飘移" value={currentSilkRing.zDriftScale} min={1} max={20} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { zDriftScale: v })} />
                               </div>
 
                               {/* 动画效果 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">动画效果</span>
-                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={0} max={10} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
-                                <RangeControl label="自转速度" value={currentSilkRing.rotationSpeed} min={0} max={2} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { rotationSpeed: v })} />
+                                <RangeControl label="流动速度" value={currentSilkRing.flowSpeed} min={1} max={30} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { flowSpeed: v })} />
+                                <RangeControl label="自转速度" value={currentSilkRing.rotationSpeed} min={1} max={10} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { rotationSpeed: v })} />
                                 {/* 网格抖动 */}
                                 <div className="flex items-center justify-between mt-2">
                                   <span className="text-xs text-gray-400">网格抖动</span>
@@ -8249,7 +8249,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               {/* 视觉效果 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">视觉效果</span>
-                                <RangeControl label="丝线密度" value={currentSilkRing.strandDensity} min={5} max={100} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { strandDensity: v })} />
+                                <RangeControl label="丝线密度" value={currentSilkRing.strandDensity} min={5} max={200} step={1} onChange={(v) => updateSilkRing(currentSilkRing.id, { strandDensity: v })} />
                                 {/* 闪点效果 */}
                                 <div className="flex items-center justify-between mt-2">
                                   <span className="text-xs text-gray-400">闪点效果</span>
@@ -8278,25 +8278,26 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 <RangeControl label="菲涅尔指数" value={currentSilkRing.fresnelPower} min={0.5} max={8} step={0.5} onChange={(v) => updateSilkRing(currentSilkRing.id, { fresnelPower: v })} />
                                 <RangeControl label="透明度" value={currentSilkRing.opacity} min={0.1} max={1} step={0.05} onChange={(v) => updateSilkRing(currentSilkRing.id, { opacity: v })} />
                                 <RangeControl label="发光强度" value={currentSilkRing.emissive} min={0} max={5} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { emissive: v })} />
-                                <RangeControl label="Bloom增强" value={currentSilkRing.bloomBoost} min={0} max={3} step={0.1} onChange={(v) => updateSilkRing(currentSilkRing.id, { bloomBoost: v })} />
+
                               </div>
 
                               {/* 颜色模式 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs text-gray-400 block mb-2">颜色设置</span>
-                                <div className="flex gap-1 mb-2">
+                                <div className="grid grid-cols-4 gap-1 mb-2">
                                   {[
-                                    { key: 'none', label: '单色' },
-                                    { key: 'twoColor', label: '双色' },
-                                    { key: 'threeColor', label: '三色' },
-                                    { key: 'procedural', label: '混色' }
-                                  ].map(({ key, label }) => (
+                                    { id: 'none', label: '单色' },
+                                    { id: 'twoColor', label: '双色' },
+                                    { id: 'threeColor', label: '三色' },
+                                    { id: 'procedural', label: '混色' }
+                                  ].map(m => (
                                     <button
-                                      key={key}
-                                      onClick={() => setSilkRingColorMode(key)}
-                                      className={`flex-1 px-2 py-1 text-xs rounded ${currentSilkRing.color?.mode === key ? 'bg-pink-500/50 text-white' : 'bg-black/30 text-white/60'}`}
+                                      key={m.id}
+                                      onClick={() => setSilkRingColorMode(m.id)}
+                                      className="px-1 py-1 text-[10px] rounded transition-all duration-200"
+                                      style={getOptionButtonStyle(currentSilkRing.color?.mode === m.id)}
                                     >
-                                      {label}
+                                      {m.label}
                                     </button>
                                   ))}
                                 </div>

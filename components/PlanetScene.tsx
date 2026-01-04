@@ -7371,12 +7371,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       const time = clockRef.current.getElapsedTime();
       const currentSettings = settingsRef.current;
 
-      // �湔鰵�批��?
+      // 更新控制器
       if (controlsRef.current) {
+        // 同步相机自动旋转设置
+        controlsRef.current.autoRotate = currentSettings.cameraAutoRotate !== false;
+        controlsRef.current.autoRotateSpeed = currentSettings.cameraAutoRotateSpeed ?? 0.5;
         controlsRef.current.update();
       }
 
-      // �湔鰵�煺�蝎鍦�蝟餌�嚗���𡁏芋撘𧶏�
+      // 湔鰵煺蝎鍦蝟餌嚗𡁏芋撘𧶏
       if (nebulaMaterialRef.current) {
         nebulaMaterialRef.current.uniforms.uTime.value = time;
         // �峕郊�见飵����唳�鈭𡢅��典��Ｚ恣蝞堒�撟單��澆��湔鰵嚗?
@@ -8283,28 +8286,56 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
               if (material?.uniforms) {
                 if (material.uniforms.uTime) material.uniforms.uTime.value = time;
 
-                // 更新动态属性（添加null检查）
+                // 基础属性
                 if (material.uniforms.uOpacity) material.uniforms.uOpacity.value = ring.opacity ?? 0.8;
                 if (material.uniforms.uEmissive) material.uniforms.uEmissive.value = ring.emissive ?? 1.0;
                 if (material.uniforms.uFlowSpeed) material.uniforms.uFlowSpeed.value = ring.flowSpeed ?? 1.0;
-                if (material.uniforms.uWobbleEnabled) material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
-                if (material.uniforms.uWobbleIntensity) material.uniforms.uWobbleIntensity.value = ring.wobbleIntensity ?? 0.05;
-                // 闪点效果即时更新
-                if (material.uniforms.uSparkleEnabled) material.uniforms.uSparkleEnabled.value = ring.sparkleEnabled ? 1.0 : 0.0;
-                if (material.uniforms.uSparkleThreshold) material.uniforms.uSparkleThreshold.value = ring.sparkleThreshold ?? 0.95;
                 if (material.uniforms.uFresnelPower) material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.5;
                 if (material.uniforms.uStrandDensity) material.uniforms.uStrandDensity.value = ring.strandDensity ?? 30;
-                if (material.uniforms.uBloomBoost) material.uniforms.uBloomBoost.value = ring.bloomBoost ?? 1.0;
+
+                // 网格抖动
+                if (material.uniforms.uWobbleEnabled) material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
+                if (material.uniforms.uWobbleIntensity) material.uniforms.uWobbleIntensity.value = ring.wobbleIntensity ?? 0.05;
+
+                // 形态波动参数
+                if (material.uniforms.uWobbleFrequency) material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 6;
+                if (material.uniforms.uWobbleAmplitude) material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.3;
+                if (material.uniforms.uZDriftScale) material.uniforms.uZDriftScale.value = ring.zDriftScale ?? 0.5;
+
+                // 闪点效果
+                if (material.uniforms.uSparkleEnabled) material.uniforms.uSparkleEnabled.value = ring.sparkleEnabled ? 1.0 : 0.0;
+                if (material.uniforms.uSparkleThreshold) material.uniforms.uSparkleThreshold.value = ring.sparkleThreshold ?? 0.95;
+
+                // 颜色系统更新
+                const colorSettings = ring.color;
+                const colors = colorSettings?.colors || ['#00ffff', '#ffffff', '#00ffff'];
+                const colorModeMap: Record<string, number> = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
+                if (material.uniforms.uColorMode) material.uniforms.uColorMode.value = colorModeMap[colorSettings?.mode || 'none'] ?? 0;
+                if (material.uniforms.uColorMidPos) material.uniforms.uColorMidPos.value = colorSettings?.colorMidPosition ?? 0.5;
+                if (material.uniforms.uProceduralIntensity) material.uniforms.uProceduralIntensity.value = colorSettings?.proceduralIntensity ?? 1.0;
 
                 // 更新颜色
-                if (ring.color?.baseColor && material.uniforms.uColor) {
-                  const c = new THREE.Color(ring.color.baseColor);
+                if (material.uniforms.uColor) {
+                  const baseColor = colorSettings?.baseColor || colors[0] || '#00ffff';
+                  const c = new THREE.Color(baseColor);
                   material.uniforms.uColor.value.set(c.r, c.g, c.b);
+                }
+                if (material.uniforms.uColor1 && colors[0]) {
+                  const c = new THREE.Color(colors[0]);
+                  material.uniforms.uColor1.value.set(c.r, c.g, c.b);
+                }
+                if (material.uniforms.uColor2 && colors[1]) {
+                  const c = new THREE.Color(colors[1]);
+                  material.uniforms.uColor2.value.set(c.r, c.g, c.b);
+                }
+                if (material.uniforms.uColor3 && colors[2]) {
+                  const c = new THREE.Color(colors[2]);
+                  material.uniforms.uColor3.value.set(c.r, c.g, c.b);
                 }
               }
 
-              // 自转
-              const rotSpeed = userData.rotationSpeed ?? ring.rotationSpeed ?? 0.1;
+              // 自转（直接使用ring设置，不使用userData缓存）
+              const rotSpeed = ring.rotationSpeed ?? 0.1;
               child.rotateOnAxis(new THREE.Vector3(0, 0, 1), rotSpeed * 0.01);
             }
           }
@@ -10244,25 +10275,40 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       return new THREE.Vector3(c.r, c.g, c.b);
     };
 
+    // 获取颜色值
+    const colorSettings = settings.color;
+    const colors = colorSettings?.colors || ['#00ffff', '#ffffff', '#00ffff'];
+    const colorMode = colorSettings?.mode || 'none';
+    const colorModeMap: Record<string, number> = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
+
     const material = new THREE.ShaderMaterial({
       vertexShader: silkRingVertexShader,
       fragmentShader: silkRingFragmentShader,
       uniforms: {
         uTime: { value: 0 },
-        uColor: { value: parseColor(settings.color?.baseColor || '#ffffff') },
         uOpacity: { value: settings.opacity ?? 0.8 },
         uEmissive: { value: settings.emissive ?? 1.0 },
         uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
-        uStrandDensity: { value: settings.strandDensity ?? 20.0 },
+        uStrandDensity: { value: settings.strandDensity ?? 30.0 },
         uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
         uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
         uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
 
+        // 颜色系统 (仿照环带)
+        uColor: { value: parseColor(colorSettings?.baseColor || colors[0] || '#00ffff') },
+        uColorMode: { value: colorModeMap[colorMode] ?? 0 },
+        uColor1: { value: parseColor(colors[0] || '#00ffff') },
+        uColor2: { value: parseColor(colors[1] || '#ffffff') },
+        uColor3: { value: parseColor(colors[2] || '#00ffff') },
+        uColorMidPos: { value: colorSettings?.colorMidPosition ?? 0.5 },
+        uProceduralIntensity: { value: colorSettings?.proceduralIntensity ?? 1.0 },
+
         // 几何波动
         uWobbleEnabled: { value: settings.wobbleEnabled ? 1.0 : 0.0 },
-        uWobbleFrequency: { value: settings.wobbleFrequency ?? 5.0 },
-        uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.1 },
-        uZDriftScale: { value: settings.zDriftScale ?? 0.2 },
+        uWobbleIntensity: { value: settings.wobbleIntensity ?? 0.05 },
+        uWobbleFrequency: { value: settings.wobbleFrequency ?? 6.0 },
+        uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.3 },
+        uZDriftScale: { value: settings.zDriftScale ?? 0.5 },
         uSeed: { value: settings.seed ?? Math.random() },
       },
       transparent: true,
