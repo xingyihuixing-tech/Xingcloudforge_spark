@@ -2440,13 +2440,16 @@ void main() {
   float angle = atan(pos.y, pos.x);
   float radius = length(pos.xy);
   
-  if (uWobbleEnabled > 0.5) {
+  // 波动效果 - 沿径向方向偏移（更明显的放大缩小环的局部半径）
+  if (uWobbleEnabled > 0.5 && radius > 0.001) {
     float wobble = sin(angle * uWobbleFrequency + uTime * uWobbleSpeed) * uWobbleAmplitude;
-    pos += normal * wobble * radius * 0.1;
+    vec2 radialDir = normalize(pos.xy);
+    pos.xy += radialDir * wobble * radius * 0.15;
   }
   
+  // Z轴抖动效果 - 使环带产生波浪起伏
   if (uZDriftEnabled > 0.5) {
-    float zDrift = cos(angle * 3.0 + uTime * uZDriftSpeed) * uZDriftScale * radius * 0.1;
+    float zDrift = sin(angle * 4.0 + uTime * uZDriftSpeed) * uZDriftScale * 20.0;
     pos.z += zDrift;
   }
   
@@ -8238,6 +8241,25 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   material.uniforms.uStreakNoiseScale.value = streak?.noiseScale ?? 1.0;
                   material.uniforms.uStreakDirection.value = streak?.flowDirection === 'ccw' ? -1.0 : 1.0;
                   material.uniforms.uStreakBrightness.value = streak?.brightness ?? 1.5;
+                }
+                // 波动效果 uniforms 动态更新
+                if (material.uniforms.uWobbleEnabled !== undefined) {
+                  material.uniforms.uWobbleEnabled.value = ring.wobbleEnabled ? 1.0 : 0.0;
+                  material.uniforms.uWobbleFrequency.value = ring.wobbleFrequency ?? 6;
+                  material.uniforms.uWobbleAmplitude.value = ring.wobbleAmplitude ?? 0.3;
+                  material.uniforms.uWobbleSpeed.value = ring.wobbleSpeed ?? 1.0;
+                }
+                // Z轴抖动 uniforms 动态更新
+                if (material.uniforms.uZDriftEnabled !== undefined) {
+                  material.uniforms.uZDriftEnabled.value = ring.zDriftEnabled ? 1.0 : 0.0;
+                  material.uniforms.uZDriftScale.value = ring.zDriftScale ?? 0.3;
+                  material.uniforms.uZDriftSpeed.value = ring.zDriftSpeed ?? 0.5;
+                }
+                // 菲涅尔边缘发光 uniforms 动态更新
+                if (material.uniforms.uFresnelEnabled !== undefined) {
+                  material.uniforms.uFresnelEnabled.value = ring.fresnelEnabled ? 1.0 : 0.0;
+                  material.uniforms.uFresnelPower.value = ring.fresnelPower ?? 2.0;
+                  material.uniforms.uFresnelIntensity.value = ring.fresnelIntensity ?? 1.0;
                 }
               }
               // �芾蓮嚗𡁶�撅��?Z 頧湔�頧穿��臬蒂�笔��𥕦遣�?XY 撟喲𢒰嚗峕��煾��?Z 頧湛�
