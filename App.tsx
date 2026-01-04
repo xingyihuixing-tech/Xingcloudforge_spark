@@ -5,7 +5,7 @@
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import NebulaScene from './components/NebulaScene';
 import PlanetScene, { CameraInfo } from './components/PlanetScene';
 import ControlPanel from './components/ControlPanel';
@@ -935,6 +935,13 @@ const App: React.FC = () => {
   const handleFileUpload = (file: File) => {
     handleImageProcess(file);
   };
+
+  // AI 生成完成回调
+  const handleGenerationComplete = useCallback(() => {
+    console.log('AI Generation Completed');
+    // 如果需要，可以在这里刷新预设列表
+    // loadCloudConfig().then(...)
+  }, []);
 
   // 提取主色调
   const handleExtractColors = async () => {
