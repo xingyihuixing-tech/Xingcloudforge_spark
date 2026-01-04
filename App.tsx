@@ -443,11 +443,11 @@ const App: React.FC = () => {
           if (config.theme?.userMaterialPresets) {
             setUserMaterialPresets(config.theme.userMaterialPresets as any);
           }
-          // 加载 XingSpark 配置
-          if (config.theme?.xingConfig) {
-            const cloudXing = config.theme.xingConfig as any;
+          // 加载 XingSpark 配置 (支持两个字段位置：theme.xingConfig和xingSparkConfig)
+          const cloudXing = config.theme?.xingConfig || (config as any).xingSparkConfig;
+          if (cloudXing) {
             // 确保合并默认值，防止旧数据缺少字段
-            setXingConfig(prev => ({ ...prev, ...cloudXing }));
+            setXingConfig(prev => ({ ...prev, ...(cloudXing as any) }));
           }
         }
         setHasHydratedFromCloud(true);
@@ -503,7 +503,9 @@ const App: React.FC = () => {
             userMaterialPresets,
             xingConfig
           },
-          presets: presetsForCloud as any[]
+          presets: presetsForCloud as any[],
+          // 额外保存xingSparkConfig(API期望的字段名)，确保云端加载时能正确识别
+          xingSparkConfig: xingConfig as any
         });
       }
     }, 2000); // 2 second debounce

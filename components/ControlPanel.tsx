@@ -3984,7 +3984,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
       {/* 标题栏 - 星云模式 */}
       {appMode === 'nebula' && (
         <div className="mb-4 pt-1">
-          <h1 className="text-3xl font-bold mb-2 text-center xingspark-logo-title">
+          <h1 className="text-3xl font-bold mb-2 text-center xingspark-logo-title py-1 px-2">
             XingCloud
           </h1>
           <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>
@@ -3997,7 +3997,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
       {/* 标题栏 - 星球模式 */}
       {appMode === 'planet' && (
         <div className="mb-4 pt-1">
-          <h1 className="text-3xl font-bold mb-2 text-center xingspark-logo-title">
+          <h1 className="text-3xl font-bold mb-2 text-center xingspark-logo-title py-1 px-2">
             XingForge
           </h1>
           <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-2)' }}>

@@ -564,46 +564,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     }, [userId, savingId, onSaveHeadTexture, onSaveBackground, onSaveMagicCircleTexture]);
 
     // === 配置持久化 ===
-    const saveTimeoutRef = useRef<any>(null);
-
-    const saveToCloud = useCallback((newConfig: XingSparkConfig) => {
-        if (!userId) return;
-
-        // 使用 debounce 避免频繁请求
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-
-        saveTimeoutRef.current = setTimeout(async () => {
-            try {
-                // 先获取现有配置以保留其他字段
-                const currentRes = await fetch(`/api/config?userId=${userId}`);
-                const currentData = await currentRes.json();
-
-                const payload = {
-                    userId,
-                    config: {
-                        ...(currentData.config || {}),
-                        xingSparkConfig: newConfig
-                    }
-                };
-
-                await fetch('/api/config', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                console.log('XingSpark 配置已保存到云端');
-            } catch (err) {
-                console.error('保存配置失败:', err);
-            }
-        }, 1000);
-    }, [userId]);
-
-    // 监听配置变化自动保存
-    useEffect(() => {
-        if (userId) {
-            saveToCloud(xingConfig);
-        }
-    }, [xingConfig, userId, saveToCloud]);
+    // REMOVED internal saveToCloud: Rely on App.tsx to handle cloud sync via onConfigChange
+    // The previous implementation was saving to a different path (config.xingSparkConfig) 
+    // than what App.tsx reads (theme.xingConfig), causing sync issues.
 
     // 同步 XingSpark 颜色到全局 CSS 变量，供 ControlPanel 等组件使用
     useEffect(() => {
@@ -615,7 +578,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         root.style.setProperty('--xing-font', CHAT_FONT_OPTIONS.find(f => f.name === xingConfig.font)?.family || 'Pacifico');
     }, [xingConfig.gradient.colors, xingConfig.font]);
 
-    if (!isOpen) return null;
+    // if (!isOpen) return null; // REMOVED: Keep mounted for background generation
 
     // 当前选中的模型名称
     const currentChatModelName = CHAT_MODELS.find(m => m.id === chatModel)?.name || 'Chat';
@@ -642,7 +605,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             <div
                 ref={panelRef}
                 className="fixed z-[9999]"
-                style={{ left: savedPosition.x, top: savedPosition.y }}
+                style={{
+                    left: savedPosition.x,
+                    top: savedPosition.y,
+                    // Control visibility via display to keep component mounted
+                    display: isOpen ? 'block' : 'none'
+                }}
             // onMouseDown removed from here to prevent dragging by content
             >
                 <div
@@ -703,6 +671,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         className={`xingspark-logo-title ${logoState === 'blinking' ? 'blinking' : ''}`}
                                         onDoubleClick={handleLogoDoubleClick}
                                         title="双击打开设置"
+                                        style={{
+                                            fontSize: '1.6rem', // 明确设置 1.6rem
+                                            padding: '4px 0',    // 防止上下裁剪
+                                            lineHeight: 1.2      // 优化行高
+                                        }}
                                     >
                                         <span style={{ fontSize: '1em' }}>X</span>
                                         <span style={{ fontSize: '0.9em' }}>ing</span>
@@ -725,7 +698,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 setConfig={onConfigChange}
                                 onBack={() => setShowSettings(false)}
                                 userId={userId}
-                                onSave={saveToCloud}
+                            // onSave removed: App.tsx handles saving via config change effects
                             />
                         </div>
                     )}
