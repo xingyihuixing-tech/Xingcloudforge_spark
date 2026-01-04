@@ -2419,12 +2419,43 @@ precision highp float;
 varying vec2 vUv;
 varying vec3 vPosition;
 varying vec3 vLocalPosition;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+uniform float uTime;
+uniform float uWobbleEnabled;
+uniform float uWobbleFrequency;
+uniform float uWobbleAmplitude;
+uniform float uWobbleSpeed;
+uniform float uZDriftEnabled;
+uniform float uZDriftScale;
+uniform float uZDriftSpeed;
 
 void main() {
   vUv = uv;
-  vPosition = position;
-  vLocalPosition = position;  // �砍𧑐�鞉��其�憸𡏭𠧧霈∠�
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  vNormal = normalize(normalMatrix * normal);
+  
+  vec3 pos = position;
+  
+  float angle = atan(pos.y, pos.x);
+  float radius = length(pos.xy);
+  
+  if (uWobbleEnabled > 0.5) {
+    float wobble = sin(angle * uWobbleFrequency + uTime * uWobbleSpeed) * uWobbleAmplitude;
+    pos += normal * wobble * radius * 0.1;
+  }
+  
+  if (uZDriftEnabled > 0.5) {
+    float zDrift = cos(angle * 3.0 + uTime * uZDriftSpeed) * uZDriftScale * radius * 0.1;
+    pos.z += zDrift;
+  }
+  
+  vPosition = pos;
+  vLocalPosition = pos;
+  
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  vViewPosition = -mvPosition.xyz;
+  gl_Position = projectionMatrix * mvPosition;
 }
 `;
 
@@ -2485,9 +2516,16 @@ uniform float uStreakNoiseScale;
 uniform float uStreakDirection;  // 1=cw, -1=ccw
 uniform float uStreakBrightness;
 
+// 菲涅尔边缘发光 uniforms
+uniform float uFresnelEnabled;
+uniform float uFresnelPower;
+uniform float uFresnelIntensity;
+
 varying vec2 vUv;
 varying vec3 vPosition;
 varying vec3 vLocalPosition;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
 
 #define PI 3.14159265359
 
@@ -2923,6 +2961,13 @@ void main() {
     
     // 摨𠉛鍂�𤩺�摨阡�蝵?
     alpha *= mix(1.0, uVisibilityMinOpacity, smoothPattern);
+  }
+  
+  // 菲涅尔边缘发光效果
+  if (uFresnelEnabled > 0.5) {
+    vec3 viewDir = normalize(vViewPosition);
+    float fresnel = pow(1.0 - abs(dot(vNormal, viewDir)), uFresnelPower);
+    color = color + color * fresnel * uFresnelIntensity;
   }
   
   gl_FragColor = vec4(color, alpha);
@@ -10817,7 +10862,20 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
           uStreakDistortion: { value: ring.streakMode?.distortion ?? 0.5 },
           uStreakNoiseScale: { value: ring.streakMode?.noiseScale ?? 1.0 },
           uStreakDirection: { value: ring.streakMode?.flowDirection === 'ccw' ? -1.0 : 1.0 },
-          uStreakBrightness: { value: ring.streakMode?.brightness ?? 1.5 }
+          uStreakBrightness: { value: ring.streakMode?.brightness ?? 1.5 },
+          // 波动效果 uniforms
+          uWobbleEnabled: { value: ring.wobbleEnabled ? 1.0 : 0.0 },
+          uWobbleFrequency: { value: ring.wobbleFrequency ?? 6 },
+          uWobbleAmplitude: { value: ring.wobbleAmplitude ?? 0.3 },
+          uWobbleSpeed: { value: ring.wobbleSpeed ?? 1.0 },
+          // Z轴抖动 uniforms
+          uZDriftEnabled: { value: ring.zDriftEnabled ? 1.0 : 0.0 },
+          uZDriftScale: { value: ring.zDriftScale ?? 0.3 },
+          uZDriftSpeed: { value: ring.zDriftSpeed ?? 0.5 },
+          // 菲涅尔边缘发光 uniforms
+          uFresnelEnabled: { value: ring.fresnelEnabled ? 1.0 : 0.0 },
+          uFresnelPower: { value: ring.fresnelPower ?? 2.0 },
+          uFresnelIntensity: { value: ring.fresnelIntensity ?? 1.0 }
         },
         transparent: true,
         blending: THREE.AdditiveBlending,

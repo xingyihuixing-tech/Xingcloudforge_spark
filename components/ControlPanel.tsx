@@ -8769,6 +8769,91 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 )}
                               </div>
 
+                              {/* 波动效果 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs" style={{ color: 'var(--ui-secondary)' }}>波动效果</span>
+                                  <button
+                                    onClick={() => updateContinuousRing(currentContinuousRing.id, { wobbleEnabled: !currentContinuousRing.wobbleEnabled })}
+                                    style={{
+                                      background: currentContinuousRing.wobbleEnabled
+                                        ? 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))'
+                                        : 'rgba(255,255,255,0.1)',
+                                      border: currentContinuousRing.wobbleEnabled
+                                        ? 'none'
+                                        : '1px solid rgba(255,255,255,0.3)',
+                                      borderRadius: '4px', padding: '2px 8px', fontSize: '9px',
+                                      color: currentContinuousRing.wobbleEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
+                                    }}
+                                  >
+                                    {currentContinuousRing.wobbleEnabled ? '已启用' : '已禁用'}
+                                  </button>
+                                </div>
+                                {currentContinuousRing.wobbleEnabled && (
+                                  <div className="space-y-1">
+                                    <RangeControl label="波动频率" value={currentContinuousRing.wobbleFrequency ?? 6} min={1} max={20} step={1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleFrequency: v })} />
+                                    <RangeControl label="波动幅度" value={currentContinuousRing.wobbleAmplitude ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleAmplitude: v })} />
+                                    <RangeControl label="波动速度" value={currentContinuousRing.wobbleSpeed ?? 1.0} min={0.1} max={2} step={0.1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { wobbleSpeed: v })} />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Z轴抖动 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs" style={{ color: 'var(--ui-secondary)' }}>Z轴抖动</span>
+                                  <button
+                                    onClick={() => updateContinuousRing(currentContinuousRing.id, { zDriftEnabled: !currentContinuousRing.zDriftEnabled })}
+                                    style={{
+                                      background: currentContinuousRing.zDriftEnabled
+                                        ? 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))'
+                                        : 'rgba(255,255,255,0.1)',
+                                      border: currentContinuousRing.zDriftEnabled
+                                        ? 'none'
+                                        : '1px solid rgba(255,255,255,0.3)',
+                                      borderRadius: '4px', padding: '2px 8px', fontSize: '9px',
+                                      color: currentContinuousRing.zDriftEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
+                                    }}
+                                  >
+                                    {currentContinuousRing.zDriftEnabled ? '已启用' : '已禁用'}
+                                  </button>
+                                </div>
+                                {currentContinuousRing.zDriftEnabled && (
+                                  <div className="space-y-1">
+                                    <RangeControl label="抖动幅度" value={currentContinuousRing.zDriftScale ?? 0.3} min={0} max={1} step={0.05} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { zDriftScale: v })} />
+                                    <RangeControl label="抖动速度" value={currentContinuousRing.zDriftSpeed ?? 0.5} min={0.1} max={2} step={0.1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { zDriftSpeed: v })} />
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* 菲涅尔边缘发光 */}
+                              <div className="p-2 bg-gray-800/50 rounded">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs" style={{ color: 'var(--ui-secondary)' }}>边缘发光</span>
+                                  <button
+                                    onClick={() => updateContinuousRing(currentContinuousRing.id, { fresnelEnabled: !currentContinuousRing.fresnelEnabled })}
+                                    style={{
+                                      background: currentContinuousRing.fresnelEnabled
+                                        ? 'linear-gradient(135deg, var(--ui-primary), var(--ui-secondary))'
+                                        : 'rgba(255,255,255,0.1)',
+                                      border: currentContinuousRing.fresnelEnabled
+                                        ? 'none'
+                                        : '1px solid rgba(255,255,255,0.3)',
+                                      borderRadius: '4px', padding: '2px 8px', fontSize: '9px',
+                                      color: currentContinuousRing.fresnelEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
+                                    }}
+                                  >
+                                    {currentContinuousRing.fresnelEnabled ? '已启用' : '已禁用'}
+                                  </button>
+                                </div>
+                                {currentContinuousRing.fresnelEnabled && (
+                                  <div className="space-y-1">
+                                    <RangeControl label="菲涅尔指数" value={currentContinuousRing.fresnelPower ?? 2.0} min={0.5} max={5} step={0.25} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { fresnelPower: v })} />
+                                    <RangeControl label="发光亮度" value={currentContinuousRing.fresnelIntensity ?? 1.0} min={0} max={3} step={0.1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { fresnelIntensity: v })} />
+                                  </div>
+                                )}
+                              </div>
+
                               {/* 运动速度 */}
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>运动速度</span>

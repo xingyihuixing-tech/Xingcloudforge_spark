@@ -1122,6 +1122,25 @@ export interface ContinuousRingSettings {
     flowDirection: 'cw' | 'ccw'; // 流动方向
     brightness: number;         // 整体亮度 0.5-3
   };
+  // ===== 垂直模式（线环效果） =====
+  verticalMode?: boolean;           // 垂直模式开关
+  tubeRadius?: number;              // 管状截面半径 1-50（垂直模式下生效）
+
+  // ===== 几何波动效果 =====
+  wobbleEnabled?: boolean;          // 波动开关
+  wobbleFrequency?: number;         // 波动频率 1-20
+  wobbleAmplitude?: number;         // 波动幅度 0-1
+  wobbleSpeed?: number;             // 波动速度 0.1-2
+
+  // ===== Z轴抖动效果 =====
+  zDriftEnabled?: boolean;          // Z轴抖动开关
+  zDriftScale?: number;             // 抖动幅度 0-1
+  zDriftSpeed?: number;             // 抖动速度 0.1-2
+
+  // ===== 菲涅尔边缘发光 =====
+  fresnelEnabled?: boolean;         // 菲涅尔开关
+  fresnelPower?: number;            // 菲涅尔指数 0.5-5
+  fresnelIntensity?: number;        // 菲涅尔亮度 0-3
 }
 
 // ==================== 能量体系统 ====================
