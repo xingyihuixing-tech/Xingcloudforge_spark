@@ -16,6 +16,7 @@ import { UserLogin } from './components/UserLogin';
 import { AIStarButton } from './components/AIStarButton'; // Added import
 import AIAssistantPanel from './components/AIAssistantPanel';
 import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSettings';
+import { useDraggableStar } from './hooks/useDraggableStar';
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
 import {
   DEFAULT_SETTINGS,
@@ -1447,7 +1448,7 @@ const App: React.FC = () => {
         )}
       </div>
 
-      {/* AI 助手面板 */}
+      {/* AI 助手面板 - 始终渲染以保持后台生成，使用 CSS 隐藏 */}
       <AIAssistantPanel
         isOpen={showAIPanel}
         onClose={() => setShowAIPanel(false)}
@@ -1455,6 +1456,7 @@ const App: React.FC = () => {
         // 同步 XingSpark 配置
         xingConfig={xingConfig}
         onConfigChange={setXingConfig}
+        onGenerationComplete={handleGenerationComplete}
         // callbacks for saving generated assets to presets
         onSaveHeadTexture={async (preset) => {
           // Logic to save head texture preset

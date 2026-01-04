@@ -18,7 +18,7 @@ export const AIStarButton: React.FC<AIStarButtonProps> = ({
     return (
         <button
             onClick={onClick}
-            className={`group relative flex items-center justify-center p-3 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 shadow-lg transition-all hover:scale-105 active:scale-95 ${className}`}
+            className={`group relative flex items-center justify-center p-2 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 shadow-lg transition-all hover:scale-105 active:scale-95 ${className}`}
             title={title}
         >
             {/* 使用 CSS 实现的流动渐变圆钝星 */}

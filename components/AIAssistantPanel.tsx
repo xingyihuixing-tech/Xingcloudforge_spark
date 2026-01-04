@@ -42,6 +42,8 @@ interface AIAssistantPanelProps {
     // XingSpark 配置 (Lifted State from App.tsx)
     xingConfig: XingSparkConfig;
     onConfigChange: React.Dispatch<React.SetStateAction<XingSparkConfig>>;
+    // 生成完成回调
+    onGenerationComplete?: () => void;
 }
 
 interface ChatMessage {
@@ -113,7 +115,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     onSaveBackground,
     onSaveMagicCircleTexture,
     xingConfig,
-    onConfigChange
+    onConfigChange,
+    onGenerationComplete
 }) => {
     // === 模式状态 ===
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
@@ -145,6 +148,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
     // === XingSpark 设置 ===
     const [showSettings, setShowSettings] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(false);
     // xingConfig moved to props
     const [logoState, setLogoState] = useState<'idle' | 'blinking'>('idle');
     const lastDoubleClickRef = useRef(0);
@@ -479,6 +483,10 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     }]);
 
                     clearUploadedImage();
+
+                    // 通知外部生成完成
+                    if (onGenerationComplete) onGenerationComplete();
+
                 } else {
                     throw new Error(data.error || '图片生成失败');
                 }

@@ -2423,7 +2423,7 @@ varying vec3 vNormal;
 varying vec3 vViewPosition;
 
 uniform float uTime;
-uniform int uWaveType;           // 0=off, 1=sine, 2=noise, 3=triangle, 4=square, 5=sawtooth, 6=pulse, 7=organic
+uniform float uWaveType;           // 0=off, 1=sine, 2=noise, 3=triangle, 4=square, 5=sawtooth, 6=pulse, 7=organic
 uniform float uWobbleFrequency;
 uniform float uWobbleAmplitude;
 uniform float uWobbleSpeed;
@@ -2444,23 +2444,23 @@ float organicNoise(float x) {
   return noise(x) * 0.5 + noise(x * 2.0) * 0.3 + noise(x * 4.0) * 0.2;
 }
 
-// 计算波形值
+// 计算波形值 (使用浮点比较避免GPU整数uniform兼容性问题)
 float computeWave(float phase) {
-  if (uWaveType == 1) {
+  if (uWaveType < 1.5) {
     return sin(phase);
-  } else if (uWaveType == 2) {
+  } else if (uWaveType < 2.5) {
     return noise(phase * 0.5) * 2.0 - 1.0;
-  } else if (uWaveType == 3) {
+  } else if (uWaveType < 3.5) {
     float t = mod(phase, 6.28318);
     return abs(t / 3.14159 - 1.0) * 2.0 - 1.0;
-  } else if (uWaveType == 4) {
+  } else if (uWaveType < 4.5) {
     return step(3.14159, mod(phase, 6.28318)) * 2.0 - 1.0;
-  } else if (uWaveType == 5) {
+  } else if (uWaveType < 5.5) {
     return mod(phase, 6.28318) / 3.14159 - 1.0;
-  } else if (uWaveType == 6) {
+  } else if (uWaveType < 6.5) {
     float t = mod(phase, 6.28318);
     return exp(-t * 2.0) * sin(t * 8.0);
-  } else if (uWaveType == 7) {
+  } else if (uWaveType < 7.5) {
     return organicNoise(phase * 0.3) * 2.0 - 1.0;
   }
   return 0.0;
@@ -2472,21 +2472,22 @@ void main() {
   
   vec3 pos = position;
   
-  float angle = atan(pos.y, pos.x);
-  float radius = length(pos.xy);
+  // 连续环带几何体在 XZ 平面（y≈0），所以使用 xz 计算角度和半径
+  float angle = atan(pos.z, pos.x);
+  float radius = length(pos.xz);
   
-  // 波动效果 - 基于波形类型
-  if (uWaveType > 0 && radius > 0.001) {
+  // 波动效果 - 基于波形类型（在 XZ 平面径向变形）
+  if (uWaveType > 0.5 && radius > 0.001) {
     float phase = angle * uWobbleFrequency + uTime * uWobbleSpeed;
     float wobble = computeWave(phase) * uWobbleAmplitude;
-    vec2 radialDir = normalize(pos.xy);
-    pos.xy += radialDir * wobble * radius * 0.15;
+    vec2 radialDir = normalize(pos.xz);
+    pos.xz += radialDir * wobble * radius * 0.15;
   }
   
-  // Z轴抖动效果 - 使环带产生波浪起伏
+  // Y轴抖动效果 - 使环带产生波浪起伏（垂直于XZ平面）
   if (uZDriftEnabled > 0.5) {
-    float zDrift = sin(angle * 4.0 + uTime * uZDriftSpeed) * uZDriftScale * 20.0;
-    pos.z += zDrift;
+    float yDrift = sin(angle * 4.0 + uTime * uZDriftSpeed) * uZDriftScale * 20.0;
+    pos.y += yDrift;
   }
   
   vPosition = pos;
@@ -10318,8 +10319,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
     // 基础位置
     vec3 pos = position;
     
-    // 计算角度用于波动效果
-    float angle = atan(pos.y, pos.x);
+    // 计算角度用于波动效果（XZ平面，与几何体预旋转后一致）
+    float angle = atan(pos.z, pos.x);
     float phase = angle * uWobbleFrequency + uTime * uFlowSpeed;
     
     // 根据波形类型计算波动
@@ -10501,14 +10502,20 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 `;
 
   function createSilkRingGeometry(settings: SilkRingSettings): THREE.BufferGeometry {
-    //创建一个圆环几何体
+    // 创建一个圆环几何体
     // TorusGeometry(radius, tube, radialSegments, tubularSegments)
+    // 注意：Three.js TorusGeometry 默认在 XY 平面（法向量 Z）
+    // 我们需要将其旋转到 XZ 平面（法向量 Y），与粒子环和连续环带统一
     const radius = settings.orbitRadius ?? 1.5;
     const tube = settings.thickness ?? 0.02;
     const radialSegments = settings.radialSegments ?? 8;
     const tubularSegments = settings.tubeSegments ?? 128;
 
     const geometry = new THREE.TorusGeometry(radius, tube, radialSegments, tubularSegments);
+
+    // 预旋转：绕X轴旋转-90度，将 XY 平面转到 XZ 平面
+    geometry.rotateX(-Math.PI / 2);
+
     return geometry;
   }
 
