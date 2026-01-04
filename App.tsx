@@ -594,9 +594,15 @@ const App: React.FC = () => {
 
   }, [xingConfig]);
 
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [showAIPanel, setShowAIPanel] = useState(false); // AI 面板状态
+
+  // 可拖拽AI星星按钮
+  const { starRef, handleDragStart: handleStarDragStart, isCustomPosition: isStarCustomPos } = useDraggableStar(xingConfig, setXingConfig);
+  const [starBlinking, setStarBlinking] = useState(false); // AI星星闪烁状态
+
   const [fps, setFps] = useState(0);
   const [gestureEnabled, setGestureEnabled] = useState(false);
 
