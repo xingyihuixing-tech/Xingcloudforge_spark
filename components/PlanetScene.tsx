@@ -7108,7 +7108,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
       // �臬��?- 雿輻鍂蝏嘥笆�𠰴�摮埈挾, brightness, particleSize嚗���怠�撅�撘��喳�摰峕㟲憸𡏭𠧧璅∪�
       const ringsKey = `pr:${p.rings.particleRingsEnabled}|` + p.rings.particleRings.map(r => {
         const g = r.gradientColor;
-        const gKey = g?.enabled ? `${g.mode}:${g.colors?.join(',')}:${g.colorMidPosition}:${g.colorMidWidth ?? 1}:${g.colorMidWidth2 ?? 0}:${g.direction}:${g.directionCustom?.x},${g.directionCustom?.y},${g.directionCustom?.z}:${g.spiralDensity}:${g.proceduralIntensity}` : '';
+        const gKey = g?.enabled ? `${g.mode}:${g.colors?.join(',')}:${g.colorMidPosition}:${g.colorMidWidth ?? 1}:${g.colorMidWidth2 ?? 0}:${g.direction}:${g.directionCustom?.x},${g.directionCustom?.y},${g.directionCustom?.z}:${g.spiralDensity}:${g.proceduralIntensity}:${g.blendStrength ?? 1}:${g.proceduralAxis}:${g.proceduralCustomAxis?.x},${g.proceduralCustomAxis?.y},${g.proceduralCustomAxis?.z}` : '';
         const v = r.vortex;
         const vKey = v?.enabled ? `${v.armCount}:${v.twist}:${v.hardness}:${v.colors?.join(',')}` : '';
         const gal = r.galaxy;
@@ -11980,7 +11980,7 @@ void main() {
     // 装饰物颜色和尺寸
     const ornSizeScale = hasOrnaments ? (ornamentSettings.baseSize || 2.0) : 2.0;
     let ornR = baseR, ornG = baseG, ornB = baseB;
-    if (hasOrnaments && ornamentSettings.colorMode === 'custom') {
+    if (hasOrnaments && ornamentSettings.colorMode === 'independent') {
       [ornR, ornG, ornB] = hexToRgb(ornamentSettings.color || '#ffffff');
     }
 
@@ -11998,6 +11998,9 @@ void main() {
     const midWidth2 = gc?.colorMidWidth2 ?? 0;
     const spiralDensity = gc?.spiralDensity ?? 2;
     const proceduralIntensity = gc?.proceduralIntensity ?? 1.0;
+    const blendStrength = gc?.blendStrength ?? 1.0;
+    const proceduralAxis = gc?.proceduralAxis || 'y';
+    const proceduralCustomAxis = gc?.proceduralCustomAxis || { x: 0, y: 1, z: 0 };
 
     // HSV 頧?RGB 颲�𨭌�賣㺭
     const hsvToRgb = (h: number, s: number, v: number): [number, number, number] => {
@@ -12075,9 +12078,18 @@ void main() {
       let finalR = baseR, finalG = baseG, finalB = baseB;
 
       if (colorMode === 'twoColor') {
-        finalR = color1[0] + (color2[0] - color1[0]) * gradientT;
-        finalG = color1[1] + (color2[1] - color1[1]) * gradientT;
-        finalB = color1[2] + (color2[2] - color1[2]) * gradientT;
+        // 应用blendStrength控制过渡平滑度
+        let blendedT = gradientT;
+        if (blendStrength < 0.99) {
+          const edgeWidth = Math.max(blendStrength * 0.5, 0.001);
+          blendedT = gradientT < 0.5
+            ? (gradientT < edgeWidth ? gradientT / edgeWidth * 0.5 : 0.5)
+            : (gradientT > 1 - edgeWidth ? 0.5 + (gradientT - (1 - edgeWidth)) / edgeWidth * 0.5 : 0.5);
+          blendedT = blendStrength * blendedT + (1 - blendStrength) * (gradientT < 0.5 ? 0 : 1);
+        }
+        finalR = color1[0] + (color2[0] - color1[0]) * blendedT;
+        finalG = color1[1] + (color2[1] - color1[1]) * blendedT;
+        finalB = color1[2] + (color2[2] - color1[2]) * blendedT;
       } else if (colorMode === 'threeColor') {
         // 霈∠�瘛瑕�����諹��湔�撅?
         const blendWeight = Math.min(midWidth, 1);
@@ -12086,15 +12098,25 @@ void main() {
         const midStart = Math.max(0.01, midPos - rangeExpand - bandHalf);
         const midEnd = Math.min(0.99, midPos + rangeExpand + bandHalf);
 
+        // 应用blendStrength控制边缘锐度
+        const edgeWidth = Math.max(blendStrength * 0.3, 0.001);
+
         // 霈∠�銝㕑𠧧皜𣂼�蝏𤘪�
         let tr, tg, tb;
         if (gradientT < midStart) {
-          const t = gradientT / midStart;
+          let t = gradientT / midStart;
+          // 应用blendStrength平滑
+          if (blendStrength < 0.99) {
+            t = t * blendStrength + (t < 0.5 ? 0 : 1) * (1 - blendStrength);
+          }
           tr = color1[0] + (color2[0] - color1[0]) * t;
           tg = color1[1] + (color2[1] - color1[1]) * t;
           tb = color1[2] + (color2[2] - color1[2]) * t;
         } else if (gradientT > midEnd) {
-          const t = (gradientT - midEnd) / (1 - midEnd);
+          let t = (gradientT - midEnd) / (1 - midEnd);
+          if (blendStrength < 0.99) {
+            t = t * blendStrength + (t < 0.5 ? 0 : 1) * (1 - blendStrength);
+          }
           tr = color2[0] + (color3[0] - color2[0]) * t;
           tg = color2[1] + (color3[1] - color2[1]) * t;
           tb = color2[2] + (color3[2] - color2[2]) * t;
@@ -12110,9 +12132,55 @@ void main() {
         finalG = dg + (tg - dg) * blendWeight;
         finalB = db + (tb - db) * blendWeight;
       } else if (colorMode === 'procedural') {
-        const [h, s, v] = rgbToHsv(baseR, baseG, baseB);
-        const newH = (h + gradientT * proceduralIntensity * 0.3) % 1;
-        [finalR, finalG, finalB] = hsvToRgb(newH, s, v);
+        // 混色模式使用proceduralAxis计算gradientT
+        let proceduralT = 0.5;
+        if (proceduralAxis === 'x') {
+          proceduralT = (x / radius + 1) * 0.5;
+        } else if (proceduralAxis === 'y') {
+          proceduralT = (y / radius + 1) * 0.5;
+        } else if (proceduralAxis === 'z') {
+          proceduralT = (z / radius + 1) * 0.5;
+        } else if (proceduralAxis === 'radial') {
+          const dist = Math.sqrt(x * x + z * z);
+          proceduralT = (dist - innerRadius) / bandwidth;
+        } else if (proceduralAxis === 'custom') {
+          const len = Math.sqrt(proceduralCustomAxis.x ** 2 + proceduralCustomAxis.y ** 2 + proceduralCustomAxis.z ** 2) || 1;
+          const normX = proceduralCustomAxis.x / len, normY = proceduralCustomAxis.y / len, normZ = proceduralCustomAxis.z / len;
+          proceduralT = ((x * normX + y * normY + z * normZ) / radius + 1) * 0.5;
+        }
+        proceduralT = Math.max(0, Math.min(1, proceduralT));
+
+        // 使用三色混合，应用proceduralIntensity和blendStrength
+        const [h1, s1, v1] = rgbToHsv(color1[0], color1[1], color1[2]);
+        const [h2, s2, v2] = rgbToHsv(color2[0], color2[1], color2[2]);
+        const [h3, s3, v3] = rgbToHsv(color3[0], color3[1], color3[2]);
+
+        // 混合色相，应用blendStrength控制过渡
+        let t = proceduralT * proceduralIntensity;
+        t = Math.max(0, Math.min(1, t));
+
+        // 应用blendStrength使过渡更硬或更软
+        if (blendStrength < 0.99) {
+          const segments = 3;
+          const segmentIndex = Math.floor(t * segments);
+          const segmentT = (t * segments) - segmentIndex;
+          const sharpT = segmentT < 0.5 ? 0 : 1;
+          t = (segmentIndex + (sharpT * (1 - blendStrength) + segmentT * blendStrength)) / segments;
+        }
+
+        let newH, newS, newV;
+        if (t < 0.5) {
+          const localT = t * 2;
+          newH = h1 + (h2 - h1) * localT;
+          newS = s1 + (s2 - s1) * localT;
+          newV = v1 + (v2 - v1) * localT;
+        } else {
+          const localT = (t - 0.5) * 2;
+          newH = h2 + (h3 - h2) * localT;
+          newS = s2 + (s3 - s2) * localT;
+          newV = v2 + (v3 - v2) * localT;
+        }
+        [finalR, finalG, finalB] = hsvToRgb(newH, newS, newV);
       }
 
       // 瞍拇間���
@@ -12159,7 +12227,7 @@ void main() {
 
       // 装饰物特殊处理
       if (hasOrnaments && i >= baseCount) {
-        if (ornamentSettings.colorMode === 'custom') {
+        if (ornamentSettings.colorMode === 'independent') {
           finalR = ornR; finalG = ornG; finalB = ornB;
         }
         // 装饰物使用更大的尺寸
