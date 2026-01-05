@@ -11709,7 +11709,12 @@ void main() {
     }
 
     finalColor *= uBrightness;
-    gl_FragColor = vec4(finalColor, alpha * uOpacity);
+    
+    // 使用预乘 alpha，确保透明区域不贡献颜色（修复贴图方框问题）
+    // 在 AdditiveBlending 模式下，低 alpha 区域的 RGB 也会被添加到背景
+    // 通过 finalColor *= alpha，透明区域的颜色接近于 0，不会产生方框
+    float finalAlpha = alpha * uOpacity;
+    gl_FragColor = vec4(finalColor * finalAlpha, finalAlpha);
   }
 
 
