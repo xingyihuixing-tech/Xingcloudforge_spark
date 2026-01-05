@@ -4912,19 +4912,23 @@ const STELLATED_OCTAHEDRON_INDICES = [
   13, 1, 5, 13, 5, 3, 13, 3, 1
 ];
 
-function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivisionLevel: number): THREE.BufferGeometry {
-  // �斗鱏�臬炏銝箸⏛閫?�芸�蝐餃�
+function createPolyhedronGeometry(
+  type: PolyhedronType,
+  radius: number,
+  subdivisionLevel: number,
+  pentagramSettings?: { height?: number; pointLength?: number; innerRadius?: number; twistAngle?: number }
+): THREE.BufferGeometry {
   // 截角/星形多面体不进行细分
   const isTruncatedType = type.startsWith('truncated') || type === 'cuboctahedron' || type === 'icosidodecahedron' || type === 'smallStellatedDodecahedron' || type === 'star';
-  // 撖寞⏛閫垍掩�见撩�?detail=0
+  // 撖寞⏛閫垍掩见撩 detail=0
   const effectiveDetail = isTruncatedType ? 0 : subdivisionLevel;
 
   switch (type) {
-    // ===== �𤩺��曄�雿橒��舀�蝏��嚗?====
+    // ===== 基础柏拉图立体 =====
     case 'tetrahedron':
       return new THREE.TetrahedronGeometry(radius, subdivisionLevel);
     case 'cube':
-      // BoxGeometry: 颲寥鵭 = radius * 2 / �? 雿踹��亦��𠰴� = radius
+      // BoxGeometry: 颲寥鵭 = radius * 2 / √3 雿踹亦𠰴 = radius
       const boxSize = radius * 2 / Math.sqrt(3);
       return new THREE.BoxGeometry(boxSize, boxSize, boxSize, 1 + subdivisionLevel, 1 + subdivisionLevel, 1 + subdivisionLevel);
     case 'octahedron':
@@ -4934,33 +4938,24 @@ function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivis
     case 'icosahedron':
       return new THREE.IcosahedronGeometry(radius, subdivisionLevel);
 
-    // ===== �芾�/�芸�憭𡁻𢒰雿?=====
+    // ===== 截角多面体 =====
     case 'truncatedTetrahedron':
-      // 蝎曄＆摰䂿緵嚗?2憿嗥�嚗?銝㕑�+4�剛器
       return new THREE.PolyhedronGeometry(TRUNCATED_TETRAHEDRON_VERTICES, TRUNCATED_TETRAHEDRON_INDICES, radius, effectiveDetail);
     case 'truncatedOctahedron':
-      // 蝎曄＆摰䂿緵嚗?4憿嗥�嚗?甇�䲮+8�剛器
       return new THREE.PolyhedronGeometry(TRUNCATED_OCTAHEDRON_VERTICES, TRUNCATED_OCTAHEDRON_INDICES, radius, effectiveDetail);
     case 'truncatedCube':
-      // 蝎曄＆摰䂿緵嚗?4憿嗥�嚗?銝㕑�+6�怨器
       return new THREE.PolyhedronGeometry(TRUNCATED_CUBE_VERTICES, TRUNCATED_CUBE_INDICES, radius, effectiveDetail);
     case 'truncatedDodecahedron':
-      // 60憿嗥�餈��憭齿�嚗𣬚鍂蝏������Ｖ�餈睲撮嚗��閫厩㮾隡潔��𤘪�銝滨移蝖殷�
       return new THREE.DodecahedronGeometry(radius, 1);
     case 'truncatedIcosahedron':
-      // 60憿嗥�餈��憭齿�嚗𣬚鍂蝏��鈭���Ｖ�餈睲撮嚗��閫㗇𦻖餈𤏸雲����𤘪�銝滨移蝖殷�
       return new THREE.IcosahedronGeometry(radius, 1);
     case 'cuboctahedron':
-      // 蝎曄＆摰䂿緵嚗?2憿嗥�嚗?銝㕑�+6甇�䲮
       return new THREE.PolyhedronGeometry(CUBOCTAHEDRON_VERTICES, CUBOCTAHEDRON_INDICES, radius, effectiveDetail);
     case 'icosidodecahedron':
-      // 30憿嗥�颲������函������𢒰雿栞�隡潘�閫���訾撮嚗?
-      // TODO: �𣂷�蝎曄＆摰䂿緵��閬���渡�30憿嗥�+32�Ｙ揣撘?
       return new THREE.IcosahedronGeometry(radius, 1);
 
     // ===== 星形多面体（Kepler-Poinsot） =====
     case 'smallStellatedDodecahedron':
-      // 小星形十二面体（星形体）：32顶点，60个三角面（12个五角星面×5）
       return new THREE.PolyhedronGeometry(SMALL_STELLATED_DODECAHEDRON_VERTICES, SMALL_STELLATED_DODECAHEDRON_INDICES, radius, 0);
 
     case 'star':
@@ -4969,9 +4964,14 @@ function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivis
 
     // ===== 新增几何体 =====
     case 'pentagram3D':
-      // 3D立体五芒星（动态生成，支持用户参数）
-      // 注意：这里使用默认参数，实际参数在调用处传入
-      return createPentagram3DGeometry(radius, 0.6, 1.0, 0.4, 0);
+      // 3D立体五芒星（动态生成，使用用户参数）
+      return createPentagram3DGeometry(
+        radius,
+        pentagramSettings?.height ?? 0.6,
+        pentagramSettings?.pointLength ?? 1.0,
+        pentagramSettings?.innerRadius ?? 0.4,
+        pentagramSettings?.twistAngle ?? 0
+      );
 
     case 'merkaba':
       // 梅尔卡巴（星际四面体）：两个相交的正四面体
@@ -11616,6 +11616,8 @@ void main() {
               vec2 texUV = gl_PointCoord;
               vec4 texColor = texture2D(uTexture, texUV);
               alpha = texColor.a;
+              // 丢弃几乎透明的像素，避免正方形边框
+              if(alpha < 0.05) discard;
               // 不再提前返回，让颜色模式逻辑继续执行
               // 贴图透明度用于形状，颜色由用户设置决定
             } else {
