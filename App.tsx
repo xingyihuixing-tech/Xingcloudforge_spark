@@ -581,7 +581,7 @@ const App: React.FC = () => {
           modulePresets
         });
       }
-    }, 2000); // 2 second debounce
+    }, 1000); // 1 second debounce
 
     return () => clearTimeout(handler);
   }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, nebulaPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
@@ -1257,6 +1257,18 @@ const App: React.FC = () => {
   const handleManualSave = useCallback(async () => {
     if (!currentUser || !hasHydratedFromCloud) return;
 
+    // 1. 立即同步到 LocalStorage (防止云端失败或网络延迟导致数据丢失)
+    console.log('Force saving config to LocalStorage...');
+    const userId = currentUser.id;
+    saveSettings(settings, userId);
+    savePlanetSceneSettings(planetSettings, userId);
+    saveThemeConfig(themeConfig, userId);
+    saveMaterialSettings(materialSettings, userId);
+    saveUserMaterialPresets(userMaterialPresets, userId);
+    saveXingConfig(xingConfig, userId);
+    saveNebulaPresets(nebulaPresets, userId);
+
+    // 2. 准备云端数据
     // 过滤掉 imageDataUrl
     const presetsForCloud = nebulaPresets.map(preset => ({ ...preset, imageDataUrl: undefined }));
     const settingsForCloud = {

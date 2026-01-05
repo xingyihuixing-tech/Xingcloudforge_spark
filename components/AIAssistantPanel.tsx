@@ -143,6 +143,38 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === 聊天状态 (初始为空) ===
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
+    // === 最小化逻辑 ===
+    const handleToggleMinimize = (minimize: boolean) => {
+        if (!panelRef.current) {
+            setIsMinimized(minimize);
+            return;
+        }
+
+        // 计算当前的底部位置
+        const rect = panelRef.current.getBoundingClientRect();
+        const bottomY = rect.top + rect.height;
+
+        // 设置新状态
+        setIsMinimized(minimize);
+
+        // 在下一帧校正位置以保持底部不变
+        // 由于 React 状态更新是异步的且会导致 DOM 变化，我们需要在渲染后执行
+        // 这里使用 requestAnimationFrame 模拟，或者简单的 setTimeout
+        requestAnimationFrame(() => {
+            if (panelRef.current) {
+                const newRect = panelRef.current.getBoundingClientRect();
+                const newTop = bottomY - newRect.height;
+                // 确保不超出屏幕顶部
+                const finalTop = Math.max(0, newTop);
+
+                setSavedPosition(prev => ({
+                    ...prev,
+                    y: finalTop
+                }));
+            }
+        });
+    };
+
     // === 图片预览 ===
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -162,7 +194,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const [savedPosition, setSavedPosition] = useState({
         x: Math.max(0, (window.innerWidth - 600) / 2),
-        y: Math.max(0, (window.innerHeight - 800) / 2)
+        y: Math.max(0, (window.innerHeight - 800) * 0.8)
     });
     const dragRef = useRef({
         isDragging: false,
@@ -648,7 +680,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 <div className="flex items-center gap-2">
                                     {/* 最小化按钮 */}
                                     <button
-                                        onClick={() => setIsMinimized(true)}
+                                        onClick={() => handleToggleMinimize(true)}
                                         className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors"
                                         title="最小化 (只保留输入框)"
                                     >
@@ -772,23 +804,13 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 </div>
                             )}
 
-                            {/* 最小化状态下的展开按钮 */}
-                            {isMinimized && (
-                                <button
-                                    onClick={() => setIsMinimized(false)}
-                                    className="absolute -top-8 right-0 bg-black/40 hover:bg-black/60 text-white/60 hover:text-white px-3 py-1 rounded-t-lg backdrop-blur text-xs flex items-center gap-1 transition-all border border-white/10 border-b-0"
-                                    title="展开面板"
-                                >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
-                                    展开
-                                </button>
-                            )}
+
 
                             {/* 输入区域容器 */}
-                            <div className="p-3 bg-black/10 backdrop-blur-sm rounded-b-2xl">
+                            <div className="p-3 bg-black/10 backdrop-blur-sm rounded-b-2xl pointer-events-auto">
 
                                 {/* 子模式选择 (放在输入框上方，左对齐，圆角长方形) */}
-                                <div className="flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar">
+                                <div className="flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar items-center">
                                     {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => (
                                         <button
                                             key={subMode}
@@ -801,6 +823,18 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                             {INSPIRATION_MODE_INFO[subMode].name}
                                         </button>
                                     ))}
+
+                                    {/* 最小化状态下的展开按钮 (放在最右侧) */}
+                                    {isMinimized && (
+                                        <button
+                                            onClick={() => handleToggleMinimize(false)}
+                                            className="ml-auto flex items-center gap-1 px-3 py-1 rounded-lg text-xs font-medium bg-white/10 text-white/80 hover:bg-white/20 hover:text-white transition-all shadow-sm border border-white/10"
+                                            title="展开面板"
+                                        >
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                                            展开
+                                        </button>
+                                    )}
                                 </div>
 
                                 {/* 6.2 Strict UI: Input Box Flowing Glow (Conditional) */}
