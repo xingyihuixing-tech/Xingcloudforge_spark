@@ -449,6 +449,39 @@ const App: React.FC = () => {
             // 确保合并默认值，防止旧数据缺少字段
             setXingConfig(prev => ({ ...prev, ...(cloudXing as any) }));
           }
+
+          // 恢复模块预设到localStorage
+          const cloudModulePresets = (config as any).modulePresets;
+          if (cloudModulePresets && typeof cloudModulePresets === 'object') {
+            const MODULE_PRESET_KEYS: Record<string, string> = {
+              solidCore: 'planet_presets_solidCore',
+              particleCore: 'planet_presets_particleCore',
+              energyBody: 'planet_presets_energyBody',
+              surfaceFlame: 'planet_presets_surfaceFlame',
+              flameJet: 'planet_presets_flameJet',
+              spiralFlame: 'planet_presets_spiralFlame',
+              afterimageTexture: 'planet_presets_afterimageTexture',
+              afterimageParticle: 'planet_presets_afterimageParticle',
+              particleRing: 'planet_presets_particleRing',
+              continuousRing: 'planet_presets_continuousRing',
+              orbitingParticles: 'planet_presets_orbitingParticles',
+              emitter: 'planet_presets_emitter',
+              orbitingFirefly: 'planet_presets_orbitingFirefly',
+              wanderingFirefly: 'planet_presets_wanderingFirefly'
+            };
+            Object.entries(cloudModulePresets).forEach(([key, value]) => {
+              const baseStorageKey = MODULE_PRESET_KEYS[key];
+              if (baseStorageKey && value) {
+                const storageKey = `${baseStorageKey}_${currentUser.id}`;
+                try {
+                  localStorage.setItem(storageKey, JSON.stringify(value));
+                } catch (e) {
+                  console.warn(`Failed to restore module preset ${key}:`, e);
+                }
+              }
+            });
+            console.log('Module presets restored from cloud');
+          }
         }
         setHasHydratedFromCloud(true);
       });
@@ -488,6 +521,36 @@ const App: React.FC = () => {
           }))
         };
 
+        // 收集14个模块预设（从localStorage读取当前用户的预设）
+        const MODULE_PRESET_KEYS = {
+          solidCore: 'planet_presets_solidCore',
+          particleCore: 'planet_presets_particleCore',
+          energyBody: 'planet_presets_energyBody',
+          surfaceFlame: 'planet_presets_surfaceFlame',
+          flameJet: 'planet_presets_flameJet',
+          spiralFlame: 'planet_presets_spiralFlame',
+          afterimageTexture: 'planet_presets_afterimageTexture',
+          afterimageParticle: 'planet_presets_afterimageParticle',
+          particleRing: 'planet_presets_particleRing',
+          continuousRing: 'planet_presets_continuousRing',
+          orbitingParticles: 'planet_presets_orbitingParticles',
+          emitter: 'planet_presets_emitter',
+          orbitingFirefly: 'planet_presets_orbitingFirefly',
+          wanderingFirefly: 'planet_presets_wanderingFirefly'
+        };
+        const modulePresets: Record<string, any> = {};
+        Object.entries(MODULE_PRESET_KEYS).forEach(([key, baseStorageKey]) => {
+          const storageKey = `${baseStorageKey}_${currentUser.id}`;
+          try {
+            const data = localStorage.getItem(storageKey);
+            if (data) {
+              modulePresets[key] = JSON.parse(data);
+            }
+          } catch (e) {
+            console.warn(`Failed to read module preset ${key}:`, e);
+          }
+        });
+
         saveCloudConfig({
           settings: settingsForCloud as any,
           planetScene: planetSettings as any,
@@ -505,7 +568,9 @@ const App: React.FC = () => {
           },
           presets: presetsForCloud as any[],
           // 额外保存xingSparkConfig(API期望的字段名)，确保云端加载时能正确识别
-          xingSparkConfig: xingConfig as any
+          xingSparkConfig: xingConfig as any,
+          // 模块预设
+          modulePresets
         });
       }
     }, 2000); // 2 second debounce

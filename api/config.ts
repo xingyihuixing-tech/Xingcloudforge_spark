@@ -69,6 +69,8 @@ interface UserConfig {
     magicCircleTexturePresets?: Array<{ id: string; name: string; url: string; createdAt: number }>;
     // XingSpark 配置
     xingSparkConfig?: Record<string, unknown>;
+    // 模块预设（来自ControlPanel的14个预设类型）
+    modulePresets?: Record<string, Array<Record<string, unknown>>>;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -137,6 +139,8 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
                 headTexturePresets: [],
                 backgroundPresets: [],
                 magicCircleTexturePresets: [],
+                // 模块预设默认空对象
+                modulePresets: {},
             }
         });
     }
@@ -176,6 +180,8 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         magicCircleTexturePresets: config.magicCircleTexturePresets ?? existingConfig?.magicCircleTexturePresets ?? [],
         // XingSpark 配置
         xingSparkConfig: config.xingSparkConfig ?? existingConfig?.xingSparkConfig,
+        // 模块预设
+        modulePresets: config.modulePresets ?? existingConfig?.modulePresets ?? {},
     };
 
     await redis!.set(`config:${userId}`, newConfig);
