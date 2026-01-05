@@ -4765,6 +4765,153 @@ const STAR_INDICES = [
   1, 11, 10, 1, 2, 11
 ];
 
+// ===== 新增几何体定义 =====
+
+// ===== 3D立体五芒星 (Pentagram 3D) =====
+// 动态生成函数，支持用户自定义参数
+function createPentagram3DGeometry(
+  radius: number,
+  height: number = 0.6,      // 高度比例
+  pointLength: number = 1.0, // 尖角长度
+  innerRadius: number = 0.4, // 内凹半径
+  twistAngle: number = 0     // 扭曲角度(度)
+): THREE.BufferGeometry {
+  const vertices: number[] = [];
+  const indices: number[] = [];
+
+  // 顶点结构：
+  // 0: 顶部极点
+  // 1: 底部极点
+  // 2-6: 5个外尖角（赤道面，角度 0, 72, 144, 216, 288 度）
+  // 7-11: 5个内凹点（赤道面，角度 36, 108, 180, 252, 324 度）
+
+  const topHeight = height * radius;
+  const bottomHeight = -height * radius;
+  const outerR = pointLength * radius;
+  const innerR = innerRadius * radius;
+  const twistRad = THREE.MathUtils.degToRad(twistAngle);
+
+  // 顶部极点
+  vertices.push(0, topHeight, 0);
+  // 底部极点
+  vertices.push(0, bottomHeight, 0);
+
+  // 5个外尖角
+  for (let i = 0; i < 5; i++) {
+    const angle = (i * 72) * Math.PI / 180;
+    vertices.push(
+      outerR * Math.cos(angle),
+      0,
+      outerR * Math.sin(angle)
+    );
+  }
+
+  // 5个内凹点
+  for (let i = 0; i < 5; i++) {
+    const angle = ((i * 72) + 36) * Math.PI / 180;
+    vertices.push(
+      innerR * Math.cos(angle),
+      0,
+      innerR * Math.sin(angle)
+    );
+  }
+
+  // 面索引 (每个尖角由4个三角形组成)
+  // 顶帽：从顶部极点连接外尖角和相邻内凹点
+  // 底帽：从底部极点连接外尖角和相邻内凹点
+  for (let i = 0; i < 5; i++) {
+    const outer = 2 + i;                    // 外尖角索引 (2-6)
+    const innerCW = 7 + i;                  // 顺时针内凹点 (7-11)
+    const innerCCW = 7 + ((i + 4) % 5);     // 逆时针内凹点
+
+    // 顶帽三角形 (顺时针绕序，面朝外)
+    indices.push(0, outer, innerCW);
+    indices.push(0, innerCCW, outer);
+
+    // 底帽三角形 (逆时针绕序，面朝外)
+    indices.push(1, innerCW, outer);
+    indices.push(1, outer, innerCCW);
+  }
+
+  // 创建BufferGeometry
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  return geometry;
+}
+
+// ===== 梅尔卡巴 (Merkaba / Star Tetrahedron) =====
+// 两个相交的正四面体，一个向上，一个向下
+const MERKABA_VERTICES = [
+  // 上四面体顶点 (顶点朝上)
+  0, 1, 0,                                    // 0: 顶部顶点
+  0.9428, -0.3333, 0,                         // 1: 底面顶点1
+  -0.4714, -0.3333, 0.8165,                   // 2: 底面顶点2
+  -0.4714, -0.3333, -0.8165,                  // 3: 底面顶点3
+  // 下四面体顶点 (顶点朝下，旋转60度)
+  0, -1, 0,                                   // 4: 底部顶点
+  -0.9428, 0.3333, 0,                         // 5: 顶面顶点1
+  0.4714, 0.3333, -0.8165,                    // 6: 顶面顶点2
+  0.4714, 0.3333, 0.8165                      // 7: 顶面顶点3
+];
+
+const MERKABA_INDICES = [
+  // 上四面体 (4个面)
+  0, 1, 2,   // 面1
+  0, 2, 3,   // 面2
+  0, 3, 1,   // 面3
+  1, 3, 2,   // 底面
+  // 下四面体 (4个面)
+  4, 6, 5,   // 面1
+  4, 7, 6,   // 面2
+  4, 5, 7,   // 面3
+  5, 6, 7    // 顶面
+];
+
+// ===== 星形八面体 (Stellated Octahedron) =====
+// 正八面体每个面延伸成三角锥
+// 8个三角锥（原8个面×1个尖端）= 8×3 = 24个新三角面
+// 顶点：6个原八面体顶点 + 8个新延伸顶点 = 14个
+const STELLATED_OCTAHEDRON_VERTICES = [
+  // 原正八面体6个顶点
+  1, 0, 0,    // 0: +X
+  -1, 0, 0,   // 1: -X
+  0, 1, 0,    // 2: +Y
+  0, -1, 0,   // 3: -Y
+  0, 0, 1,    // 4: +Z
+  0, 0, -1,   // 5: -Z
+  // 8个延伸尖端 (沿各面法向量方向，距离约1.6)
+  0.577, 0.577, 0.577,     // 6: +X+Y+Z 方向
+  0.577, 0.577, -0.577,    // 7: +X+Y-Z 方向
+  0.577, -0.577, 0.577,    // 8: +X-Y+Z 方向
+  0.577, -0.577, -0.577,   // 9: +X-Y-Z 方向
+  -0.577, 0.577, 0.577,    // 10: -X+Y+Z 方向
+  -0.577, 0.577, -0.577,   // 11: -X+Y-Z 方向
+  -0.577, -0.577, 0.577,   // 12: -X-Y+Z 方向
+  -0.577, -0.577, -0.577   // 13: -X-Y-Z 方向
+];
+
+const STELLATED_OCTAHEDRON_INDICES = [
+  // 原八面体面 (+X+Y+Z) 的三角锥，尖端6
+  6, 0, 2, 6, 2, 4, 6, 4, 0,
+  // 原八面体面 (+X+Y-Z) 的三角锥，尖端7
+  7, 0, 5, 7, 5, 2, 7, 2, 0,
+  // 原八面体面 (+X-Y+Z) 的三角锥，尖端8
+  8, 0, 4, 8, 4, 3, 8, 3, 0,
+  // 原八面体面 (+X-Y-Z) 的三角锥，尖端9
+  9, 0, 3, 9, 3, 5, 9, 5, 0,
+  // 原八面体面 (-X+Y+Z) 的三角锥，尖端10
+  10, 1, 4, 10, 4, 2, 10, 2, 1,
+  // 原八面体面 (-X+Y-Z) 的三角锥，尖端11
+  11, 1, 2, 11, 2, 5, 11, 5, 1,
+  // 原八面体面 (-X-Y+Z) 的三角锥，尖端12
+  12, 1, 3, 12, 3, 4, 12, 4, 1,
+  // 原八面体面 (-X-Y-Z) 的三角锥，尖端13
+  13, 1, 5, 13, 5, 3, 13, 3, 1
+];
+
 function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivisionLevel: number): THREE.BufferGeometry {
   // �斗鱏�臬炏銝箸⏛閫?�芸�蝐餃�
   // 截角/星形多面体不进行细分
@@ -4817,8 +4964,22 @@ function createPolyhedronGeometry(type: PolyhedronType, radius: number, subdivis
       return new THREE.PolyhedronGeometry(SMALL_STELLATED_DODECAHEDRON_VERTICES, SMALL_STELLATED_DODECAHEDRON_INDICES, radius, 0);
 
     case 'star':
-      // 立体五角星（双面五角星锥）
+      // 立体五角星（双面五角星锥）- 已废弃，保留向后兼容
       return new THREE.PolyhedronGeometry(STAR_VERTICES, STAR_INDICES, radius, 0);
+
+    // ===== 新增几何体 =====
+    case 'pentagram3D':
+      // 3D立体五芒星（动态生成，支持用户参数）
+      // 注意：这里使用默认参数，实际参数在调用处传入
+      return createPentagram3DGeometry(radius, 0.6, 1.0, 0.4, 0);
+
+    case 'merkaba':
+      // 梅尔卡巴（星际四面体）：两个相交的正四面体
+      return new THREE.PolyhedronGeometry(MERKABA_VERTICES, MERKABA_INDICES, radius, effectiveDetail);
+
+    case 'stellatedOctahedron':
+      // 星形八面体：正八面体每面延伸成三角锥
+      return new THREE.PolyhedronGeometry(STELLATED_OCTAHEDRON_VERTICES, STELLATED_OCTAHEDRON_INDICES, radius, effectiveDetail);
 
     default:
       return new THREE.IcosahedronGeometry(radius, subdivisionLevel);

@@ -9854,7 +9854,9 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                         </optgroup>
                                         <optgroup label="星形多面体">
                                           <option value="smallStellatedDodecahedron">小星形十二面体</option>
-                                          <option value="star">立体五角星</option>
+                                          <option value="stellatedOctahedron">星形八面体</option>
+                                          <option value="merkaba">梅尔卡巴</option>
+                                          <option value="pentagram3D">3D五芒星</option>
                                         </optgroup>
                                       </select>
                                     </div>
@@ -9867,6 +9869,57 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                       <RangeControl label="细分级别" value={currentEnergyBody.subdivisionLevel} min={0} max={4} step={1} onChange={(v) => updateEnergyBody(currentEnergyBody.id, { subdivisionLevel: v })} />
                                     )}
                                     <RangeControl label="球化程度" value={currentEnergyBody.spherize} min={0} max={1} step={0.1} onChange={(v) => updateEnergyBody(currentEnergyBody.id, { spherize: v })} />
+
+                                    {/* 五芒星专用参数 */}
+                                    {currentEnergyBody.polyhedronType === 'pentagram3D' && (
+                                      <div className="mt-2 p-2 bg-gray-700/30 rounded">
+                                        <span className="text-xs text-purple-400">五芒星参数</span>
+                                        <RangeControl
+                                          label="高度"
+                                          value={(currentEnergyBody as any).pentagramSettings?.height ?? 0.6}
+                                          min={0.2} max={1.5} step={0.1}
+                                          onChange={(v) => updateEnergyBody(currentEnergyBody.id, {
+                                            pentagramSettings: {
+                                              ...((currentEnergyBody as any).pentagramSettings || {}),
+                                              height: v
+                                            }
+                                          })}
+                                        />
+                                        <RangeControl
+                                          label="尖角长度"
+                                          value={(currentEnergyBody as any).pentagramSettings?.pointLength ?? 1.0}
+                                          min={0.5} max={2.0} step={0.1}
+                                          onChange={(v) => updateEnergyBody(currentEnergyBody.id, {
+                                            pentagramSettings: {
+                                              ...((currentEnergyBody as any).pentagramSettings || {}),
+                                              pointLength: v
+                                            }
+                                          })}
+                                        />
+                                        <RangeControl
+                                          label="内凹半径"
+                                          value={(currentEnergyBody as any).pentagramSettings?.innerRadius ?? 0.4}
+                                          min={0.2} max={0.6} step={0.05}
+                                          onChange={(v) => updateEnergyBody(currentEnergyBody.id, {
+                                            pentagramSettings: {
+                                              ...((currentEnergyBody as any).pentagramSettings || {}),
+                                              innerRadius: v
+                                            }
+                                          })}
+                                        />
+                                        <RangeControl
+                                          label="扭曲角度"
+                                          value={(currentEnergyBody as any).pentagramSettings?.twistAngle ?? 0}
+                                          min={0} max={36} step={1}
+                                          onChange={(v) => updateEnergyBody(currentEnergyBody.id, {
+                                            pentagramSettings: {
+                                              ...((currentEnergyBody as any).pentagramSettings || {}),
+                                              twistAngle: v
+                                            }
+                                          })}
+                                        />
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="p-2 bg-gray-800/50 rounded">
                                     <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>变换</span>

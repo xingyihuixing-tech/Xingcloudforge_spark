@@ -1155,7 +1155,19 @@ export type PolyhedronType =
   | 'icosidodecahedron'      // 截半二十面体
   // 星形多面体（Kepler-Poinsot）
   | 'smallStellatedDodecahedron'   // 小星形十二面体（星形体）
-  | 'star';                        // 立体五角星（双面五角星锥）
+  | 'star'                        // 立体五角星（双面五角星锥）- 已废弃
+  // 新增几何体
+  | 'pentagram3D'                 // 3D立体五芒星（用户可调参数）
+  | 'merkaba'                     // 梅尔卡巴（星际四面体）
+  | 'stellatedOctahedron';        // 星形八面体
+
+// 五芒星参数配置
+export interface PentagramSettings {
+  height: number;          // 高度比例 0.2-1.5 (尖角向上/下突出程度)
+  pointLength: number;     // 尖角长度比例 0.5-2.0 (外尖角相对基础半径的延伸)
+  innerRadius: number;     // 内凹半径比例 0.2-0.6 (内凹点相对外尖角的距离)
+  twistAngle: number;      // 扭曲角度 0-60 (上下尖角的旋转偏移，度数)
+}
 
 // 渲染模式
 export type EnergyBodyRenderMode = 'wireframe' | 'shell' | 'both';
