@@ -11453,15 +11453,14 @@ void main() {
             // 使用贴图采样（如果有），否则使用星形
             if(uUseTexture > 0.5) {
               vec2 texUV = gl_PointCoord;
-      vec4 texColor = texture2D(uTexture, texUV);
-        alpha = texColor.a;
-        // 可选：保留贴图原色或使用uColor着色
-        gl_FragColor = vec4(texColor.rgb * uBrightness, alpha * uOpacity);
-        return;
-      } else {
-        alpha = starShape(uv);
-      }
-    }
+              vec4 texColor = texture2D(uTexture, texUV);
+              alpha = texColor.a;
+              // 不再提前返回，让颜色模式逻辑继续执行
+              // 贴图透明度用于形状，颜色由用户设置决定
+            } else {
+              alpha = starShape(uv);
+            }
+          }
 
   // 发光效果
   float glow = smoothstep(1.2, 0.0, r) * uGlowIntensity * 0.3;
