@@ -500,7 +500,7 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                 }}
             >
                 {/* SVG 预览层 - pointer-events:none 让事件穿透到画布 */}
-                <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
+                <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
                     {/* 已完成的笔画 */}
                     {currentLayer?.strokes.map(stroke => {
                         // 应用对称变换
@@ -539,7 +539,7 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                         return allPoints.map((points, idx) => (
                             <polyline
                                 key={`${stroke.id}_${idx}`}
-                                points={points.map(p => `${p.x * 100}%,${p.y * 100}%`).join(' ')}
+                                points={points.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
                                 fill="none"
                                 stroke={stroke.color}
                                 strokeWidth={stroke.brushType === 'particle'
@@ -577,7 +577,7 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                             lines.push(
                                 <polyline
                                     key={`drawing_${i}`}
-                                    points={transformedPoints.map(p => `${p.x * 100}%,${p.y * 100}%`).join(' ')}
+                                    points={transformedPoints.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
                                     fill="none"
                                     stroke={brushColor}
                                     strokeWidth={brushType === 'particle' ? particleSettings.baseSize / 5 : lineRingSettings.baseWidth}
