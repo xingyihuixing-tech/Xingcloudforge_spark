@@ -1513,30 +1513,28 @@ const App: React.FC = () => {
         </button>
 
         {/* AI Assistant Toggle Button - Redesigned Star (Relocated & Draggable) */}
-        {showControls && (
-          <div
-            ref={starRef}
-            className={`absolute z-40 transition-all duration-300 cursor-grab ${starBlinking ? 'animate-bounce' : ''} ${!isStarCustomPos
-              ? (showControls ? 'right-[324px]' : 'right-1')
-              : ''
-              } ${!isStarCustomPos ? 'top-24' : ''
-              }`}
-            style={
-              isStarCustomPos ? { transition: 'none' } : {}
-            }
-            onMouseDown={handleStarDragStart}
-          >
-            <AIStarButton
-              className={starBlinking ? 'ring-4 ring-yellow-400 ring-opacity-50' : ''}
-              isNotifying={starBlinking}
-              onClick={() => {
-                if (handDataRef.current.isActive) return;
-                setShowAIPanel(true);
-                setStarBlinking(false);
-              }}
-            />
-          </div>
-        )}
+        <div
+          ref={starRef}
+          className={`absolute z-40 transition-all duration-300 cursor-grab ${starBlinking ? 'animate-bounce' : ''} ${!isStarCustomPos
+            ? (showControls ? 'right-[324px]' : 'right-4')
+            : ''
+            } ${!isStarCustomPos ? 'top-24' : ''
+            }`}
+          style={
+            isStarCustomPos ? { transition: 'none' } : {}
+          }
+          onMouseDown={handleStarDragStart}
+        >
+          <AIStarButton
+            className={starBlinking ? 'ring-4 ring-yellow-400 ring-opacity-50' : ''}
+            isNotifying={starBlinking}
+            onClick={() => {
+              if (handDataRef.current.isActive) return;
+              setShowAIPanel(true);
+              setStarBlinking(false);
+            }}
+          />
+        </div>
 
 
 

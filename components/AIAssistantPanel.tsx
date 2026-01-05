@@ -410,11 +410,19 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [inputValue, inspirationSubMode, uploadedImage, isRefining, chatModel]);
 
+    // === 规范化换行（避免过多空行） ===
+    const normalizeLineBreaks = (text: string) => {
+        return text
+            .replace(/\r\n/g, '\n')       // 统一换行符
+            .replace(/\n{3,}/g, '\n\n')   // 连续3+换行 -> 2换行
+            .trim();
+    };
+
     // === 发送 ===
     const handleSend = useCallback(async () => {
         if (!inputValue.trim() || isGenerating) return;
 
-        const prompt = inputValue.trim();
+        const prompt = normalizeLineBreaks(inputValue);
         const currentAttachedImage = uploadedImage; // 保存当前附图
 
         // 添加用户消息
@@ -741,9 +749,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     {/* 消息列表 - When expanded & not in settings */}
                     {!isMinimized && !showSettings && (
                         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar pointer-events-auto">
-                            <div className="text-center py-4">
-                                <p className="text-xs text-white/30">✨ XingSpark AI Assistant Ready</p>
-                            </div>
                             {messages.map(msg => (
                                 <div className={`max-w-[90%] ${msg.role === 'user' ? 'text-right' : 'text-left'
                                     }`}>
@@ -841,17 +846,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                             <div className="p-3 bg-black/10 backdrop-blur-sm rounded-b-2xl pointer-events-auto">
 
                                 {/* 子模式选择 (放在输入框上方，左对齐，圆角长方形) */}
-                                <div className="flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar items-center">
-                                    {/* 最小化时的拖动手柄 (展开按钮左侧区域) */}
-                                    {isMinimized && (
-                                        <div
-                                            className="flex-1 h-6 cursor-move flex items-center"
-                                            onMouseDown={handleDragStart}
-                                            title="拖动移动面板"
-                                        >
-                                            <div className="w-8 h-1 bg-white/20 rounded-full mx-auto" />
-                                        </div>
-                                    )}
+                                {/* 最小化时：整行可拖动（点击空白处拖动） */}
+                                <div
+                                    className={`flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar items-center ${isMinimized ? 'cursor-move' : ''}`}
+                                    onMouseDown={isMinimized ? handleDragStart : undefined}
+                                >
 
                                     {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => (
                                         <button
