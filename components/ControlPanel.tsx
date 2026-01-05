@@ -6576,11 +6576,12 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                   </div>
                 </ControlGroup>
 
-                {/* 七个并列子Tab - 应用材质设置 */}
-                <div className="flex gap-1 mb-3 p-1 rounded-xl" style={{
-                  background: 'rgba(0,0,0,0.4)',
+                {/* 七个并列子Tab - 应用材质设置 - Sticky定位 */}
+                <div className="flex gap-1 mb-3 p-1 rounded-xl sticky top-0 z-10" style={{
+                  background: 'rgba(0,0,0,0.85)',
                   border: '1px solid rgba(255,255,255,0.05)',
-                  overflow: 'visible'
+                  overflow: 'visible',
+                  backdropFilter: 'blur(8px)'
                 }}>
                   {[
                     {
@@ -6707,8 +6708,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                   return (
                     <>
-                      {/* 核心类型切换Tab - 应用材质设置 */}
-                      <div className="mb-3 flex gap-1 p-1 rounded-lg" style={{ background: 'rgba(0,0,0,0.3)' }}>
+                      {/* 核心类型切换Tab - 应用材质设置 - Sticky定位 */}
+                      <div className="mb-3 flex gap-1 p-1 rounded-lg sticky top-12 z-[9]" style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)' }}>
                         {[
                           { key: 'particle' as const, label: '粒子核心', color: '#3b82f6' },
                           { key: 'solid' as const, label: '实体核心', color: '#8b5cf6' }
