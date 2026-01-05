@@ -42,6 +42,8 @@ interface AIAssistantPanelProps {
     // XingSpark 配置 (Lifted State from App.tsx)
     xingConfig: XingSparkConfig;
     onConfigChange: React.Dispatch<React.SetStateAction<XingSparkConfig>>;
+    // 强制保存回调
+    onForceSave?: () => void;
     // 生成完成回调
     onGenerationComplete?: () => void;
 }
@@ -94,7 +96,7 @@ const ImageModal: React.FC<{
                         onClick={() => navigator.clipboard.writeText(imageUrl)}
                         className="px-3 py-1 bg-white/10 text-white/80 rounded-lg text-sm hover:bg-white/20"
                     >
-                        📋 复制 URL
+                        📋 📋 复制 URL
                     </button>
                 </div>
             </div>
@@ -116,6 +118,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     onSaveMagicCircleTexture,
     xingConfig,
     onConfigChange,
+    onForceSave,
     onGenerationComplete
 }) => {
     // === 模式状态 ===
@@ -582,159 +585,157 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     left: savedPosition.x,
                     top: savedPosition.y,
                     // Control visibility via display to keep component mounted
-                    display: isOpen ? 'block' : 'none'
+                    display: isOpen ? 'block' : 'none',
+                    pointerEvents: isMinimized ? 'none' : 'auto' // Pass through clicks when transparent
                 }}
-            // onMouseDown removed from here to prevent dragging by content
             >
                 <div
                     className="ai-panel-container"
                     style={{
                         width: '600px', // Keep full width for input area
                         height: isMinimized ? 'auto' : '85vh', // Auto height when minimized (Compact Mode)
-                        // 动态边框光晕效果
-                        boxShadow: `
+                        background: isMinimized ? 'transparent' : undefined,
+                        boxShadow: isMinimized ? 'none' : `
                             0 24px 48px rgba(0,0,0,0.15), 
                             0 8px 16px rgba(0,0,0,0.1),
                             0 0 20px ${xingConfig.gradient.colors[0]}40,
                             0 0 40px ${xingConfig.gradient.colors[1] || xingConfig.gradient.colors[0]}25,
                             0 0 60px ${xingConfig.gradient.colors[2] || xingConfig.gradient.colors[0]}15
                         `,
+                        border: isMinimized ? 'none' : undefined,
+                        pointerEvents: isMinimized ? 'none' : 'auto' // Container itself shouldn't block
                     }}
                 >
-                    {/* ... (borders) ... */}
-                    <div className="ai-panel-border-top" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[0]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[2]} 80%, transparent 100%)` }}></div>
-                    <div className="ai-panel-border-bottom" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[2]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[0]} 80%, transparent 100%)` }}></div>
-                    <div className="ai-panel-border-left" style={{ background: `linear-gradient(to bottom, ${xingConfig.gradient.colors[0]}80 0%, ${xingConfig.gradient.colors[1]}80 50%, transparent 100%)` }}></div>
-                    <div className="ai-panel-border-right" style={{ background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
+                    {/* Borders - Only show when expanded */}
+                    {!isMinimized && (
+                        <>
+                            <div className="ai-panel-border-top" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[0]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[2]} 80%, transparent 100%)` }}></div>
+                            <div className="ai-panel-border-bottom" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[2]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[0]} 80%, transparent 100%)` }}></div>
+                            <div className="ai-panel-border-left" style={{ background: `linear-gradient(to bottom, ${xingConfig.gradient.colors[0]}80 0%, ${xingConfig.gradient.colors[1]}80 50%, transparent 100%)` }}></div>
+                            <div className="ai-panel-border-right" style={{ background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
 
-                    {/* 标题栏 (Drag Handle) */}
-                    <div
-                        className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5"
-                        onMouseDown={handleDragStart}
-                    >
-                        <div className="flex items-center gap-2 relative">
-                            {/* XingSpark Logo */}
-                            {(() => {
-                                const colors = xingConfig.gradient.colors;
-                                return (
-                                    <span
-                                        className={`xingspark-logo-title ${logoState === 'blinking' ? 'blinking' : ''}`}
-                                        onDoubleClick={handleLogoDoubleClick}
-                                        title="双击打开设置"
-                                        style={{
-                                            fontSize: '1.6rem',
-                                            padding: '4px 8px',
-                                            lineHeight: 1.2
-                                        }}
-                                    >
-                                        <span style={{ fontSize: '1em' }}>X</span>
-                                        <span style={{ fontSize: '0.9em' }}>ing</span>
-                                        <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
-                                        <span style={{ fontSize: '0.9em' }}>park</span>
-                                    </span>
-                                );
-                            })()}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            {/* 最小化按钮 */}
-                            <button
-                                onClick={() => setIsMinimized(!isMinimized)}
-                                className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors"
-                                title={isMinimized ? "展开" : "最小化"}
+                            {/* 标题栏 (Drag Handle) */}
+                            <div
+                                className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5"
+                                onMouseDown={handleDragStart}
                             >
-                                {isMinimized ? (
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
-                                ) : (
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                                )}
-                            </button>
-                            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
-                        </div>
-                    </div>
+                                <div className="flex items-center gap-2 relative">
+                                    {/* XingSpark Logo */}
+                                    {(() => {
+                                        return (
+                                            <span
+                                                className={`xingspark-logo-title ${logoState === 'blinking' ? 'blinking' : ''}`}
+                                                onDoubleClick={handleLogoDoubleClick}
+                                                title="双击打开设置"
+                                                style={{
+                                                    fontSize: '1.6rem',
+                                                    padding: '4px 8px',
+                                                    lineHeight: 1.2
+                                                }}
+                                            >
+                                                <span style={{ fontSize: '1em' }}>X</span>
+                                                <span style={{ fontSize: '0.9em' }}>ing</span>
+                                                <span style={{ fontSize: '1.25em', marginLeft: '-0.05em' }}>S</span>
+                                                <span style={{ fontSize: '0.9em' }}>park</span>
+                                            </span>
+                                        );
+                                    })()}
+                                </div>
 
-                    {/* XingSpark 设置 */}
+                                <div className="flex items-center gap-2">
+                                    {/* 最小化按钮 */}
+                                    <button
+                                        onClick={() => setIsMinimized(true)}
+                                        className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                                        title="最小化 (只保留输入框)"
+                                    >
+                                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                    </button>
+                                    <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* XingSpark 设置 - Only when expanded */}
                     {!isMinimized && showSettings && (
-                        <div className="flex-1 min-h-0">
+                        <div className="flex-1 min-h-0 pointer-events-auto">
                             <XingSparkSettingsPanel
                                 config={xingConfig}
                                 setConfig={onConfigChange}
-                                onBack={() => setShowSettings(false)}
+                                onBack={() => {
+                                    setShowSettings(false);
+                                    onForceSave?.(); // 退出设置时强制保存
+                                }}
                                 userId={userId}
                             />
                         </div>
                     )}
 
-                    {/* 预览气泡 REMOVED */}
-
-                    {/* 消息列表 - 当设置面板关闭且不缩小时显示 */}
+                    {/* 消息列表 - When expanded & not in settings */}
                     {!isMinimized && !showSettings && (
-                        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                            {messages.length === 0 && (
-                                <div className="h-full flex items-center justify-center text-white/10 text-sm italic select-none">
-                                    {/* 空状态 */}
-                                </div>
-                            )}
+                        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar pointer-events-auto">
+                            <div className="text-center py-4">
+                                <p className="text-xs text-white/30">✨ XingSpark AI Assistant Ready</p>
+                            </div>
                             {messages.map(msg => (
-                                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[90%] ${msg.role === 'user' ? 'text-right' : 'text-left'
-                                        }`}>
-                                        {msg.type === 'image' && msg.imageUrl ? (
-                                            <div className="inline-block relative group">
+                                <div className={`max-w-[90%] ${msg.role === 'user' ? 'text-right' : 'text-left'
+                                    }`}>
+                                    {msg.type === 'image' && msg.imageUrl ? (
+                                        <div className="inline-block relative group">
+                                            <img
+                                                src={msg.imageUrl}
+                                                alt="Generated"
+                                                className="max-h-[160px] rounded-lg shadow-lg cursor-pointer hover:opacity-95 transition-opacity"
+                                                onClick={() => setPreviewImage(msg.imageUrl!)}
+                                            />
+                                            {msg.subMode && msg.subMode !== 'freeChat' && (
+                                                <div className="mt-2 text-left">
+                                                    <button
+                                                        onClick={() => handleSavePreset(msg)}
+                                                        disabled={savingId === msg.id || !userId}
+                                                        className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/90 text-xs rounded transition-colors backdrop-blur-sm"
+                                                    >
+                                                        {savingId === msg.id ? 'Saving...' : (
+                                                            <><Save size={12} className="inline mr-1" />{saveButtonText[msg.subMode]}</>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className={`inline-block px-3 py-2 rounded-xl ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
+                                            style={{
+                                                // 应用对话字体和字号
+                                                fontFamily: CHAT_FONT_OPTIONS.find(f => f.id === xingConfig.theme?.chatFont)?.family || CHAT_FONT_OPTIONS[0].family,
+                                                fontSize: `${xingConfig.theme?.chatFontSize ?? 14}px`,
+                                                wordBreak: 'break-word',
+                                                whiteSpace: 'pre-wrap',
+                                                ...(msg.role === 'user' ? {
+                                                    backgroundSize: '200% 200%',
+                                                    animation: `xing-gradient-flow ${xingConfig.userMsg?.speed ?? 6}s ease infinite`,
+                                                    background: `linear-gradient(${xingConfig.userMsg?.angle ?? 135}deg, ${(xingConfig.userMsg?.colors ?? ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2']).map((c, i, arr) => {
+                                                        const opacity = i === 0 ? (xingConfig.userMsg?.lightOpacity ?? 0.15) : (xingConfig.userMsg?.darkOpacity ?? 0.25);
+                                                        return `${c}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
+                                                    }).join(', ')})`,
+                                                    border: `1px solid ${xingConfig.userMsg?.borderColor ?? '#71b0ff'}40`,
+                                                    color: 'rgba(255,255,255,0.9)',
+                                                } : {})
+                                            }}
+                                        >
+                                            {/* 附图显示 */}
+                                            {msg.attachedImage && (
                                                 <img
-                                                    src={msg.imageUrl}
-                                                    alt="Generated"
-                                                    className="max-h-[160px] rounded-lg shadow-lg cursor-pointer hover:opacity-95 transition-opacity"
-                                                    onClick={() => setPreviewImage(msg.imageUrl!)}
+                                                    src={msg.attachedImage}
+                                                    alt="附图"
+                                                    className="max-h-[80px] rounded mb-2 cursor-pointer hover:opacity-80"
+                                                    onClick={() => setPreviewImage(msg.attachedImage!)}
                                                 />
-                                                {msg.subMode && msg.subMode !== 'freeChat' && (
-                                                    <div className="mt-2 text-left">
-                                                        <button
-                                                            onClick={() => handleSavePreset(msg)}
-                                                            disabled={savingId === msg.id || !userId}
-                                                            className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-white/90 text-xs rounded transition-colors backdrop-blur-sm"
-                                                        >
-                                                            {savingId === msg.id ? 'Saving...' : (
-                                                                <><Save size={12} className="inline mr-1" />{saveButtonText[msg.subMode]}</>
-                                                            )}
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <div
-                                                className={`inline-block px-3 py-2 rounded-xl ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
-                                                style={{
-                                                    // 应用对话字体和字号
-                                                    fontFamily: CHAT_FONT_OPTIONS.find(f => f.id === xingConfig.theme?.chatFont)?.family || CHAT_FONT_OPTIONS[0].family,
-                                                    fontSize: `${xingConfig.theme?.chatFontSize ?? 14}px`,
-                                                    wordBreak: 'break-word',
-                                                    whiteSpace: 'pre-wrap',
-                                                    ...(msg.role === 'user' ? {
-                                                        backgroundSize: '200% 200%',
-                                                        animation: `xing-gradient-flow ${xingConfig.userMsg?.speed ?? 6}s ease infinite`,
-                                                        background: `linear-gradient(${xingConfig.userMsg?.angle ?? 135}deg, ${(xingConfig.userMsg?.colors ?? ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2']).map((c, i, arr) => {
-                                                            const opacity = i === 0 ? (xingConfig.userMsg?.lightOpacity ?? 0.15) : (xingConfig.userMsg?.darkOpacity ?? 0.25);
-                                                            return `${c}${Math.round(opacity * 255).toString(16).padStart(2, '0')}`;
-                                                        }).join(', ')})`,
-                                                        border: `1px solid ${xingConfig.userMsg?.borderColor ?? '#71b0ff'}40`,
-                                                        color: 'rgba(255,255,255,0.9)',
-                                                    } : {})
-                                                }}
-                                            >
-                                                {/* 附图显示 */}
-                                                {msg.attachedImage && (
-                                                    <img
-                                                        src={msg.attachedImage}
-                                                        alt="附图"
-                                                        className="max-h-[80px] rounded mb-2 cursor-pointer hover:opacity-80"
-                                                        onClick={() => setPreviewImage(msg.attachedImage!)}
-                                                    />
-                                                )}
-                                                {msg.content}
-                                            </div>
-                                        )}
-                                    </div>
+                                            )}
+                                            {msg.content}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                             {/* 加载状态 */}

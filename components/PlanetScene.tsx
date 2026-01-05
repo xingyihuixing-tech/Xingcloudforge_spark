@@ -396,6 +396,10 @@ uniform float uHotspotEmission;
 uniform float uOpacity;
 uniform float uBrightness;
 
+// 纹理自转参数
+uniform float uRotationAngle;   // 累计旋转角度（弧度）
+uniform vec3 uRotationAxis;     // 旋转轴（归一化向量）
+
 // 銵券𢒰憸𡏭𠧧蝟餌�嚗�𣈲����矋�
 uniform float uSurfaceColorMode;    // 0=�閗𠧧, 1=�諹𠧧, 2=銝㕑𠧧, 3=瘛瑁𠧧
 uniform vec3 uSurfaceBaseColor;     // �箇�憸𡏭𠧧
@@ -433,6 +437,19 @@ varying vec3 vWorldPosition;
 varying vec3 vLocalPosition;
 varying vec3 vNormal;
 varying vec3 vViewPosition;
+
+// 绕任意轴旋转的矩阵（用于纹理坐标自转）
+mat3 rotateAroundAxis(vec3 axis, float angle) {
+  axis = normalize(axis);
+  float s = sin(angle);
+  float c = cos(angle);
+  float oc = 1.0 - c;
+  return mat3(
+    oc * axis.x * axis.x + c,         oc * axis.x * axis.y - axis.z * s, oc * axis.z * axis.x + axis.y * s,
+    oc * axis.x * axis.y + axis.z * s, oc * axis.y * axis.y + c,         oc * axis.y * axis.z - axis.x * s,
+    oc * axis.z * axis.x - axis.y * s, oc * axis.y * axis.z + axis.x * s, oc * axis.z * axis.z + c
+  );
+}
 
 // RGB 頧?HSL
 vec3 rgb2hsl(vec3 c) {
@@ -657,6 +674,12 @@ void main() {
   // === 敶雴��㚚��瑕��?===
   // 撠��������銝��硋� [-1, 1]嚗䔶蝙蝥寧�銝𡒊�雿枏之撠讛圾�?
   vec3 normalizedPos = vWorldPosition / uRadius;
+  
+  // === 应用纹理自转 ===
+  // 将旋转应用到采样坐标，使纹理跟随mesh旋转
+  if (abs(uRotationAngle) > 0.0001) {
+    normalizedPos = rotateAroundAxis(uRotationAxis, uRotationAngle) * normalizedPos;
+  }
   
   // --- 1. [蝥寧�撖�漲] & [瘚�𢆡�笔漲] ---
   // uScale �湔𦻖�批�蝥寧�撖�漲嚗��銝��硋�銝滚���閬?0.05 蝟餅㺭嚗?
@@ -5702,6 +5725,9 @@ function createSolidCoreMesh(settings: SolidCoreSettings, isMobile: boolean): TH
       uHotspotEmission: { value: hotspotEmission },
       uOpacity: { value: opacity },
       uBrightness: { value: brightness },
+      // 纹理自转参数
+      uRotationAngle: { value: 0 },  // 累计旋转角度
+      uRotationAxis: { value: new THREE.Vector3(0, 1, 0) },  // 默认Y轴旋转
       // 銵券𢒰憸𡏭𠧧蝟餌�
       uSurfaceColorMode: { value: getColorModeIndex(surfaceColor.mode) },
       uSurfaceBaseColor: { value: hexToVec3(surfaceColor.baseColor) },
@@ -7758,16 +7784,26 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                 }
               }
 
-              // 摰硺��詨��芾蓮
+              // 摰硺��詨��芾蓮（通过着色器uniform实现纹理旋转）
               const rotSpeed = solidCore.rotationSpeed ?? 0;
-              if (rotSpeed !== 0) {
+              if (rotSpeed !== 0 && coreMesh) {
                 const rotAxis = solidCore.rotationAxis ?? { preset: 'y', customX: 0, customY: 1, customZ: 0 };
                 const axisX = rotAxis.customX ?? 0;
                 const axisY = rotAxis.customY ?? 1;
                 const axisZ = rotAxis.customZ ?? 0;
-                const axis = new THREE.Vector3(axisX, axisY, axisZ).normalize();
-                const deltaRotation = rotSpeed * deltaTime;
-                child.rotateOnAxis(axis, deltaRotation);
+
+                // 累计旋转角度存储在mesh的userData中
+                if (typeof coreMesh.userData.accumulatedRotation !== 'number') {
+                  coreMesh.userData.accumulatedRotation = 0;
+                }
+                coreMesh.userData.accumulatedRotation += rotSpeed * deltaTime;
+
+                // 更新材质uniforms
+                const material = coreMesh.material as THREE.ShaderMaterial;
+                if (material.uniforms) {
+                  material.uniforms.uRotationAngle.value = coreMesh.userData.accumulatedRotation;
+                  material.uniforms.uRotationAxis.value.set(axisX, axisY, axisZ).normalize();
+                }
               }
             }
           });

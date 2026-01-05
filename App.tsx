@@ -1245,6 +1245,66 @@ const App: React.FC = () => {
   // 检测移动设备
   const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
+  // 手动强制保存 (用于 AI 面板关闭/设置保存时立即同步)
+  const handleManualSave = useCallback(async () => {
+    if (!currentUser || !hasHydratedFromCloud) return;
+
+    // 过滤掉 imageDataUrl
+    const presetsForCloud = nebulaPresets.map(preset => ({ ...preset, imageDataUrl: undefined }));
+    const settingsForCloud = {
+      ...settings,
+      nebulaInstances: settings.nebulaInstances?.map(instance => ({ ...instance, imageDataUrl: undefined }))
+    };
+
+    // 收集模块预设
+    const MODULE_PRESET_KEYS = {
+      solidCore: 'planet_presets_solidCore',
+      particleCore: 'planet_presets_particleCore',
+      energyBody: 'planet_presets_energyBody',
+      surfaceFlame: 'planet_presets_surfaceFlame',
+      flameJet: 'planet_presets_flameJet',
+      spiralFlame: 'planet_presets_spiralFlame',
+      afterimageTexture: 'planet_presets_afterimageTexture',
+      afterimageParticle: 'planet_presets_afterimageParticle',
+      particleRing: 'planet_presets_particleRing',
+      continuousRing: 'planet_presets_continuousRing',
+      orbitingParticles: 'planet_presets_orbitingParticles',
+      emitter: 'planet_presets_emitter',
+      orbitingFirefly: 'planet_presets_orbitingFirefly',
+      wanderingFirefly: 'planet_presets_wanderingFirefly'
+    };
+    const modulePresets: Record<string, any> = {};
+    Object.entries(MODULE_PRESET_KEYS).forEach(([key, baseStorageKey]) => {
+      const storageKey = `${baseStorageKey}_${currentUser.id}`;
+      try {
+        const data = localStorage.getItem(storageKey);
+        if (data) modulePresets[key] = JSON.parse(data);
+      } catch (e) {
+        console.warn(`Failed to read module preset ${key}:`, e);
+      }
+    });
+
+    console.log('Force saving config to cloud...');
+    await saveCloudConfig({
+      settings: settingsForCloud as any,
+      planetScene: planetSettings as any,
+      theme: {
+        themeConfig: {
+          activeSchemeId: themeConfig.activeSchemeId,
+          activeColors: themeConfig.activeColors,
+          consoleBg: themeConfig.consoleBg,
+          deletedSystemSchemeIds: themeConfig.deletedSystemSchemeIds
+        },
+        materialSettings,
+        userMaterialPresets,
+        xingConfig
+      },
+      presets: presetsForCloud as any[],
+      xingSparkConfig: xingConfig as any,
+      modulePresets
+    });
+  }, [currentUser, hasHydratedFromCloud, nebulaPresets, settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, saveCloudConfig]);
+
   // 如果用户未登录，显示登录界面
   if (!currentUser) {
     return <UserLogin />;
@@ -1474,42 +1534,9 @@ const App: React.FC = () => {
                 color: 'rgba(255,255,255,0.95)'
               }}
             >
-              🎯 还原初始视角
             </button>
           </div>
         )}
-
-        {/* 互通模式设置面板 - 仅互通模式+星云模式下显示 - 玻璃样式 */}
-        {overlayMode && appMode === 'nebula' && (
-          <div
-            className="absolute bottom-24 md:bottom-8 left-4 z-40 rounded-xl p-3"
-            style={{
-              background: 'rgba(30,30,40,0.16)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
-              border: '1px solid rgba(255,255,255,0.15)',
-              minWidth: '180px'
-            }}
-          >
-            <span className="text-xs font-medium block mb-2 text-cyan-400">互通模式设置</span>
-            <div className="flex items-center gap-2">
-              <span className="text-gray-400 text-[10px] min-w-[40px]">辉光:</span>
-              <input
-                type="range"
-                min={0} max={3} step={0.05}
-                value={settings.overlayBloomStrength ?? 1.0}
-                onChange={(e) => setSettings(prev => ({ ...prev, overlayBloomStrength: parseFloat(e.target.value) }))}
-                className="flex-1 h-1 rounded-lg appearance-none cursor-pointer"
-                style={{ background: 'rgba(55,65,81,0.5)' }}
-              />
-              <span className="text-white text-[10px] w-8 text-right">{(settings.overlayBloomStrength ?? 1.0).toFixed(2)}</span>
-            </div>
-          </div>
-        )}
-
-        {/* 手势处理器（支持iPad） */}
-        <GestureHandler handDataRef={handDataRef} enabled={gestureEnabled} showVideo={false} />
       </div>
 
       {/* Sidebar - 悬浮在右侧 */}
@@ -1560,11 +1587,16 @@ const App: React.FC = () => {
       {/* AI 助手面板 - 始终渲染以保持后台生成，使用 CSS 隐藏 */}
       <AIAssistantPanel
         isOpen={showAIPanel}
-        onClose={() => setShowAIPanel(false)}
+        onClose={() => {
+          setShowAIPanel(false);
+          handleManualSave(); // 关闭时强制保存
+        }}
         userId={currentUser?.id}
         // 同步 XingSpark 配置
         xingConfig={xingConfig}
         onConfigChange={setXingConfig}
+        // 传递强制保存函数，供内部设置面板保存时调用
+        onForceSave={handleManualSave}
         onGenerationComplete={handleGenerationComplete}
         // callbacks for saving generated assets to presets
         onSaveHeadTexture={async (preset) => {
@@ -1604,7 +1636,7 @@ const App: React.FC = () => {
           }
         }}
       />
-    </div >
+    </div>
   );
 };
 

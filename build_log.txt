@@ -1,0 +1,88 @@
+﻿
+> version-1@0.0.0 build
+> npm run generate && vite build
+
+
+> version-1@0.0.0 generate
+> node scripts/generate-textures.cjs
+
+馃攳 鎵弿娉曢樀璐村浘鐩綍...
+
+  鉁?cute: 16 寮犲浘鐗?  鉁?magic_circle: 23 寮犲浘鐗?  鉁?star: 16 寮犲浘鐗?  鉁?rings: 11 寮犲浘鐗?  鉁?myth: 23 寮犲浘鐗?
+鉁?瀹屾垚锛佸叡 89 寮犺创鍥?馃搫 閰嶇疆宸插啓鍏? src/generated/magic-textures.json
+
+[36mvite v6.4.1 [32mbuilding for production...[36m[39m
+transforming...
+[32m鉁?[39m 5 modules transformed.
+node.exe : [31m鉁?[39m Build fail
+ed in 100ms
+所在位置 行:1 字符: 1
++ & "D:\programmenew/node.exe" "D
+:\programmenew/node_modules/npm/b
+in/np ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo          : No 
+   tSpecified: ([31m鉁?[39m Bui  
+  ld failed in 100ms:String) [   
+ ], RemoteException
+    + FullyQualifiedErrorId : Na 
+   tiveCommandError
+ 
+[31merror during build:
+[31m[vite:esbuild] Transform fai
+led with 2 errors:
+D:/chrome涓嬭浇/version-1/App.tsx:16
+41:0: ERROR: The character "}" is
+ not valid inside a JSX element
+D:/chrome涓嬭浇/version-1/App.tsx:16
+43:25: ERROR: Unexpected end of f
+ile before a closing "div" tag[3
+1m
+file: [36mD:/chrome涓嬭浇/version-1
+/App.tsx:1641:0[31m
+[33m
+[33mThe character "}" is not val
+id inside a JSX element[33m
+1639|        </div>
+1640|        );
+1641|  };
+   |  ^
+1642|  
+1643|        export default App;
+
+[33mUnexpected end of file befor
+e a closing "div" tag[33m
+1641|  };
+1642|  
+1643|        export default App;
+   |                           ^
+[31m
+    at failureErrorWithLog (D:\ch
+rome涓嬭浇\version-1\node_modules\es
+build\lib\main.js:1467:15)
+    at D:\chrome涓嬭浇\version-1\nod
+e_modules\esbuild\lib\main.js:736
+:50
+    at responseCallbacks.<compute
+d> (D:\chrome涓嬭浇\version-1\node_m
+odules\esbuild\lib\main.js:603:9)
+    at handleIncomingPacket (D:\c
+hrome涓嬭浇\version-1\node_modules\e
+sbuild\lib\main.js:658:12)
+    at Socket.readFromStdout (D:\
+chrome涓嬭浇\version-1\node_modules\
+esbuild\lib\main.js:581:7)
+    at Socket.emit (node:events:5
+08:28)
+    at addChunk (node:internal/st
+reams/readable:559:12)
+    at readableAddChunkPushByteMo
+de (node:internal/streams/readabl
+e:510:3)
+    at Readable.push (node:intern
+al/streams/readable:390:5)
+    at Pipe.onStreamRead (node:in
+ternal/stream_base_commons:189:23
+)[39m
