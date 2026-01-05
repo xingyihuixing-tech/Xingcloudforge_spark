@@ -125,12 +125,23 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
     const [isMinimized, setIsMinimized] = useState(false);
 
-    // === 模型选择 ===
-    const [chatModel, setChatModel] = useState(DEFAULT_CHAT_MODEL);
-    const [imageModel, setImageModel] = useState(DEFAULT_IMAGE_MODEL);
+    // === 模型选择 (从配置持久化读取) ===
+    const [chatModel, setChatModelState] = useState(xingConfig.chatModel || DEFAULT_CHAT_MODEL);
+    const [imageModel, setImageModelState] = useState(xingConfig.imageModel || DEFAULT_IMAGE_MODEL);
     const [showModelSelector, setShowModelSelector] = useState(false);
     // 自由对话模式下，当前选中的模型类型 ('chat' 或 'image')
     const [freeChatModelType, setFreeChatModelType] = useState<'chat' | 'image'>('chat');
+
+    // 模型变更处理器 (同步持久化)
+    const setChatModel = useCallback((model: string) => {
+        setChatModelState(model);
+        onConfigChange(prev => ({ ...prev, chatModel: model }));
+    }, [onConfigChange]);
+
+    const setImageModel = useCallback((model: string) => {
+        setImageModelState(model);
+        onConfigChange(prev => ({ ...prev, imageModel: model }));
+    }, [onConfigChange]);
 
     // === 输入状态 ===
     const [inputValue, setInputValue] = useState('');
@@ -672,6 +683,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 <div className="flex items-center gap-2 relative">
                                     {/* XingSpark Logo */}
                                     {(() => {
+                                        const colors = xingConfig.gradient?.colors || ['#71b0ff', '#FFB6C1', '#2bf6a5', '#37f1d2'];
                                         return (
                                             <span
                                                 className={`xingspark-logo-title ${logoState === 'blinking' ? 'blinking' : ''}`}
@@ -680,8 +692,12 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                 style={{
                                                     fontSize: '1.6rem',
                                                     padding: '4px 8px',
-                                                    lineHeight: 1.2
-                                                }}
+                                                    lineHeight: 1.2,
+                                                    fontFamily: `'${xingConfig.font || 'Pacifico'}', cursive`,
+                                                    // 设置 CSS 自定义属性驱动动态渐变
+                                                    '--xing-bg-image': `conic-gradient(from var(--xing-angle) at var(--xing-cx) var(--xing-cy), ${colors.join(', ')}, ${colors[0]})`,
+                                                    '--xing-font': `'${xingConfig.font || 'Pacifico'}'`,
+                                                } as React.CSSProperties}
                                             >
                                                 <span style={{ fontSize: '1em' }}>X</span>
                                                 <span style={{ fontSize: '0.9em' }}>ing</span>
@@ -826,6 +842,17 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
                                 {/* 子模式选择 (放在输入框上方，左对齐，圆角长方形) */}
                                 <div className="flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar items-center">
+                                    {/* 最小化时的拖动手柄 (展开按钮左侧区域) */}
+                                    {isMinimized && (
+                                        <div
+                                            className="flex-1 h-6 cursor-move flex items-center"
+                                            onMouseDown={handleDragStart}
+                                            title="拖动移动面板"
+                                        >
+                                            <div className="w-8 h-1 bg-white/20 rounded-full mx-auto" />
+                                        </div>
+                                    )}
+
                                     {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => (
                                         <button
                                             key={subMode}

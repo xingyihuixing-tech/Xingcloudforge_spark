@@ -69,6 +69,8 @@ export interface XingSparkConfig {
     hiddenSystemPresets?: string[];       // 被隐藏的系统预设ID列表
     starPosition?: { x: number; y: number }; // AI星星按钮的拖拽位置
     panelPosition?: { x: number; y: number }; // AI面板的拖拽位置
+    chatModel?: string;   // 持久化的对话模型选择
+    imageModel?: string;  // 持久化的图像模型选择
 }
 
 // 默认配置

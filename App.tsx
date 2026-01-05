@@ -1528,6 +1528,7 @@ const App: React.FC = () => {
           >
             <AIStarButton
               className={starBlinking ? 'ring-4 ring-yellow-400 ring-opacity-50' : ''}
+              isNotifying={starBlinking}
               onClick={() => {
                 if (handDataRef.current.isActive) return;
                 setShowAIPanel(true);

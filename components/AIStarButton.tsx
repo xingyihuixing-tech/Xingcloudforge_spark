@@ -4,6 +4,7 @@ interface AIStarButtonProps {
     onClick?: () => void;
     className?: string;
     title?: string;
+    isNotifying?: boolean; // 生成完成通知闪烁
 }
 
 /**
@@ -13,7 +14,8 @@ interface AIStarButtonProps {
 export const AIStarButton: React.FC<AIStarButtonProps> = ({
     onClick,
     className = '',
-    title = "唤起 AI 助手"
+    title = "唤起 AI 助手",
+    isNotifying = false
 }) => {
     return (
         <button
@@ -22,7 +24,7 @@ export const AIStarButton: React.FC<AIStarButtonProps> = ({
             title={title}
         >
             {/* 使用 CSS 实现的流动渐变圆钝星 */}
-            <div className="ai-star-btn relative z-10" />
+            <div className={`ai-star-btn relative z-10 ${isNotifying ? 'ai-star-notify' : ''}`} />
 
             {/* 外部装饰光圈 (可选) */}
             <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />

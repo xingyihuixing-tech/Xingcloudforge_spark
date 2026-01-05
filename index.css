@@ -819,3 +819,24 @@ canvas {
 .ai-star-btn:active {
   transform: scale(0.95);
 }
+
+/* AI 生成完成通知闪烁动画 */
+.ai-star-btn.ai-star-notify {
+  animation: xing-flow var(--xing-speed) linear infinite,
+    breathe 3s ease-in-out infinite,
+    star-notify-flash 0.4s ease-in-out infinite;
+}
+
+@keyframes star-notify-flash {
+
+  0%,
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 8px var(--xing-c1)) drop-shadow(0 0 16px var(--xing-c2));
+  }
+
+  50% {
+    transform: scale(1.25);
+    filter: drop-shadow(0 0 16px var(--xing-c1)) drop-shadow(0 0 32px var(--xing-c2)) brightness(1.5);
+  }
+}
