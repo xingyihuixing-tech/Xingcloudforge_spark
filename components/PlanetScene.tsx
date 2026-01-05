@@ -11068,6 +11068,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         ornGeom.setAttribute('aPhase', new THREE.BufferAttribute(ornamentData.phases, 1));
         ornGeom.setAttribute('aRandom', new THREE.BufferAttribute(ornamentData.randomSeeds, 1));
 
+        // 计算径向距离 (用于Shader中的空间渐变)
+        const radialDists = new Float32Array(orn.count);
+        for (let i = 0; i < orn.count; i++) {
+          const x = ornamentData.positions[i * 3];
+          const z = ornamentData.positions[i * 3 + 2];
+          radialDists[i] = Math.sqrt(x * x + z * z);
+        }
+        ornGeom.setAttribute('aRadialDist', new THREE.BufferAttribute(radialDists, 1));
+
         // 计算点缀颜色
         let ornColor = new THREE.Vector3(1, 1, 1);
         if (orn.colorMode === 'inherit') {
@@ -11107,8 +11116,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             attribute float aSize;
             attribute float aPhase;
             attribute float aRandom;
+            attribute float aRadialDist;
             varying float vPhase;
             varying float vRandom;
+            varying float vRadialDist;
+            varying vec3 vPosition;
             uniform float uTime;
             uniform float uBaseSize;
             uniform float uPulseEnabled;
@@ -11119,6 +11131,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
 void main() {
   vPhase = aPhase;
   vRandom = aRandom;
+  vRadialDist = aRadialDist;
+  vPosition = position;
               
               vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
 
@@ -11149,8 +11163,14 @@ void main() {
             uniform float uFlareWidth;
             uniform sampler2D uTexture;
             uniform float uUseTexture;
+            uniform float uRingRadius;
+            uniform float uBandwidth;
+            uniform float uBlendStrength; // 0-1
+            uniform float uProceduralAxis; // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
             varying float vPhase;
             varying float vRandom;
+            varying float vRadialDist;
+            varying vec3 vPosition;
 
 #define PI 3.14159265359
 
@@ -11159,26 +11179,26 @@ float flareShape(vec2 uv, float leaves, float width) {
   float angle = atan(uv.y, uv.x);
   float r = length(uv);
   float flare = abs(cos(angle * leaves * 0.5));
-  flare = pow(flare, 1.0 / width);
-  return smoothstep(1.0, 0.0, r / (flare * 0.5 + 0.1));
-}
+            flare = pow(flare, 1.0 / width);
+            return smoothstep(1.0, 0.0, r / (flare * 0.5 + 0.1));
+          }
 
 // 火花形状 (2)
 float sparkShape(vec2 uv) {
   float r = length(uv);
   float angle = atan(uv.y, uv.x);
   float rays = pow(abs(sin(angle * 4.0)), 3.0) * 0.3;
-  return smoothstep(0.5 + rays, 0.0, r);
-}
+            return smoothstep(0.5 + rays, 0.0, r);
+          }
 
 // 星形 (4)
 float starShape(vec2 uv) {
   float angle = atan(uv.y, uv.x);
   float r = length(uv);
   float star = abs(cos(angle * 2.5));
-  star = 0.3 + star * 0.4;
-  return smoothstep(star, star - 0.1, r);
-}
+            star = 0.3 + star * 0.4;
+            return smoothstep(star, star - 0.1, r);
+          }
 
 // 雪花形状 (5)
 float snowflakeShape(vec2 uv) {
@@ -11186,33 +11206,33 @@ float snowflakeShape(vec2 uv) {
   float r = length(uv);
   float branches = 6.0;
   float arm = abs(cos(angle * branches * 0.5));
-  arm = pow(arm, 0.3);
+            arm = pow(arm, 0.3);
   float cross = max(abs(uv.x), abs(uv.y));
   float diagonal = max(abs(uv.x + uv.y), abs(uv.x - uv.y)) * 0.707;
   float pattern = min(cross, diagonal);
   float shape = smoothstep(0.08, 0.02, pattern) * smoothstep(0.8, 0.2, r);
-  shape += smoothstep(0.6, 0.0, r / (arm * 0.4 + 0.1)) * 0.6;
-  return clamp(shape, 0.0, 1.0);
-}
+            shape += smoothstep(0.6, 0.0, r / (arm * 0.4 + 0.1)) * 0.6;
+            return clamp(shape, 0.0, 1.0);
+          }
 
 // 爱心形状 (6)
 float heartShape(vec2 uv) {
-  uv.y -= 0.25;
-  uv.x = abs(uv.x);
+            uv.y -= 0.25;
+            uv.x = abs(uv.x);
   float a = atan(uv.x, uv.y) / PI;
   float r = length(uv);
   float h = abs(a);
   float d = (13.0 * h - 22.0 * h * h + 10.0 * h * h * h) / (6.0 - 5.0 * h);
-  return smoothstep(d * 0.5 + 0.1, d * 0.5 - 0.05, r);
-}
+            return smoothstep(d * 0.5 + 0.1, d * 0.5 - 0.05, r);
+          }
 
 // 月牙形状 (7)
 float crescentShape(vec2 uv) {
   float r1 = length(uv);
   float r2 = length(uv - vec2(0.3, 0.0));
   float crescent = smoothstep(0.6, 0.5, r1) - smoothstep(0.55, 0.45, r2);
-  return clamp(crescent, 0.0, 1.0);
-}
+            return clamp(crescent, 0.0, 1.0);
+          }
 
 // 十字光芒 (8)
 float crossGlowShape(vec2 uv) {
@@ -11220,8 +11240,8 @@ float crossGlowShape(vec2 uv) {
   float r = length(uv);
   float glow = smoothstep(0.15, 0.0, cross) * smoothstep(1.0, 0.0, r);
   float core = smoothstep(0.2, 0.0, r);
-  return glow + core;
-}
+            return glow + core;
+          }
 
 // 樱花形状 (9)
 float sakuraShape(vec2 uv) {
@@ -11229,33 +11249,33 @@ float sakuraShape(vec2 uv) {
   float r = length(uv);
   float petals = 5.0;
   float petal = abs(cos(angle * petals * 0.5));
-  petal = pow(petal, 0.6);
+            petal = pow(petal, 0.6);
   float notch = 1.0 - smoothstep(0.0, 0.15, abs(mod(angle + PI / petals, PI * 2.0 / petals) - PI / petals));
   float shape = smoothstep(0.5, 0.2, r / (petal * 0.4 + 0.2)) * (1.0 - notch * 0.3);
-  return clamp(shape, 0.0, 1.0);
-}
+            return clamp(shape, 0.0, 1.0);
+          }
 
 // 太阳形状 (10)
 float sunShape(vec2 uv) {
   float angle = atan(uv.y, uv.x);
   float r = length(uv);
   float rays = abs(sin(angle * 8.0));
-  rays = pow(rays, 2.0);
+            rays = pow(rays, 2.0);
   float core = smoothstep(0.35, 0.25, r);
   float corona = smoothstep(0.7, 0.3, r / (rays * 0.3 + 0.4)) * 0.6;
-  return core + corona;
-}
+            return core + corona;
+          }
 
 // 太阳2形状 (11)
 float sun2Shape(vec2 uv) {
   float angle = atan(uv.y, uv.x);
   float r = length(uv);
   float rays = abs(cos(angle * 12.0));
-  rays = pow(rays, 4.0);
+            rays = pow(rays, 4.0);
   float core = smoothstep(0.25, 0.15, r);
   float beam = smoothstep(0.9, 0.0, r / (rays * 0.5 + 0.15)) * 0.7;
-  return core + beam;
-}
+            return core + beam;
+          }
 
 // 梅花形状 (12)
 float plumShape(vec2 uv) {
@@ -11263,11 +11283,11 @@ float plumShape(vec2 uv) {
   float r = length(uv);
   float petals = 5.0;
   float petal = abs(cos(angle * petals * 0.5));
-  petal = pow(petal, 0.4);
+            petal = pow(petal, 0.4);
   float shape = smoothstep(0.55, 0.2, r / (petal * 0.35 + 0.25));
   float core = smoothstep(0.15, 0.05, r);
-  return shape + core * 0.5;
-}
+            return shape + core * 0.5;
+          }
 
 // 百合形状 (13)
 float lilyShape(vec2 uv) {
@@ -11275,11 +11295,11 @@ float lilyShape(vec2 uv) {
   float r = length(uv);
   float petals = 6.0;
   float petal = abs(cos(angle * petals * 0.5));
-  petal = pow(petal, 0.5);
+            petal = pow(petal, 0.5);
   float elongate = 1.0 + 0.3 * cos(angle * petals);
   float shape = smoothstep(0.6 * elongate, 0.2, r / (petal * 0.4 + 0.2));
-  return clamp(shape, 0.0, 1.0);
-}
+            return clamp(shape, 0.0, 1.0);
+          }
 
 // 莲花形状 (14)
 float lotusShape(vec2 uv) {
@@ -11287,12 +11307,12 @@ float lotusShape(vec2 uv) {
   float r = length(uv);
   float layer1 = abs(cos(angle * 4.0));
   float layer2 = abs(cos(angle * 4.0 + PI * 0.25));
-  layer1 = pow(layer1, 0.5);
-  layer2 = pow(layer2, 0.5);
+            layer1 = pow(layer1, 0.5);
+            layer2 = pow(layer2, 0.5);
   float shape1 = smoothstep(0.55, 0.25, r / (layer1 * 0.35 + 0.25));
   float shape2 = smoothstep(0.45, 0.2, r / (layer2 * 0.3 + 0.2)) * 0.7;
-  return shape1 + shape2;
-}
+            return shape1 + shape2;
+          }
 
 // 棱镜晶体 (15)
 float prismShape(vec2 uv) {
@@ -11303,101 +11323,188 @@ float prismShape(vec2 uv) {
   float polygon = cos(a) * r;
   float shape = smoothstep(0.45, 0.35, polygon);
   float highlight = smoothstep(0.3, 0.0, abs(uv.x - 0.1)) * smoothstep(0.5, 0.2, r) * 0.4;
-  return shape + highlight;
-}
+            return shape + highlight;
+          }
 
-void main() {
-  vec2 uv = gl_PointCoord * 2.0 - 1.0;
-  float r = length(uv);
-  float alpha = 0.0;
+void main_old() {
+          vec2 uv = gl_PointCoord * 2.0 - 1.0;
+          float r = length(uv);
+          float alpha = 0.0;
 
-  // 新的样式映射：0=star, 1=snowflake, 2=heart, 3=crescent, 4=crossGlow
-  // 5=sakura, 6=sun, 7=sun2, 8=plum, 9=lily, 10=lotus, 11=prism, 12=xingspark贴图
-  if (uShape < 0.5) {
-    // star - 星形 (0)
-    alpha = starShape(uv);
-  } else if (uShape < 1.5) {
-    // snowflake - 雪花 (1)
-    alpha = snowflakeShape(uv);
-  } else if (uShape < 2.5) {
-    // heart - 爱心 (2)
-    alpha = heartShape(uv);
-  } else if (uShape < 3.5) {
-    // crescent - 月牙 (3)
-    alpha = crescentShape(uv);
-  } else if (uShape < 4.5) {
-    // crossGlow - 十字光芒 (4)
-    alpha = crossGlowShape(uv);
-  } else if (uShape < 5.5) {
-    // sakura - 樱花 (5)
-    alpha = sakuraShape(uv);
-  } else if (uShape < 6.5) {
-    // sun - 太阳 (6)
-    alpha = sunShape(uv);
-  } else if (uShape < 7.5) {
-    // sun2 - 太阳2 (7)
-    alpha = sun2Shape(uv);
-  } else if (uShape < 8.5) {
-    // plum - 梅花 (8)
-    alpha = plumShape(uv);
-  } else if (uShape < 9.5) {
-    // lily - 百合 (9)
-    alpha = lilyShape(uv);
-  } else if (uShape < 10.5) {
-    // lotus - 莲花 (10)
-    alpha = lotusShape(uv);
-  } else if (uShape < 11.5) {
-    // prism - 棱镜 (11)
-    alpha = prismShape(uv);
-  } else {
-    // xingspark - 贴图模式 (12)
-    // 使用贴图采样（如果有），否则使用星形
-    if (uUseTexture > 0.5) {
-      vec2 texUV = gl_PointCoord;
+          // 新的样式映射：0=star, 1=snowflake, 2=heart, 3=crescent, 4=crossGlow
+          // 5=sakura, 6=sun, 7=sun2, 8=plum, 9=lily, 10=lotus, 11=prism, 12=xingspark贴图
+          if(uShape < 0.5) {
+            // star - 星形 (0)
+            alpha = starShape(uv);
+          } else if(uShape < 1.5) {
+            // snowflake - 雪花 (1)
+            alpha = snowflakeShape(uv);
+          } else if(uShape < 2.5) {
+            // heart - 爱心 (2)
+            alpha = heartShape(uv);
+          } else if(uShape < 3.5) {
+            // crescent - 月牙 (3)
+            alpha = crescentShape(uv);
+          } else if(uShape < 4.5) {
+            // crossGlow - 十字光芒 (4)
+            alpha = crossGlowShape(uv);
+          } else if(uShape < 5.5) {
+            // sakura - 樱花 (5)
+            alpha = sakuraShape(uv);
+          } else if(uShape < 6.5) {
+            // sun - 太阳 (6)
+            alpha = sunShape(uv);
+          } else if(uShape < 7.5) {
+            // sun2 - 太阳2 (7)
+            alpha = sun2Shape(uv);
+          } else if(uShape < 8.5) {
+            // plum - 梅花 (8)
+            alpha = plumShape(uv);
+          } else if(uShape < 9.5) {
+            // lily - 百合 (9)
+            alpha = lilyShape(uv);
+          } else if(uShape < 10.5) {
+            // lotus - 莲花 (10)
+            alpha = lotusShape(uv);
+          } else if(uShape < 11.5) {
+            // prism - 棱镜 (11)
+            alpha = prismShape(uv);
+          } else {
+            // xingspark - 贴图模式 (12)
+            // 使用贴图采样（如果有），否则使用星形
+            if(uUseTexture > 0.5) {
+              vec2 texUV = gl_PointCoord;
       vec4 texColor = texture2D(uTexture, texUV);
-      alpha = texColor.a;
-      // 可选：保留贴图原色或使用uColor着色
-      gl_FragColor = vec4(texColor.rgb * uBrightness, alpha * uOpacity);
-      return;
-    } else {
-      alpha = starShape(uv);
+        alpha = texColor.a;
+        // 可选：保留贴图原色或使用uColor着色
+        gl_FragColor = vec4(texColor.rgb * uBrightness, alpha * uOpacity);
+        return;
+      } else {
+        alpha = starShape(uv);
+      }
     }
-  }
 
   // 发光效果
   float glow = smoothstep(1.2, 0.0, r) * uGlowIntensity * 0.3;
-  alpha = alpha + glow;
-  
+    alpha = alpha + glow;
+
   // 根据颜色模式计算最终颜色
   vec3 finalColor;
-  if (uColorMode < 0.5) {
-    // 0 = 单色/继承 - 使用uColor
-    finalColor = uColor;
-  } else if (uColorMode < 1.5) {
+    if (uColorMode < 0.5) {
+      // 0 = 单色/继承 - 使用uColor
+      finalColor = uColor;
+    } else if (uColorMode < 1.5) {
     // 1 = 双色 - 根据vRandom在color1和color2之间选择
     float t = vRandom;
-    finalColor = mix(uColor1, uColor2, t);
-  } else if (uColorMode < 2.5) {
+      finalColor = mix(uColor1, uColor2, t);
+    } else if (uColorMode < 2.5) {
     // 2 = 三色 - 根据vRandom在三色之间渐变
     float t = vRandom;
-    if (t < uColorMidPosition) {
+      if (t < uColorMidPosition) {
       float localT = t / uColorMidPosition;
-      finalColor = mix(uColor1, uColor2, localT);
-    } else {
+        finalColor = mix(uColor1, uColor2, localT);
+      } else {
       float localT = (t - uColorMidPosition) / (1.0 - uColorMidPosition);
-      finalColor = mix(uColor2, uColor3, localT);
-    }
-  } else {
+        finalColor = mix(uColor2, uColor3, localT);
+      }
+    } else {
     // 3 = 混色 - 使用随机混合三色
     float t1 = vRandom;
     float t2 = fract(vRandom * 2.7);
     vec3 mixed = mix(uColor1, uColor2, t1);
-    finalColor = mix(mixed, uColor3, t2 * 0.5);
+      finalColor = mix(mixed, uColor3, t2 * 0.5);
+    }
+
+    finalColor *= uBrightness;
+    gl_FragColor = vec4(finalColor, alpha * uOpacity);
   }
-  
-  finalColor *= uBrightness;
-  gl_FragColor = vec4(finalColor, alpha * uOpacity);
-}
+
+
+          void main() {
+            vPhase = aPhase; // Needs vPhase? Vertex shader sets it.
+
+            vec2 uv = gl_PointCoord * 2.0 - 1.0;
+            float r = length(uv);
+            float alpha = 0.0;
+
+            // 形状判断 (复用)
+            // 由于Shapes在外层定义，这里可以直接调用。
+            // 但是 uShape 逻辑很长。
+            // 可以调用 old Main 获取 alpha? 
+            // Old main 计算了 gl_FragColor。
+            // 我们可以先调用 main_old()，然后覆盖 gl_FragColor.rgb?
+            // 但是 main_old() 可能会 discard? (Texture logic uses return).
+            // Texture logic: if(uUseTexture>0.5) ... return;
+            // 如果它 return 了，我们还能修改颜色吗？
+            // 不能。
+
+            // 所以必须复制 Shape Logic。
+            // 幸好 Shape Logic 依赖于外部函数 (starShape etc) 和 uShape uniform。
+            // 我们可以复制 Shape Logic 部分。
+
+            // 也可以简单地：
+            // 调用 main_old();
+            // vec4 oldColor = gl_FragColor;
+            // alpha = oldColor.a / uOpacity; // Recover alpha (approx)
+
+            // 但是 old main 根据颜色模式计算了 color。
+            // 我们想要 覆盖 颜色计算。
+            // 如果 old main 已经 return 了 (texture mode)，我们可能不需要修改颜色 (贴图模式通常就是贴图颜色)。
+            // 如果是 shape mode，old main 没 return。
+            // 所以我们可以：
+            // 1. call main_old();
+            // 2. if (uColorMode >= 0.5) { ... recalc color and set gl_FragColor ... }
+            //    (if inherits, old main did fine. If independent/gradient, we override).
+
+            main_old();
+
+  // 如果使用了贴图且直接返回了，就不覆盖颜色了（假设贴图自带颜色或old main处理正确）
+  // 但是 old main 的贴图逻辑是: gl_FragColor = vec4(texColor.rgb * uBrightness, alpha * uOpacity); return;
+  // 如果我们想要 渐变色 应用于贴图？
+  // Currently ornament texture is usually white/colored.
+  // If we want gradient on texture, we need to override.
+  // But let's assume texture mode is simpler for now.
+
+  // 对于 Shape 模式，main_old() 设置了 gl_FragColor。
+  // 我们重新计算颜色并保留 alpha。
+  float currentAlpha = gl_FragColor.a / uOpacity;
+            // wait, main_old applies uOpacity.
+
+            if(uColorMode >= 0.5) {
+              // 计算新的颜色
+              vec3 finalColor;
+     float t = 0.0;
+
+        if (uProceduralAxis < 0.5) {
+       float normalizedDist = (vRadialDist - uRingRadius) / (uBandwidth * 0.5);
+          t = normalizedDist * 0.5 + 0.5;
+        } else if (uProceduralAxis < 1.5) {
+       float angle = atan(vPosition.z, vPosition.x);
+          t = (angle + PI) / (2.0 * PI);
+        } else if (uProceduralAxis < 2.5) {
+          t = vPosition.y * 0.1 + 0.5;
+        } else {
+          t = vRandom;
+        }
+        t = clamp(t, 0.0, 1.0);
+
+        if (uColorMode < 1.5) {
+          finalColor = mix(uColor1, uColor2, t);
+        } else if (uColorMode < 2.5) {
+          if (t < uColorMidPosition) {
+            finalColor = mix(uColor1, uColor2, t / uColorMidPosition);
+          } else {
+            finalColor = mix(uColor2, uColor3, (t - uColorMidPosition) / (1.0 - uColorMidPosition));
+          }
+        } else {
+       vec3 mixed = mix(uColor1, uColor2, t);
+          finalColor = mix(mixed, uColor3, vRandom * 0.5);
+        }
+
+        finalColor *= uBrightness;
+        gl_FragColor = vec4(finalColor, gl_FragColor.a);
+      }
+    }
 `,
           uniforms: {
             uTime: { value: 0 },
@@ -11419,7 +11526,11 @@ void main() {
             uPulseEnabled: { value: orn.pulseEnabled ? 1.0 : 0.0 },
             uPulseSpeed: { value: orn.pulseSpeed ?? 1.0 },
             uPulseIntensity: { value: orn.pulseIntensity ?? 0.3 },
-            uPulseSync: { value: orn.pulseSync ? 1.0 : 0.0 }
+            uPulseSync: { value: orn.pulseSync ? 1.0 : 0.0 },
+            uRingRadius: { value: ring.absoluteRadius },
+            uBandwidth: { value: ring.bandwidth || 5 },
+            uBlendStrength: { value: (orn.gradientColor as any)?.blendStrength ?? 0.5 },
+            uProceduralAxis: { value: (orn.gradientColor as any)?.proceduralAxis ?? 0 }
           },
           transparent: true,
           blending: THREE.AdditiveBlending,
@@ -11495,7 +11606,7 @@ void main() {
 
       // 瞍拇間霈曄蔭
       const vortex = ring.vortex;
-      const vortexColors = (vortex?.colors || ['#ff6b6b', '#4ecdc4']).map(c => {
+      const vortexColors = (vortex?.colors || ['#ff6b6b', '#4ecdc4']).map((c: string) => {
         const [vr, vg, vb] = hexToRgb(c);
         return new THREE.Vector3(vr, vg, vb);
       });
@@ -11992,11 +12103,7 @@ void main() {
     }
 
     // 装饰物点缀逻辑
-    const ornamentSettings = ring.ornament;
-    const hasOrnaments = ornamentSettings?.enabled && (ornamentSettings.count || 0) > 0;
-    const ornamentCount = hasOrnaments ? (ornamentSettings.count || 0) : 0;
-    const baseCount = basePositions.length / 3;
-    const totalCount = baseCount + ornamentCount;
+    const totalCount = basePositions.length / 3;
 
     const positions = new Float32Array(totalCount * 3);
     const colors = new Float32Array(totalCount * 3);
@@ -12007,37 +12114,11 @@ void main() {
     // 复制基础粒子位置
     positions.set(basePositions);
 
-    // 生成装饰物位置
-    if (hasOrnaments) {
-      for (let j = 0; j < ornamentCount; j++) {
-        const idx = baseCount + j;
-        const angle = Math.random() * Math.PI * 2;
-        const rOffset = (Math.random() - 0.5) * (ring.bandwidth || 0.5);
-        const r = radius + rOffset;
-        const hOffset = (Math.random() - 0.5) * (ring.thickness || 0.2) * (1.0 + (ornamentSettings.sizeRandomness || 0.5));
-
-        const x = r * Math.cos(angle);
-        const z = r * Math.sin(angle);
-        const y = hOffset;
-
-        positions[idx * 3] = x;
-        positions[idx * 3 + 1] = y;
-        positions[idx * 3 + 2] = z;
-      }
-    }
-
     const count = totalCount;
 
     const [baseR, baseG, baseB] = hexToRgb(ring.color);
     const brightness = ring.brightness || 1.0;
     const sizeScale = ring.particleSize || 1.0;
-
-    // 装饰物颜色和尺寸
-    const ornSizeScale = hasOrnaments ? (ornamentSettings.baseSize || 2.0) : 2.0;
-    let ornR = baseR, ornG = baseG, ornB = baseB;
-    if (hasOrnaments && ornamentSettings.colorMode === 'independent') {
-      [ornR, ornG, ornB] = hexToRgb(ornamentSettings.color || '#ffffff');
-    }
 
     // 憸𡏭𠧧璅∪�憭��
     const gc = ring.gradientColor;
@@ -12280,20 +12361,11 @@ void main() {
         finalB = c1[2] + (c2[2] - c1[2]) * localT;
       }
 
-      // 装饰物特殊处理
-      if (hasOrnaments && i >= baseCount) {
-        if (ornamentSettings.colorMode === 'independent') {
-          finalR = ornR; finalG = ornG; finalB = ornB;
-        }
-        // 装饰物使用更大的尺寸
-        sizes[i] = (1 + Math.random() * 2) * sizeScale * ornSizeScale;
-      } else {
-        sizes[i] = (1 + Math.random() * 2) * sizeScale;
-      }
+      sizes[i] = (1 + Math.random() * 2) * sizeScale;
 
       // 应用银河系亮度因子（如果存在）
       let galaxyBrightnessMult = 1.0;
-      if (galaxyBrightnessFactors && i < baseCount) {
+      if (galaxyBrightnessFactors) {
         galaxyBrightnessMult = galaxyBrightnessFactors[i];
       }
 
@@ -12807,25 +12879,25 @@ function createParticleEmitter(baseRadius: number): ParticleEmitterData {
       attribute float aAlpha;
       varying vec3 vColor;
       varying float vAlpha;
-void main() {
-  vColor = aColor;
-  vAlpha = aAlpha;
+  void main() {
+    vColor = aColor;
+    vAlpha = aAlpha;
         vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-  gl_PointSize = aSize * (300.0 / -mvPosition.z);
-  gl_Position = projectionMatrix * mvPosition;
-}
-`,
+    gl_PointSize = aSize * (300.0 / -mvPosition.z);
+    gl_Position = projectionMatrix * mvPosition;
+  }
+  `,
     fragmentShader: `
       varying vec3 vColor;
       varying float vAlpha;
-void main() {
+  void main() {
         vec2 uv = gl_PointCoord - 0.5;
         float dist = length(uv);
-  if (dist > 0.5) discard;
+    if (dist > 0.5) discard;
         float alpha = smoothstep(0.5, 0.0, dist) * vAlpha;
-  gl_FragColor = vec4(vColor, alpha);
-}
-`,
+    gl_FragColor = vec4(vColor, alpha);
+  }
+  `,
     transparent: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false

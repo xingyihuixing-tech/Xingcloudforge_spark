@@ -2480,7 +2480,7 @@ function FloatingListSelector<T extends FloatingListItem>({
   );
 }
 
-const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]; setNebulaPresets: React.Dispatch<React.SetStateAction<NebulaPreset[]>> }> = ({
+const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]; setNebulaPresets: React.Dispatch<React.SetStateAction<NebulaPreset[]>>; headTexturePresets?: any[] }> = ({
   settings,
   setSettings,
   planetSettings,
@@ -2502,7 +2502,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   overlayMode = false,  // 互通模式状态，默认false
   materialSettings: propMaterialSettings,  // 从 App 传入的材质配置
   nebulaPresets,
-  setNebulaPresets
+  setNebulaPresets,
+  headTexturePresets = []
 }) => {
   // 获取当前用户信息用于上传图片
   const { currentUser } = useUser();
@@ -8000,8 +8001,6 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 {currentParticleRing.ornament?.enabled && (() => {
                                   const orn = currentParticleRing.ornament!;
                                   const updateOrn = (updates: Partial<typeof orn>) => updateParticleRing(currentParticleRing.id, { ornament: { ...orn, ...updates } });
-                                  // XingSpark云端预设 - 暂用空数组，用户可用内置光效
-                                  const headTextureCloudPresets: { id: string; name: string; url: string }[] = [];
                                   return (
                                     <div className="space-y-2">
                                       {/* 样式选择 */}
@@ -8034,27 +8033,11 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                                       {/* XingSpark贴图选择器 - 当选择xingspark样式时显示 */}
                                       {orn.style === 'xingspark' && (
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs text-gray-400">选择贴图</span>
-                                          <select
+                                        <div className="mb-2">
+                                          <HeadTextureSelect
                                             value={orn.xingsparkTexture || ''}
-                                            onChange={(e) => updateOrn({ xingsparkTexture: e.target.value })}
-                                            className="flex-1 text-xs bg-gray-700 rounded px-2 py-1 text-white"
-                                          >
-                                            <option value="">请选择...</option>
-                                            <optgroup label="内置光效">
-                                              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
-                                                <option key={n} value={`/textures/firefly-heads/glow${n}.png`}>光效 {n}</option>
-                                              ))}
-                                            </optgroup>
-                                            {headTextureCloudPresets.length > 0 && (
-                                              <optgroup label={`✨ XingSpark (${headTextureCloudPresets.length})`}>
-                                                {headTextureCloudPresets.map((preset, i) => (
-                                                  <option key={i} value={preset.url}>{preset.name || `预设 ${i + 1}`}</option>
-                                                ))}
-                                              </optgroup>
-                                            )}
-                                          </select>
+                                            onChange={(url) => updateOrn({ xingsparkTexture: url })}
+                                          />
                                         </div>
                                       )}
 

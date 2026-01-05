@@ -383,6 +383,7 @@ const App: React.FC = () => {
   const [userMaterialPresets, setUserMaterialPresets] = useState<MaterialPreset[]>(() => loadUserMaterialPresets(null));
   const [xingConfig, setXingConfig] = useState<XingSparkConfig>(() => loadXingConfig(null));
   const [nebulaPresets, setNebulaPresets] = useState<NebulaPreset[]>(() => loadNebulaPresets(null));
+  const [headTexturePresets, setHeadTexturePresets] = useState<any[]>([]); // XingSpark Head Texture Presets
   const [hasHydratedFromCloud, setHasHydratedFromCloud] = useState(false);
 
   // 星云预览模式
@@ -450,6 +451,9 @@ const App: React.FC = () => {
                 return cloudPreset;
               }) as NebulaPreset[];
             });
+          }
+          if (config.headTexturePresets) {
+            setHeadTexturePresets(config.headTexturePresets);
           }
           if (config.planetScene) {
             setPlanetSettings(prev => ({ ...prev, ...config.planetScene }));
@@ -1624,6 +1628,7 @@ const App: React.FC = () => {
             overlayMode={overlayMode}
             materialSettings={materialSettings}
             xingConfig={xingConfig}
+            headTexturePresets={headTexturePresets}
             nebulaPresets={nebulaPresets}
             setNebulaPresets={setNebulaPresets}
           />
