@@ -8282,6 +8282,30 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                           if (material.uniforms.uColor2) material.uniforms.uColor2.value.set(c2[0], c2[1], c2[2]);
                           if (material.uniforms.uColor3) material.uniforms.uColor3.value.set(c3[0], c3[1], c3[2]);
                           if (material.uniforms.uColorMidPosition) material.uniforms.uColorMidPosition.value = gc.colorMidPosition ?? 0.5;
+                          // 混色新增参数
+                          if (material.uniforms.uBlendStrength) material.uniforms.uBlendStrength.value = gc.blendStrength ?? 0.5;
+                          if (material.uniforms.uProceduralAxis) {
+                            const axisMap: Record<string, number> = { 'radial': 0, 'y': 2, 'x': 1, 'z': 1 }; // Mapping simplify
+                            // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
+                            // Control Panel sends: x, y, z, radial
+                            // We map: radial->0, y->2. 
+                            // x, z usually imply Angle in this context? Or we don't support linear X/Z yet?
+                            // Shader supports: 0=Radial, 1=Angle (atan z,x), 2=Vertical(y), 3=Random.
+                            // CP: x, y, z, radial.
+                            // Let's map 'radial'->0, 'y'->2. 'x'/'z' -> 1 (Angle)? 
+                            // Or maybe map 'x'/'z' to Random (3) if not implemented?
+                            // Angle is rotational.
+                            let axis = 0;
+                            if (gc.proceduralAxis === 'radial') axis = 0;
+                            else if (gc.proceduralAxis === 'y') axis = 2; // Vertical
+                            else if (gc.proceduralAxis === 'angle') axis = 1; // Not in CP? CP has x, y, z, radial.
+                            // CP has x, y, z.
+                            // If user picks 'x' or 'z', maybe we just use Angle for now (horizontal plane)?
+                            else axis = 1;
+
+                            material.uniforms.uProceduralAxis.value = axis;
+                          }
+                          if (material.uniforms.uGradientStrength) material.uniforms.uGradientStrength.value = gc.proceduralIntensity ?? 1.0;
                         } else if (material.uniforms.uColorMode) {
                           material.uniforms.uColorMode.value = 0; // 继承模式或单色
                         }
@@ -11167,6 +11191,7 @@ void main() {
             uniform float uBandwidth;
             uniform float uBlendStrength; // 0-1
             uniform float uProceduralAxis; // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
+            uniform float uGradientStrength; // 渐变强度 (Naturalness)
             varying float vPhase;
             varying float vRandom;
             varying float vRadialDist;
@@ -11326,7 +11351,7 @@ float prismShape(vec2 uv) {
             return shape + highlight;
           }
 
-void main_old() {
+void main() {
           vec2 uv = gl_PointCoord * 2.0 - 1.0;
           float r = length(uv);
           float alpha = 0.0;
@@ -11408,11 +11433,45 @@ void main_old() {
         finalColor = mix(uColor2, uColor3, localT);
       }
     } else {
-    // 3 = 混色 - 使用随机混合三色
-    float t1 = vRandom;
-    float t2 = fract(vRandom * 2.7);
-    vec3 mixed = mix(uColor1, uColor2, t1);
-      finalColor = mix(mixed, uColor3, t2 * 0.5);
+
+    // 3 = 混色 - 改进的混色逻辑
+    // 目标：让uColor2(中间色)在中间显示，uBlendStrength控制色相跨度，uGradientStrength控制自然度
+    
+    // 1. 计算基础 t (0-1)
+    float t = 0.5;
+    float spatial = 0.5;
+    
+    if (uProceduralAxis < 0.5) { // 径向
+       // vRadialDist是绝对半径. uRingRadius是中心. 
+       float halfWidth = uBandwidth * 0.5;
+       spatial = (vRadialDist - (uRingRadius - halfWidth)) / uBandwidth;
+    } else if (uProceduralAxis < 1.5) { // 角度
+       float angle = atan(vPosition.z, vPosition.x);
+       spatial = (angle + PI) / (2.0 * PI);
+    } else if (uProceduralAxis < 2.5) { // 垂直
+       spatial = vPosition.y * 0.1 + 0.5;
+    } else { // 随机
+       spatial = vRandom;
+    }
+    spatial = clamp(spatial, 0.0, 1.0);
+    
+    // 2. 混合噪点 (GradientStrength = Naturalness)
+    // Strength 1.0 = Clean Spatial. Strength 0.0 = Random Noise.
+    float naturalness = clamp(uGradientStrength, 0.0, 1.0);
+    t = mix(vRandom, spatial, naturalness);
+    
+    // 3. 色相跨度 (BlendStrength = Span)
+    // Strength 0.0 = Only Middle Color. Strength 1.0 = Full Span.
+    float span = clamp(uBlendStrength, 0.0, 1.0);
+    t = (t - 0.5) * span + 0.5;
+    t = clamp(t, 0.0, 1.0);
+
+    // 4. 三色混合
+    if (t < uColorMidPosition) {
+        finalColor = mix(uColor1, uColor2, t / uColorMidPosition);
+    } else {
+        finalColor = mix(uColor2, uColor3, (t - uColorMidPosition) / (1.0 - uColorMidPosition));
+    }
     }
 
     finalColor *= uBrightness;
@@ -11420,8 +11479,8 @@ void main_old() {
   }
 
 
-          void main() {
-            vPhase = aPhase; // Needs vPhase? Vertex shader sets it.
+          /* void main_ignored() {
+            // vPhase = aPhase; // Needs vPhase? Vertex shader sets it.
 
             vec2 uv = gl_PointCoord * 2.0 - 1.0;
             float r = length(uv);
@@ -11504,7 +11563,7 @@ void main_old() {
         finalColor *= uBrightness;
         gl_FragColor = vec4(finalColor, gl_FragColor.a);
       }
-    }
+    } */
 `,
           uniforms: {
             uTime: { value: 0 },
@@ -11530,7 +11589,8 @@ void main_old() {
             uRingRadius: { value: ring.absoluteRadius },
             uBandwidth: { value: ring.bandwidth || 5 },
             uBlendStrength: { value: (orn.gradientColor as any)?.blendStrength ?? 0.5 },
-            uProceduralAxis: { value: (orn.gradientColor as any)?.proceduralAxis ?? 0 }
+            uProceduralAxis: { value: (orn.gradientColor as any)?.proceduralAxis ?? 0 },
+            uGradientStrength: { value: (orn.gradientColor as any)?.proceduralIntensity ?? 1.0 }
           },
           transparent: true,
           blending: THREE.AdditiveBlending,
