@@ -7,7 +7,7 @@
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Sparkles, Send, X, Save } from 'lucide-react';
 
@@ -143,38 +143,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === 聊天状态 (初始为空) ===
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-    // === 最小化逻辑 ===
-    const handleToggleMinimize = (minimize: boolean) => {
-        if (!panelRef.current) {
-            setIsMinimized(minimize);
-            return;
-        }
-
-        // 计算当前的底部位置
-        const rect = panelRef.current.getBoundingClientRect();
-        const bottomY = rect.top + rect.height;
-
-        // 设置新状态
-        setIsMinimized(minimize);
-
-        // 在下一帧校正位置以保持底部不变
-        // 由于 React 状态更新是异步的且会导致 DOM 变化，我们需要在渲染后执行
-        // 这里使用 requestAnimationFrame 模拟，或者简单的 setTimeout
-        requestAnimationFrame(() => {
-            if (panelRef.current) {
-                const newRect = panelRef.current.getBoundingClientRect();
-                const newTop = bottomY - newRect.height;
-                // 确保不超出屏幕顶部
-                const finalTop = Math.max(0, newTop);
-
-                setSavedPosition(prev => ({
-                    ...prev,
-                    y: finalTop
-                }));
-            }
-        });
-    };
-
     // === 图片预览 ===
     const [previewImage, setPreviewImage] = useState<string | null>(null);
 
@@ -192,10 +160,18 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === 窗口拖拽 ===
     const panelRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [savedPosition, setSavedPosition] = useState({
-        x: Math.max(0, (window.innerWidth - 600) / 2),
-        y: Math.max(0, (window.innerHeight - 800) * 0.8)
+
+    // 初始化位置：优先读取配置，否则默认在顶部下方 (避开导航栏)
+    const [savedPosition, setSavedPosition] = useState(() => {
+        if (xingConfig.panelPosition) {
+            return xingConfig.panelPosition;
+        }
+        return {
+            x: Math.max(0, (window.innerWidth - 600) / 2),
+            y: 120 // 默认 Y 坐标，避开顶部导航栏
+        };
     });
+
     const dragRef = useRef({
         isDragging: false,
         startX: 0,
@@ -203,6 +179,38 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         initialLeft: 0,
         initialTop: 0
     });
+
+    // 最小化时的位置锚点 (底部 Y 坐标)
+    const bottomAnchorRef = useRef<number | null>(null);
+
+    // 监听最小化状态变化，同步调整位置 (防止视觉跳动)
+    useLayoutEffect(() => {
+        if (bottomAnchorRef.current !== null && panelRef.current) {
+            const rect = panelRef.current.getBoundingClientRect();
+            const newHeight = rect.height;
+            // 新的 Top = 之前的 Bottom - 新的高度
+            const newTop = bottomAnchorRef.current - newHeight;
+
+            setSavedPosition(prev => ({
+                ...prev,
+                y: Math.max(0, newTop)
+            }));
+
+            // 如果是展开操作，可能需要更新配置中的位置? 
+            // 暂时只更新本地 state，拖拽结束才保存到配置
+            bottomAnchorRef.current = null;
+        }
+    }, [isMinimized]); // 依赖 isMinimized 变化后触发
+
+    // === 最小化逻辑 ===
+    const handleToggleMinimize = (minimize: boolean) => {
+        if (panelRef.current) {
+            // 记录当前的底部位置作为锚点
+            const rect = panelRef.current.getBoundingClientRect();
+            bottomAnchorRef.current = rect.top + rect.height;
+        }
+        setIsMinimized(minimize);
+    };
 
     const handleDragMove = useCallback((e: MouseEvent) => {
         if (!dragRef.current.isDragging || !panelRef.current) return;
@@ -220,12 +228,19 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         if (panelRef.current) {
             panelRef.current.style.cursor = 'default';
             const style = window.getComputedStyle(panelRef.current);
-            setSavedPosition({
+            const newPos = {
                 x: parseInt(style.left || '0', 10),
                 y: parseInt(style.top || '0', 10)
-            });
+            };
+            setSavedPosition(newPos);
+
+            // 持久化保存位置
+            onConfigChange(prev => ({
+                ...prev,
+                panelPosition: newPos
+            }));
         }
-    }, [handleDragMove]);
+    }, [handleDragMove, onConfigChange]);
 
     const handleDragStart = useCallback((e: React.MouseEvent) => {
         if (!panelRef.current) return;
@@ -625,7 +640,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 }}
             >
                 <div
-                    className="ai-panel-container"
+                    className="ai-panel-container overflow-visible" // 允许子元素(如弹出菜单)溢出
                     style={{
                         width: '600px', // Keep full width for input area
                         height: isMinimized ? 'auto' : '85vh', // Auto height when minimized (Compact Mode)

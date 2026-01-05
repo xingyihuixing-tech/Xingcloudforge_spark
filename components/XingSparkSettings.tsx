@@ -68,6 +68,7 @@ export interface XingSparkConfig {
     gradientPresets?: GradientPreset[];  // 用户自定义渐变预设
     hiddenSystemPresets?: string[];       // 被隐藏的系统预设ID列表
     starPosition?: { x: number; y: number }; // AI星星按钮的拖拽位置
+    panelPosition?: { x: number; y: number }; // AI面板的拖拽位置
 }
 
 // 默认配置
