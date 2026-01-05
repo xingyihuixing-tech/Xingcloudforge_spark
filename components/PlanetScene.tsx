@@ -7114,7 +7114,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         const gal = r.galaxy;
         const galKey = gal?.enabled ? `${gal.preset}:${gal.branches}:${gal.spin}:${gal.randomness}:${gal.randomnessPower}:${gal.coreSize}:${gal.coreBrightness}` : '';
         const orn = r.ornament;
-        const ornKey = orn?.enabled ? `${orn.count}:${orn.baseSize}:${orn.colorMode}:${orn.color}:${orn.sizeRandomness}` : '';
+        const ornKey = orn?.enabled ? `${orn.style}:${orn.xingsparkTexture || ''}:${orn.count}:${orn.distribution}:${orn.clusterCount}:${orn.clusterSpread}:${orn.baseSize}:${orn.sizeRandomness}:${orn.colorMode}:${orn.color}:${JSON.stringify(orn.gradientColor) || ''}` : '';
         return `${r.id}:${r.enabled}:${r.eccentricity}:${r.absoluteRadius}:${r.particleDensity}:${r.bandwidth}:${r.thickness}:${r.color}:${r.brightness}:${r.particleSize}:${r.tilt?.axis}:${r.tilt?.angle}:${r.trailLength ?? 0}:${r.rotationSpeed}:${r.orbitAxis?.axis}:${r.orbitAxis?.angle}:${g?.enabled}:${gKey}:${v?.enabled}:${vKey}:${gal?.enabled}:${galKey}:${orn?.enabled}:${ornKey}`;
       }).join('|') + `/cr:${p.rings.continuousRingsEnabled}|` + p.rings.continuousRings.map(r => {
         const g = r.gradientColor;
@@ -8241,16 +8241,15 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                         if (material.uniforms.uBaseSize) material.uniforms.uBaseSize.value = orn.baseSize ?? 15;
                         // 形状参数实时更新
                         if (material.uniforms.uShape) {
+                          // 新的样式映射（精简后只保留星云形状 + xingspark贴图）
                           const styleToShape: Record<string, number> = {
-                            'plain': 0, 'flare': 1, 'spark': 2, 'texture': 3,
-                            'star': 4, 'snowflake': 5, 'heart': 6, 'crescent': 7,
-                            'crossGlow': 8, 'sakura': 9, 'sun': 10, 'sun2': 11,
-                            'plum': 12, 'lily': 13, 'lotus': 14, 'prism': 15
+                            'star': 0, 'snowflake': 1, 'heart': 2, 'crescent': 3,
+                            'crossGlow': 4, 'sakura': 5, 'sun': 6, 'sun2': 7,
+                            'plum': 8, 'lily': 9, 'lotus': 10, 'prism': 11,
+                            'xingspark': 12
                           };
                           material.uniforms.uShape.value = styleToShape[orn.style] ?? 0;
                         }
-                        if (material.uniforms.uFlareLeaves) material.uniforms.uFlareLeaves.value = orn.flareLeaves ?? 4;
-                        if (material.uniforms.uFlareWidth) material.uniforms.uFlareWidth.value = orn.flareWidth ?? 0.5;
                         // 脉冲参数实时更新
                         if (material.uniforms.uPulseEnabled) material.uniforms.uPulseEnabled.value = orn.pulseEnabled ? 1.0 : 0.0;
                         if (material.uniforms.uPulseSpeed) material.uniforms.uPulseSpeed.value = orn.pulseSpeed ?? 1.0;
@@ -8261,8 +8260,10 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                           let ornColor: [number, number, number] = [1, 1, 1];
                           if (orn.colorMode === 'inherit') {
                             ornColor = hexToRgb(ring.color);
-                          } else if (orn.colorMode === 'solid') {
-                            ornColor = hexToRgb(orn.color || '#ffffff');
+                          } else if (orn.colorMode === 'independent') {
+                            // 独立模式：使用独立颜色或渐变颜色的基色
+                            const baseColor = orn.gradientColor?.enabled ? (orn.gradientColor.colors?.[0] || orn.color) : orn.color;
+                            ornColor = hexToRgb(baseColor || '#ffffff');
                           }
                           material.uniforms.uColor.value.set(ornColor[0], ornColor[1], ornColor[2]);
                         }
@@ -11054,19 +11055,34 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         if (orn.colorMode === 'inherit') {
           const [r, g, b] = hexToRgb(ring.color);
           ornColor = new THREE.Vector3(r, g, b);
-        } else if (orn.colorMode === 'solid') {
-          const [r, g, b] = hexToRgb(orn.color || '#ffffff');
+        } else if (orn.colorMode === 'independent') {
+          // 独立模式：使用独立颜色或渐变颜色的基色
+          const baseColor = orn.gradientColor?.enabled ? (orn.gradientColor.colors?.[0] || orn.color) : orn.color;
+          const [r, g, b] = hexToRgb(baseColor || '#ffffff');
           ornColor = new THREE.Vector3(r, g, b);
         }
 
-        // 样式映射到shader shape值
+        // 样式映射到shader shape值（精简后只保留星云形状 + xingspark贴图）
         const styleToShape: Record<string, number> = {
-          'plain': 0, 'flare': 1, 'spark': 2, 'texture': 3,
-          'star': 4, 'snowflake': 5, 'heart': 6, 'crescent': 7,
-          'crossGlow': 8, 'sakura': 9, 'sun': 10, 'sun2': 11,
-          'plum': 12, 'lily': 13, 'lotus': 14, 'prism': 15
+          'star': 0, 'snowflake': 1, 'heart': 2, 'crescent': 3,
+          'crossGlow': 4, 'sakura': 5, 'sun': 6, 'sun2': 7,
+          'plum': 8, 'lily': 9, 'lotus': 10, 'prism': 11,
+          'xingspark': 12  // 贴图模式
         };
         const shapeVal = styleToShape[orn.style] ?? 0;
+
+        // 加载XingSpark贴图
+        let ornTexture: THREE.Texture | null = null;
+        if (orn.style === 'xingspark' && orn.xingsparkTexture) {
+          ornTexture = textureCache.current.get(orn.xingsparkTexture) || null;
+          if (!ornTexture) {
+            const loader = new THREE.TextureLoader();
+            ornTexture = loader.load(orn.xingsparkTexture, (tex) => {
+              textureCache.current.set(orn.xingsparkTexture!, tex);
+            });
+            textureCache.current.set(orn.xingsparkTexture, ornTexture);
+          }
+        }
 
         const ornMat = new THREE.ShaderMaterial({
           vertexShader: `
@@ -11108,6 +11124,8 @@ void main() {
             uniform float uShape;
             uniform float uFlareLeaves;
             uniform float uFlareWidth;
+            uniform sampler2D uTexture;
+            uniform float uUseTexture;
             varying float vPhase;
             varying float vRandom;
 
@@ -11270,54 +11288,57 @@ void main() {
   float r = length(uv);
   float alpha = 0.0;
 
+  // 新的样式映射：0=star, 1=snowflake, 2=heart, 3=crescent, 4=crossGlow
+  // 5=sakura, 6=sun, 7=sun2, 8=plum, 9=lily, 10=lotus, 11=prism, 12=xingspark贴图
   if (uShape < 0.5) {
-    // plain - 圆形 (0)
-    alpha = smoothstep(1.0, 0.3, r);
+    // star - 星形 (0)
+    alpha = starShape(uv);
   } else if (uShape < 1.5) {
-    // flare - 星芒 (1)
-    alpha = flareShape(uv, uFlareLeaves, uFlareWidth);
-  } else if (uShape < 2.5) {
-    // spark - 火花 (2)
-    alpha = sparkShape(uv);
-  } else if (uShape < 3.5) {
-    // texture - 使用星形代替 (3)
-    alpha = starShape(uv);
-  } else if (uShape < 4.5) {
-    // star - 星形 (4)
-    alpha = starShape(uv);
-  } else if (uShape < 5.5) {
-    // snowflake - 雪花 (5)
+    // snowflake - 雪花 (1)
     alpha = snowflakeShape(uv);
-  } else if (uShape < 6.5) {
-    // heart - 爱心 (6)
+  } else if (uShape < 2.5) {
+    // heart - 爱心 (2)
     alpha = heartShape(uv);
-  } else if (uShape < 7.5) {
-    // crescent - 月牙 (7)
+  } else if (uShape < 3.5) {
+    // crescent - 月牙 (3)
     alpha = crescentShape(uv);
-  } else if (uShape < 8.5) {
-    // crossGlow - 十字光芒 (8)
+  } else if (uShape < 4.5) {
+    // crossGlow - 十字光芒 (4)
     alpha = crossGlowShape(uv);
-  } else if (uShape < 9.5) {
-    // sakura - 樱花 (9)
+  } else if (uShape < 5.5) {
+    // sakura - 樱花 (5)
     alpha = sakuraShape(uv);
-  } else if (uShape < 10.5) {
-    // sun - 太阳 (10)
+  } else if (uShape < 6.5) {
+    // sun - 太阳 (6)
     alpha = sunShape(uv);
-  } else if (uShape < 11.5) {
-    // sun2 - 太阳2 (11)
+  } else if (uShape < 7.5) {
+    // sun2 - 太阳2 (7)
     alpha = sun2Shape(uv);
-  } else if (uShape < 12.5) {
-    // plum - 梅花 (12)
+  } else if (uShape < 8.5) {
+    // plum - 梅花 (8)
     alpha = plumShape(uv);
-  } else if (uShape < 13.5) {
-    // lily - 百合 (13)
+  } else if (uShape < 9.5) {
+    // lily - 百合 (9)
     alpha = lilyShape(uv);
-  } else if (uShape < 14.5) {
-    // lotus - 莲花 (14)
+  } else if (uShape < 10.5) {
+    // lotus - 莲花 (10)
     alpha = lotusShape(uv);
-  } else {
-    // prism - 棱镜 (15)
+  } else if (uShape < 11.5) {
+    // prism - 棱镜 (11)
     alpha = prismShape(uv);
+  } else {
+    // xingspark - 贴图模式 (12)
+    // 使用贴图采样（如果有），否则使用星形
+    if (uUseTexture > 0.5) {
+      vec2 texUV = gl_PointCoord;
+      vec4 texColor = texture2D(uTexture, texUV);
+      alpha = texColor.a;
+      // 可选：保留贴图原色或使用uColor着色
+      gl_FragColor = vec4(texColor.rgb * uBrightness, alpha * uOpacity);
+      return;
+    } else {
+      alpha = starShape(uv);
+    }
   }
 
   // 发光效果
@@ -11336,8 +11357,10 @@ void main() {
             uGlowIntensity: { value: orn.glowIntensity ?? 0.8 },
             uBaseSize: { value: orn.baseSize ?? 15 },
             uShape: { value: shapeVal },
-            uFlareLeaves: { value: orn.flareLeaves ?? 4 },
-            uFlareWidth: { value: orn.flareWidth ?? 0.5 },
+            uFlareLeaves: { value: 4 },  // 保留用于向后兼容
+            uFlareWidth: { value: 0.5 }, // 保留用于向后兼容
+            uTexture: { value: ornTexture },
+            uUseTexture: { value: ornTexture ? 1.0 : 0.0 },
             uPulseEnabled: { value: orn.pulseEnabled ? 1.0 : 0.0 },
             uPulseSpeed: { value: orn.pulseSpeed ?? 1.0 },
             uPulseIntensity: { value: orn.pulseIntensity ?? 0.3 },

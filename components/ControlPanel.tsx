@@ -7816,6 +7816,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                       </div>
                                     )}
                                     <RangeControl label="渐变强度" value={currentParticleRing.gradientColor?.proceduralIntensity ?? 1.0} min={0.1} max={5} step={0.1} onChange={(v) => updateParticleRing(currentParticleRing.id, { gradientColor: { ...currentParticleRing.gradientColor, proceduralIntensity: v } })} />
+                                    <RangeControl label="过渡强度" value={currentParticleRing.gradientColor?.blendStrength ?? 1.0} min={0} max={1} step={0.05} onChange={(v) => updateParticleRing(currentParticleRing.id, { gradientColor: { ...currentParticleRing.gradientColor, blendStrength: v } })} />
                                   </div>
                                 )}
                               </div>
@@ -8009,12 +8010,6 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                           onChange={(e) => updateOrn({ style: e.target.value as any })}
                                           className="flex-1 text-xs bg-gray-700 rounded px-2 py-1 text-white"
                                         >
-                                          <optgroup label="流萤样式">
-                                            <option value="plain">圆点</option>
-                                            <option value="flare">星芒</option>
-                                            <option value="spark">火花</option>
-                                            <option value="texture">贴图</option>
-                                          </optgroup>
                                           <optgroup label="星云形状">
                                             <option value="star">星形</option>
                                             <option value="snowflake">雪花</option>
@@ -8029,14 +8024,35 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                             <option value="lotus">莲花</option>
                                             <option value="prism">棱镜</option>
                                           </optgroup>
+                                          <optgroup label="XingSpark贴图">
+                                            <option value="xingspark">贴图</option>
+                                          </optgroup>
                                         </select>
                                       </div>
 
-                                      {/* 星芒参数 */}
-                                      {orn.style === 'flare' && (
-                                        <div className="flex gap-2">
-                                          <RangeControl label="叶片数" value={orn.flareLeaves ?? 4} min={2} max={8} step={1} onChange={(v) => updateOrn({ flareLeaves: v })} />
-                                          <RangeControl label="叶片宽" value={orn.flareWidth ?? 0.5} min={0.1} max={1} step={0.1} onChange={(v) => updateOrn({ flareWidth: v })} />
+                                      {/* XingSpark贴图选择器 - 当选择xingspark样式时显示 */}
+                                      {orn.style === 'xingspark' && (
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-xs text-gray-400">选择贴图</span>
+                                          <select
+                                            value={orn.xingsparkTexture || ''}
+                                            onChange={(e) => updateOrn({ xingsparkTexture: e.target.value })}
+                                            className="flex-1 text-xs bg-gray-700 rounded px-2 py-1 text-white"
+                                          >
+                                            <option value="">请选择...</option>
+                                            <optgroup label="内置光效">
+                                              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
+                                                <option key={n} value={`/textures/firefly-heads/glow${n}.png`}>光效 {n}</option>
+                                              ))}
+                                            </optgroup>
+                                            {headTextureCloudPresets.length > 0 && (
+                                              <optgroup label={`✨ XingSpark (${headTextureCloudPresets.length})`}>
+                                                {headTextureCloudPresets.map((preset, i) => (
+                                                  <option key={i} value={preset.url}>{preset.name || `预设 ${i + 1}`}</option>
+                                                ))}
+                                              </optgroup>
+                                            )}
+                                          </select>
                                         </div>
                                       )}
 
@@ -8072,7 +8088,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs text-gray-400">颜色</span>
                                         <div className="flex gap-1">
-                                          {[{ id: 'inherit', label: '继承' }, { id: 'solid', label: '纯色' }].map(c => (
+                                          {[{ id: 'inherit', label: '继承' }, { id: 'independent', label: '独立' }].map(c => (
                                             <button
                                               key={c.id}
                                               onClick={() => updateOrn({ colorMode: c.id as any })}
@@ -8083,10 +8099,89 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                             </button>
                                           ))}
                                         </div>
-                                        {orn.colorMode === 'solid' && (
-                                          <input type="color" value={orn.color} onChange={(e) => updateOrn({ color: e.target.value })} className="w-8 h-6 rounded cursor-pointer" />
-                                        )}
                                       </div>
+
+                                      {/* 独立颜色模式详细设置 */}
+                                      {orn.colorMode === 'independent' && (
+                                        <div className="p-2 bg-gray-800/50 rounded space-y-2">
+                                          {/* 颜色模式选择：单色/双色/三色/混色 */}
+                                          <div className="flex items-center gap-1 flex-wrap">
+                                            {[
+                                              { id: 'none', label: '单色' },
+                                              { id: 'twoColor', label: '双色' },
+                                              { id: 'threeColor', label: '三色' },
+                                              { id: 'procedural', label: '混色' }
+                                            ].map(m => (
+                                              <button
+                                                key={m.id}
+                                                onClick={() => updateOrn({ gradientColor: { ...orn.gradientColor, enabled: m.id !== 'none', mode: m.id as any } as any })}
+                                                className="px-2 py-0.5 text-[10px] rounded transition-all"
+                                                style={getOptionButtonStyle((orn.gradientColor?.mode || 'none') === m.id || (!orn.gradientColor?.enabled && m.id === 'none'))}
+                                              >
+                                                {m.label}
+                                              </button>
+                                            ))}
+                                          </div>
+
+                                          {/* 单色模式 */}
+                                          {(!orn.gradientColor?.enabled || orn.gradientColor?.mode === 'none') && (
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-xs text-gray-400">颜色</span>
+                                              <input type="color" value={orn.color || '#ffffff'} onChange={(e) => updateOrn({ color: e.target.value })} className="w-10 h-6 rounded cursor-pointer" />
+                                            </div>
+                                          )}
+
+                                          {/* 双色模式 */}
+                                          {orn.gradientColor?.enabled && orn.gradientColor?.mode === 'twoColor' && (
+                                            <>
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-xs text-gray-400">颜色</span>
+                                                <input type="color" value={orn.gradientColor?.colors?.[0] || '#ff0000'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [e.target.value, orn.gradientColor?.colors?.[1] || '#00ff00'] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                                <input type="color" value={orn.gradientColor?.colors?.[1] || '#00ff00'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [orn.gradientColor?.colors?.[0] || '#ff0000', e.target.value] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                              </div>
+                                              <RangeControl label="中间位置" value={orn.gradientColor?.colorMidPosition ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => updateOrn({ gradientColor: { ...orn.gradientColor, colorMidPosition: v } as any })} />
+                                              <RangeControl label="过渡强度" value={orn.gradientColor?.blendStrength ?? 1.0} min={0} max={1} step={0.05} onChange={(v) => updateOrn({ gradientColor: { ...orn.gradientColor, blendStrength: v } as any })} />
+                                            </>
+                                          )}
+
+                                          {/* 三色模式 */}
+                                          {orn.gradientColor?.enabled && orn.gradientColor?.mode === 'threeColor' && (
+                                            <>
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-xs text-gray-400">颜色</span>
+                                                <input type="color" value={orn.gradientColor?.colors?.[0] || '#ff0000'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [e.target.value, orn.gradientColor?.colors?.[1] || '#00ff00', orn.gradientColor?.colors?.[2] || '#0000ff'] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                                <input type="color" value={orn.gradientColor?.colors?.[1] || '#00ff00'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [orn.gradientColor?.colors?.[0] || '#ff0000', e.target.value, orn.gradientColor?.colors?.[2] || '#0000ff'] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                                <input type="color" value={orn.gradientColor?.colors?.[2] || '#0000ff'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [orn.gradientColor?.colors?.[0] || '#ff0000', orn.gradientColor?.colors?.[1] || '#00ff00', e.target.value] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                              </div>
+                                              <RangeControl label="中间位置" value={orn.gradientColor?.colorMidPosition ?? 0.5} min={0} max={1} step={0.05} onChange={(v) => updateOrn({ gradientColor: { ...orn.gradientColor, colorMidPosition: v } as any })} />
+                                              <RangeControl label="过渡强度" value={orn.gradientColor?.blendStrength ?? 1.0} min={0} max={1} step={0.05} onChange={(v) => updateOrn({ gradientColor: { ...orn.gradientColor, blendStrength: v } as any })} />
+                                            </>
+                                          )}
+
+                                          {/* 混色模式 */}
+                                          {orn.gradientColor?.enabled && orn.gradientColor?.mode === 'procedural' && (
+                                            <>
+                                              <div className="flex items-center gap-1">
+                                                <span className="text-xs text-gray-400">颜色</span>
+                                                <input type="color" value={orn.gradientColor?.colors?.[0] || '#ff0000'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [e.target.value, orn.gradientColor?.colors?.[1] || '#00ff00', orn.gradientColor?.colors?.[2] || '#0000ff'] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                                <input type="color" value={orn.gradientColor?.colors?.[1] || '#00ff00'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [orn.gradientColor?.colors?.[0] || '#ff0000', e.target.value, orn.gradientColor?.colors?.[2] || '#0000ff'] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                                <input type="color" value={orn.gradientColor?.colors?.[2] || '#0000ff'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, colors: [orn.gradientColor?.colors?.[0] || '#ff0000', orn.gradientColor?.colors?.[1] || '#00ff00', e.target.value] } as any })} className="w-8 h-5 rounded cursor-pointer" />
+                                              </div>
+                                              <div className="flex gap-2 items-center">
+                                                <span className="text-xs text-gray-400">混色轴向</span>
+                                                <select value={orn.gradientColor?.proceduralAxis || 'radial'} onChange={(e) => updateOrn({ gradientColor: { ...orn.gradientColor, proceduralAxis: e.target.value as any } as any })} className="flex-1 text-xs bg-gray-700 rounded px-2 py-1 text-white cursor-pointer">
+                                                  <option value="x">X轴</option>
+                                                  <option value="y">Y轴</option>
+                                                  <option value="z">Z轴</option>
+                                                  <option value="radial">径向</option>
+                                                </select>
+                                              </div>
+                                              <RangeControl label="渐变强度" value={orn.gradientColor?.proceduralIntensity ?? 1.0} min={0.1} max={5} step={0.1} onChange={(v) => updateOrn({ gradientColor: { ...orn.gradientColor, proceduralIntensity: v } as any })} />
+                                              <RangeControl label="过渡强度" value={orn.gradientColor?.blendStrength ?? 1.0} min={0} max={1} step={0.05} onChange={(v) => updateOrn({ gradientColor: { ...orn.gradientColor, blendStrength: v } as any })} />
+                                            </>
+                                          )}
+                                        </div>
+                                      )}
 
                                       {/* 透明度与发光 */}
                                       <RangeControl label="不透明度" value={orn.opacity ?? 1} min={0.1} max={1} step={0.1} onChange={(v) => updateOrn({ opacity: v })} />

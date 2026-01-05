@@ -944,13 +944,8 @@ export interface SilkEffectSettings {
 
 // ==================== 粒子环点缀装饰 ====================
 
-// 点缀样式类型
+// 点缀样式类型（精简后：只保留星云粒子形状 + XingSpark贴图）
 export type OrnamentStyle =
-  // 流萤样式
-  | 'plain'        // 普通圆点
-  | 'flare'        // N叶星芒
-  | 'spark'        // 尖锐火花
-  | 'texture'      // 自定义贴图
   // 星云粒子形状
   | 'star'         // 星形
   | 'snowflake'    // 雪花
@@ -963,14 +958,14 @@ export type OrnamentStyle =
   | 'plum'         // 梅花
   | 'lily'         // 百合
   | 'lotus'        // 莲花
-  | 'prism';       // 棱镜晶体
+  | 'prism'        // 棱镜晶体
+  // XingSpark贴图
+  | 'xingspark';   // 使用XingSpark云端预设贴图
 
 // 点缀颜色模式
 export type OrnamentColorMode =
-  | 'inherit'      // 继承粒子环颜色
-  | 'solid'        // 纯色
-  | 'random'       // 随机色（从调色板）
-  | 'gradient';    // 渐变（沿轨道）
+  | 'inherit'      // 继承粒子环颜色（包括渐变设置）
+  | 'independent'; // 独立颜色模式（使用gradientColor配置）
 
 // 点缀分布模式
 export type OrnamentDistribution =
@@ -981,9 +976,9 @@ export type OrnamentDistribution =
 export interface OrnamentSettings {
   enabled: boolean;              // 点缀开关
 
-  // ===== 贴图样式 =====
+  // ===== 样式 =====
   style: OrnamentStyle;          // 样式类型
-  customTexture?: string;        // 自定义贴图路径（style='texture' 时使用）
+  xingsparkTexture?: string;     // XingSpark贴图URL（style='xingspark' 时使用）
 
   // ===== 数量与分布 =====
   count: number;                 // 点缀数量 5-100
@@ -996,9 +991,9 @@ export interface OrnamentSettings {
   sizeRandomness: number;        // 大小随机缩放范围 0-1
 
   // ===== 颜色 =====
-  colorMode: OrnamentColorMode;  // 颜色模式
-  color: string;                 // 纯色模式下的颜色
-  colorPalette?: string[];       // 随机模式下的调色板（2-5色）
+  colorMode: OrnamentColorMode;  // 颜色模式：继承 或 独立
+  color: string;                 // 基础颜色（独立单色模式）
+  gradientColor?: GradientColor; // 渐变配置（独立渐变模式，复用粒子环的GradientColor结构）
 
   // ===== 透明度与发光 =====
   opacity: number;               // 不透明度 0-1
@@ -1015,10 +1010,6 @@ export interface OrnamentSettings {
   // 公转
   orbitSpeedMultiplier: number;  // 公转速度倍率 0-2
   orbitPhaseRandomness: number;  // 相位随机性 0-1
-
-  // ===== 星芒参数（style='flare'时生效）=====
-  flareLeaves: number;           // 星芒叶片数 4-8
-  flareWidth: number;            // 星芒宽度 0.1-1
 }
 
 // 连续环带透明度渐变模式
