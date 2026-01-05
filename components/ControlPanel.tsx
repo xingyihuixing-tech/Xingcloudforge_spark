@@ -147,6 +147,7 @@ interface ControlPanelProps {
   overlayMode?: boolean;  // 互通模式状态
   materialSettings?: import('../types').MaterialSettings;  // 从 App 传入的材质配置（用于样式生成）
   xingConfig?: XingSparkConfig; // 用于 Logo 样式同步
+  onEnterDrawingMode?: () => void;  // 进入法阵绘图模式
 }
 
 const DepthModeLabels: Record<DepthMode, string> = {

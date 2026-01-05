@@ -1882,3 +1882,85 @@ export interface MaterialPreset {
   data: MaterialSettings;
   isBuiltIn?: boolean;
 }
+
+// ==================== 自定义法阵绘制系统类型 ====================
+
+// 对称模式
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope';
+
+// 粒子画笔形状
+export type DrawingBrushShape = 'circle' | 'star' | 'glow' | 'spark';
+
+// 粒子画笔设置
+export interface ParticleBrushSettings {
+  baseSize: number;       // 基础粒子大小 5-50
+  baseDensity: number;    // 基础密度 0.1-1.0
+  glowIntensity: number;  // 发光强度 0-2
+  shape: DrawingBrushShape;
+  pulseEnabled: boolean;
+  pulseSpeed: number;     // 0.5-3
+}
+
+// 线环画笔设置
+export interface LineRingBrushSettings {
+  baseWidth: number;      // 基础线宽 1-10
+  glowIntensity: number;  // 发光强度 0-2
+  dashEnabled: boolean;
+  dashRatio: number;      // 0.1-0.9
+  flowSpeed: number;      // 0-3
+}
+
+// 画笔类型
+export type DrawingBrushType = 'particle' | 'lineRing';
+
+// 采样点 (支持压感)
+export interface StrokePoint {
+  x: number;         // 归一化坐标 0-1
+  y: number;         // 归一化坐标 0-1
+  pressure: number;  // 压感 0-1
+  timestamp: number;
+}
+
+// 笔画
+export interface MagicCircleStroke {
+  id: string;
+  brushType: DrawingBrushType;
+  brushSettings: ParticleBrushSettings | LineRingBrushSettings;
+  color: string;
+  points: StrokePoint[];
+}
+
+// 图层 (对称模式应用在图层级别)
+export interface MagicCircleLayer {
+  id: string;
+  name: string;
+  visible: boolean;
+  locked: boolean;
+  opacity: number;        // 0-1
+  symmetryMode: SymmetryMode;
+  symmetryDivisions: number;  // 3-36
+  strokes: MagicCircleStroke[];
+}
+
+// 自定义法阵实例
+export interface CustomMagicCircle {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  layers: MagicCircleLayer[];
+  thumbnail?: string;  // Base64 缩略图
+}
+
+// 绘图模式状态
+export interface DrawingModeState {
+  isActive: boolean;
+  currentCircleId: string | null;
+  currentLayerId: string | null;
+  currentBrushType: DrawingBrushType;
+  particleBrushSettings: ParticleBrushSettings;
+  lineRingBrushSettings: LineRingBrushSettings;
+  currentColor: string;
+  undoStack: MagicCircleStroke[];
+  redoStack: MagicCircleStroke[];
+}

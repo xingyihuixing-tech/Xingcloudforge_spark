@@ -17,7 +17,8 @@ import { AIStarButton } from './components/AIStarButton'; // Added import
 import AIAssistantPanel from './components/AIAssistantPanel';
 import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSettings';
 import { useDraggableStar } from './hooks/useDraggableStar';
-import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset } from './types';
+import MagicCircleDrawing from './components/MagicCircleDrawing';
+import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, CustomMagicCircle } from './types';
 import {
   DEFAULT_SETTINGS,
   SAMPLE_IMAGES,
@@ -388,6 +389,11 @@ const App: React.FC = () => {
 
   // 星云预览模式
   const [nebulaPreviewMode, setNebulaPreviewMode] = useState(false);
+
+  // 自定义法阵绘制系统
+  const [customMagicCircles, setCustomMagicCircles] = useState<CustomMagicCircle[]>([]);
+  const [drawingModeActive, setDrawingModeActive] = useState(false);
+  const [currentDrawingCircleId, setCurrentDrawingCircleId] = useState<string | null>(null);
 
   // 多星云实例的粒子数据缓存
   const [nebulaInstancesData, setNebulaInstancesData] = useState<Map<string, ProcessedData>>(new Map());
@@ -1686,6 +1692,16 @@ const App: React.FC = () => {
             console.error('Failed to save magic circle texture preset:', preset.name);
           }
         }}
+      />
+
+      {/* 自定义法阵绘制系统 */}
+      <MagicCircleDrawing
+        isActive={drawingModeActive}
+        customMagicCircles={customMagicCircles}
+        onUpdateCircles={setCustomMagicCircles}
+        onClose={() => setDrawingModeActive(false)}
+        currentCircleId={currentDrawingCircleId}
+        onSelectCircle={setCurrentDrawingCircleId}
       />
     </div>
   );
