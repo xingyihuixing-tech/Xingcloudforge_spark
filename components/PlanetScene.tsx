@@ -428,7 +428,8 @@ uniform vec3 uGlowCustomDir;
 uniform float uGlowSpiralDensity;
 uniform float uGlowProceduralInt;
 
-// �㗇���㺭
+// 光晕参数
+uniform float uGlowEnabled;    // 边缘光晕开关 (0.0=关闭, 1.0=开启)
 uniform float uGlowLength;
 uniform float uGlowStrength;
 uniform float uGlowBloomBoost;
@@ -887,56 +888,59 @@ void main() {
     surfaceColor += uHotspotColor * hotspot * uHotspotEmission;
   }
   
-  // --- 8. [颲寧��穃�] (Fresnel Glow) ---
-  float fresnel = 1.0 - clamp(dot(viewDir, normal), 0.0, 1.0);
-  float glowExponent = 10.0 / max(uGlowLength, 0.1);
-  float glowFactor = pow(fresnel, glowExponent);
-  
-  // 霈∠��㗇�皜𣂼���㺭
-  float glowGradientT = radialT;
-  if (uGlowGradientDir < 0.5) { glowGradientT = radialT; }
-  else if (uGlowGradientDir < 1.5) { glowGradientT = (normLocal.x + 1.0) * 0.5; }
-  else if (uGlowGradientDir < 2.5) { glowGradientT = (normLocal.y + 1.0) * 0.5; }
-  else if (uGlowGradientDir < 3.5) { glowGradientT = (normLocal.z + 1.0) * 0.5; }
-  else if (uGlowGradientDir < 4.5) { glowGradientT = (dot(normLocal, normalize(uGlowCustomDir)) + 1.0) * 0.5; }
-  else { glowGradientT = fract(angularT * uGlowSpiralDensity + radialT * 2.0); }
-  glowGradientT = clamp(glowGradientT, 0.0, 1.0);
-  
-  // 霈∠��㗇�憸𡏭𠧧
-  vec3 glowColor = uGlowBaseColor;
-  if (uGlowColorMode > 0.5 && uGlowColorMode < 1.5) {
-    glowColor = mix(uGlowColor1, uGlowColor2, glowGradientT);
-  } else if (uGlowColorMode > 1.5 && uGlowColorMode < 2.5) { // 銝㕑𠧧皜𣂼�
-    float blendWeight = min(uGlowColorMidWidth, 1.0);
-    float rangeExpand = max(uGlowColorMidWidth - 1.0, 0.0) * 0.2;
-    float bandHalf = uGlowColorMidWidth2 * 0.5;
-    float midStart = max(0.01, uGlowColorMidPos - rangeExpand - bandHalf);
-    float midEnd = min(0.99, uGlowColorMidPos + rangeExpand + bandHalf);
+  // --- 8. [边缘光晕] (Fresnel Glow) ---
+  // 仅在 glowEnabled 开启时计算边缘光晕
+  if (uGlowEnabled > 0.5) {
+    float fresnel = 1.0 - clamp(dot(viewDir, normal), 0.0, 1.0);
+    float glowExponent = 10.0 / max(uGlowLength, 0.1);
+    float glowFactor = pow(fresnel, glowExponent);
     
-    vec3 threeColorGlow;
-    if (glowGradientT < midStart) {
-      threeColorGlow = mix(uGlowColor1, uGlowColor2, glowGradientT / midStart);
-    } else if (glowGradientT > midEnd) {
-      threeColorGlow = mix(uGlowColor2, uGlowColor3, (glowGradientT - midEnd) / (1.0 - midEnd));
-    } else {
-      threeColorGlow = uGlowColor2;
+    // 计算光晕渐变参数
+    float glowGradientT = radialT;
+    if (uGlowGradientDir < 0.5) { glowGradientT = radialT; }
+    else if (uGlowGradientDir < 1.5) { glowGradientT = (normLocal.x + 1.0) * 0.5; }
+    else if (uGlowGradientDir < 2.5) { glowGradientT = (normLocal.y + 1.0) * 0.5; }
+    else if (uGlowGradientDir < 3.5) { glowGradientT = (normLocal.z + 1.0) * 0.5; }
+    else if (uGlowGradientDir < 4.5) { glowGradientT = (dot(normLocal, normalize(uGlowCustomDir)) + 1.0) * 0.5; }
+    else { glowGradientT = fract(angularT * uGlowSpiralDensity + radialT * 2.0); }
+    glowGradientT = clamp(glowGradientT, 0.0, 1.0);
+    
+    // 计算光晕颜色
+    vec3 glowColor = uGlowBaseColor;
+    if (uGlowColorMode > 0.5 && uGlowColorMode < 1.5) {
+      glowColor = mix(uGlowColor1, uGlowColor2, glowGradientT);
+    } else if (uGlowColorMode > 1.5 && uGlowColorMode < 2.5) { // 三色渐变
+      float blendWeight = min(uGlowColorMidWidth, 1.0);
+      float rangeExpand = max(uGlowColorMidWidth - 1.0, 0.0) * 0.2;
+      float bandHalf = uGlowColorMidWidth2 * 0.5;
+      float midStart = max(0.01, uGlowColorMidPos - rangeExpand - bandHalf);
+      float midEnd = min(0.99, uGlowColorMidPos + rangeExpand + bandHalf);
+      
+      vec3 threeColorGlow;
+      if (glowGradientT < midStart) {
+        threeColorGlow = mix(uGlowColor1, uGlowColor2, glowGradientT / midStart);
+      } else if (glowGradientT > midEnd) {
+        threeColorGlow = mix(uGlowColor2, uGlowColor3, (glowGradientT - midEnd) / (1.0 - midEnd));
+      } else {
+        threeColorGlow = uGlowColor2;
+      }
+      vec3 twoColorGlow = mix(uGlowColor1, uGlowColor3, glowGradientT);
+      glowColor = mix(twoColorGlow, threeColorGlow, blendWeight);
+    } else if (uGlowColorMode > 2.5) {
+      float hueShift = glowGradientT * uGlowProceduralInt * 0.3;
+      glowColor = uGlowBaseColor;
+      glowColor.r = mix(glowColor.r, glowColor.g, hueShift);
+      glowColor.g = mix(glowColor.g, glowColor.b, hueShift);
     }
-    vec3 twoColorGlow = mix(uGlowColor1, uGlowColor3, glowGradientT);
-    glowColor = mix(twoColorGlow, threeColorGlow, blendWeight);
-  } else if (uGlowColorMode > 2.5) {
-    float hueShift = glowGradientT * uGlowProceduralInt * 0.3;
-    glowColor = uGlowBaseColor;
-    glowColor.r = mix(glowColor.r, glowColor.g, hueShift);
-    glowColor.g = mix(glowColor.g, glowColor.b, hueShift);
-  }
-  
-  // �惩��㗇�
-  surfaceColor += glowColor * glowFactor * uGlowStrength;
-  
-  // --- 9. [Bloom 憓𧼮撩] ---
-  if (uGlowBloomBoost > 0.01) {
-    float bloomPeak = glowFactor * glowFactor * 2.0;
-    surfaceColor += glowColor * bloomPeak * uGlowStrength * uGlowBloomBoost;
+    
+    // 叠加光晕
+    surfaceColor += glowColor * glowFactor * uGlowStrength;
+    
+    // --- 9. [Bloom 增强] ---
+    if (uGlowBloomBoost > 0.01) {
+      float bloomPeak = glowFactor * glowFactor * 2.0;
+      surfaceColor += glowColor * bloomPeak * uGlowStrength * uGlowBloomBoost;
+    }
   }
   
   // --- 10. [鈭桀漲靚�㟲] ---
@@ -5641,7 +5645,8 @@ function createSolidCoreMesh(settings: SolidCoreSettings, isMobile: boolean): TH
   const hotspotEmission = settings.hotspotEmission ?? 3.0;
   const opacity = settings.opacity ?? 1.0;
   const brightness = settings.brightness ?? 1.0;
-  // �啣��訫��?
+  // 边缘光晕参数
+  const glowEnabled = settings.glowEnabled ?? true;   // 默认开启
   const glowLength = settings.glowLength ?? 2.0;
   const glowStrength = settings.glowStrength ?? 1.0;
   const glowRadius = settings.glowRadius ?? 0.2;
@@ -5754,7 +5759,8 @@ function createSolidCoreMesh(settings: SolidCoreSettings, isMobile: boolean): TH
       uGlowCustomDir: { value: new THREE.Vector3(glowColorSettings.directionCustom.x, glowColorSettings.directionCustom.y, glowColorSettings.directionCustom.z) },
       uGlowSpiralDensity: { value: glowColorSettings.spiralDensity },
       uGlowProceduralInt: { value: glowColorSettings.proceduralIntensity },
-      // �㗇���㺭
+      // 光晕参数
+      uGlowEnabled: { value: glowEnabled ? 1.0 : 0.0 },
       uGlowLength: { value: glowLength },
       uGlowStrength: { value: glowStrength },
       uGlowBloomBoost: { value: glowBloomBoost }
@@ -5779,12 +5785,12 @@ function createSolidCoreMesh(settings: SolidCoreSettings, isMobile: boolean): TH
   depthMesh.name = 'solidCoreDepth';
   depthMesh.renderOrder = 5;  // ���甇�𢒰皜脫�
 
-  // === 2. 憭硋ㄢ�㗇�撅��敶?glowStrength > 0 �嗅�撱綽� ===
+  // === 2. 外壳光晕层，仅当 glowEnabled 开启且 glowStrength > 0 时创建 ===
   const group = new THREE.Group();
-  group.add(depthMesh);  // ��溶�䭾楛摨阡��坔�
-  group.add(coreMesh);   // �齿溶�䭾迤�Ｗ�
+  group.add(depthMesh);  // 先添加深度写入层
+  group.add(coreMesh);   // 再添加渲染层
 
-  if (glowStrength > 0 && glowRadius > 0) {
+  if (glowEnabled && glowStrength > 0 && glowRadius > 0) {
     // 憭硋ㄢ�𠰴�嚗𡁶眏 glowRadius �批�嚗?-1 撖孵� 0-100% 憸嘥�擃睃漲嚗?
     const shellScale = 1.0 + glowRadius;
     const shellRadius = radius * shellScale;
@@ -7758,7 +7764,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                   material.uniforms.uGlowSpiralDensity.value = gc.spiralDensity ?? 3;
                   material.uniforms.uGlowProceduralInt.value = gc.proceduralIntensity ?? 1.0;
 
-                  // �冽��凒�啣��訫��?
+                  // 实时更新边缘光晕参数
+                  material.uniforms.uGlowEnabled.value = (solidCore.glowEnabled ?? true) ? 1.0 : 0.0;
                   material.uniforms.uGlowLength.value = solidCore.glowLength ?? 2.0;
                   material.uniforms.uGlowStrength.value = solidCore.glowStrength ?? 1.0;
                   material.uniforms.uGlowBloomBoost.value = solidCore.glowBloomBoost ?? 1.0;
@@ -7796,7 +7803,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                 if (typeof coreMesh.userData.accumulatedRotation !== 'number') {
                   coreMesh.userData.accumulatedRotation = 0;
                 }
-                coreMesh.userData.accumulatedRotation += rotSpeed * deltaTime;
+                // deltaTime 是毫秒，需要转换为秒，使 rotationSpeed 语义正确（每秒弧度）
+                const deltaTimeSeconds = deltaTime / 1000;
+                coreMesh.userData.accumulatedRotation += rotSpeed * deltaTimeSeconds;
 
                 // 更新材质uniforms
                 const material = coreMesh.material as THREE.ShaderMaterial;
