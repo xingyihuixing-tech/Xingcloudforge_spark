@@ -461,6 +461,10 @@ const App: React.FC = () => {
           if (config.headTexturePresets) {
             setHeadTexturePresets(config.headTexturePresets);
           }
+          // 加载自定义法阵绘制数据
+          if ((config as any).customMagicCircles) {
+            setCustomMagicCircles((config as any).customMagicCircles);
+          }
           if (config.planetScene) {
             setPlanetSettings(prev => ({ ...prev, ...config.planetScene }));
             // REMOVED explicit localStorage write to avoid sync issues
@@ -615,7 +619,9 @@ const App: React.FC = () => {
           // 额外保存xingSparkConfig(API期望的字段名)，确保云端加载时能正确识别
           xingSparkConfig: xingConfig as any,
           // 模块预设
-          modulePresets
+          modulePresets,
+          // 自定义法阵绘制
+          customMagicCircles
         });
       }
     }, 1000); // 1 second debounce
@@ -1546,7 +1552,30 @@ const App: React.FC = () => {
           />
         </div>
 
-
+        {/* 法阵绘图模式入口按钮 - 悬浮 */}
+        {appMode === 'planet' && (
+          <button
+            onClick={() => setDrawingModeActive(true)}
+            className={`absolute z-40 transition-all duration-300 ${showControls ? 'right-[364px]' : 'right-12'} top-40`}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(255, 170, 0, 0.2), rgba(255, 100, 50, 0.2))',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '2px solid rgba(255, 170, 0, 0.5)',
+              boxShadow: '0 4px 16px rgba(255, 170, 0, 0.3)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+            title="进入法阵绘图模式"
+          >
+            <span style={{ fontSize: 18, color: '#ffaa00' }}>🖌️</span>
+          </button>
+        )}
 
         {/* 视角信息面板 - 仅星球模式显示 - 玻璃样式 */}
         {appMode === 'planet' && cameraInfo && (
