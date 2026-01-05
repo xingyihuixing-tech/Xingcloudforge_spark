@@ -7973,11 +7973,11 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                   <button
                                     onClick={() => {
                                       const ornament = currentParticleRing.ornament || {
-                                        enabled: false, style: 'flare' as const, count: 20, distribution: 'uniform' as const,
+                                        enabled: false, style: 'star' as const, count: 20, distribution: 'uniform' as const,
                                         baseSize: 15, sizeRandomness: 0.3, colorMode: 'inherit' as const, color: '#ffffff',
                                         opacity: 1, brightness: 1.5, glowIntensity: 0.8, pulseEnabled: false,
                                         pulseSpeed: 1, pulseIntensity: 0.3, pulseSync: false, orbitSpeedMultiplier: 1,
-                                        orbitPhaseRandomness: 0.8, flareLeaves: 4, flareWidth: 0.5
+                                        orbitPhaseRandomness: 0.8
                                       };
                                       updateParticleRing(currentParticleRing.id, { ornament: { ...ornament, enabled: !ornament.enabled } });
                                     }}

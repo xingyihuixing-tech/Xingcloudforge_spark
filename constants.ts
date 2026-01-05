@@ -730,9 +730,9 @@ export const createDefaultParticleRing = (id: string, name: string = '粒子环'
   },
   ornament: {
     enabled: false,
-    // 样式
-    style: 'flare',
-    customTexture: '',
+    // 样式（精简后只有星云形状+xingspark贴图）
+    style: 'star',
+    xingsparkTexture: '',
     // 数量与分布
     count: 20,
     distribution: 'uniform',
@@ -744,7 +744,7 @@ export const createDefaultParticleRing = (id: string, name: string = '粒子环'
     // 颜色
     colorMode: 'inherit',
     color: '#ffffff',
-    colorPalette: ['#ff6b6b', '#4ecdc4', '#ffe66d'],
+    gradientColor: undefined,
     // 透明度与发光
     opacity: 1.0,
     brightness: 1.5,
@@ -756,10 +756,7 @@ export const createDefaultParticleRing = (id: string, name: string = '粒子环'
     pulseSync: false,
     // 公转
     orbitSpeedMultiplier: 1.0,
-    orbitPhaseRandomness: 0.8,
-    // 星芒
-    flareLeaves: 4,
-    flareWidth: 0.5
+    orbitPhaseRandomness: 0.8
   },
   galaxy: {
     enabled: false,
