@@ -2,7 +2,7 @@
  * input: App.tsx 传入的 settings 与各类 setSettings/回调；依赖 types.ts/constants.ts 的默认值与枚举
  * output: 控制面板 UI（参数编辑、实例选择、预设/导入导出，不含主题配置），驱动 settings 变化
  * pos: 全项目参数编辑的唯一入口之一；决定“全局 vs 选中实例”的写入策略
- * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
+ * update: 2026-01-05 调整星球模式 5 类旋转速度范围（能量核-6~6、粒子环-8~8、连续环-10~10、粒子环绕-6~6、实体核心-10~10）。一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  */
 
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
@@ -7157,7 +7157,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                           {/* 运动效果 */}
                                           <div className="p-2 bg-gray-800/50 rounded mb-2">
                                             <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>运动效果</span>
-                                            <RangeControl label="自转速度" value={currentSolidCore.rotationSpeed ?? 0} min={-2} max={2} step={0.02} onChange={(v) => updateSolidCore(currentSolidCore.id, { rotationSpeed: v })} />
+                                            <RangeControl label="自转速度" value={currentSolidCore.rotationSpeed ?? 0} min={-10} max={10} step={0.02} onChange={(v) => updateSolidCore(currentSolidCore.id, { rotationSpeed: v })} />
                                             <RotationAxisPresetSelector axis={currentSolidCore.rotationAxis ?? { preset: 'y', customX: 0, customY: 1, customZ: 0 }} onChange={(axis) => updateSolidCore(currentSolidCore.id, { rotationAxis: axis })} getButtonStyle={getOptionButtonStyle} />
                                           </div>
 
@@ -7953,7 +7953,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>运动速度</span>
                                 <RangeControl label="公转速度" value={currentParticleRing.orbitSpeed} min={-2} max={2} step={0.02} onChange={(v) => updateParticleRing(currentParticleRing.id, { orbitSpeed: v })} />
-                                <RangeControl label="自转速度" value={currentParticleRing.rotationSpeed ?? 0.3} min={-2} max={2} step={0.1} onChange={(v) => updateParticleRing(currentParticleRing.id, { rotationSpeed: v })} />
+                                <RangeControl label="自转速度" value={currentParticleRing.rotationSpeed ?? 0.3} min={-8} max={8} step={0.1} onChange={(v) => updateParticleRing(currentParticleRing.id, { rotationSpeed: v })} />
                                 <RangeControl label="起始相位" value={currentParticleRing.phaseOffset} min={0} max={360} step={15} onChange={(v) => updateParticleRing(currentParticleRing.id, { phaseOffset: v })} />
                                 <RangeControl label="拖尾长度" value={currentParticleRing.trailLength ?? 0} min={0} max={1} step={0.1} onChange={(v) => updateParticleRing(currentParticleRing.id, { trailLength: v })} />
                               </div>
@@ -8972,7 +8972,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                               <div className="p-2 bg-gray-800/50 rounded">
                                 <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>运动速度</span>
                                 <RangeControl label="公转速度" value={currentContinuousRing.orbitSpeed} min={-2} max={2} step={0.02} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { orbitSpeed: v })} />
-                                <RangeControl label="自转速度" value={currentContinuousRing.rotationSpeed ?? 0.1} min={-2} max={2} step={0.1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { rotationSpeed: v })} />
+                                <RangeControl label="自转速度" value={currentContinuousRing.rotationSpeed ?? 0.1} min={-10} max={10} step={0.1} onChange={(v) => updateContinuousRing(currentContinuousRing.id, { rotationSpeed: v })} />
                               </div>
 
                               {/* 姿态设置 */}
@@ -9789,7 +9789,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                   </div>
                                   <div className="p-2 bg-gray-800/50 rounded">
                                     <span className="text-xs block mb-2" style={{ color: 'var(--ui-secondary)' }}>变换</span>
-                                    <RangeControl label="旋转速度" value={currentEnergyBody.rotationSpeed} min={-2} max={2} step={0.1} onChange={(v) => updateEnergyBody(currentEnergyBody.id, { rotationSpeed: v })} />
+                                    <RangeControl label="旋转速度" value={currentEnergyBody.rotationSpeed} min={-6} max={6} step={0.1} onChange={(v) => updateEnergyBody(currentEnergyBody.id, { rotationSpeed: v })} />
                                     <RotationAxisPresetSelector axis={currentEnergyBody.rotationAxis} onChange={(axis) => updateEnergyBody(currentEnergyBody.id, { rotationAxis: axis })} getButtonStyle={getOptionButtonStyle} />
                                     <div className="mt-2">
                                       <TiltPresetSelector tilt={currentEnergyBody.tilt} onChange={(tilt) => updateEnergyBody(currentEnergyBody.id, { tilt })} getButtonStyle={getOptionButtonStyle} />
@@ -10376,7 +10376,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                     );
                                   })}
                                 </div>
-                                <RangeControl label="旋转速度" value={currentOrbiting.baseSpeed} min={0.1} max={2} step={0.05} onChange={(v) => updateOrbiting(currentOrbiting.id, { baseSpeed: v })} />
+                                <RangeControl label="旋转速度" value={currentOrbiting.baseSpeed} min={-6} max={6} step={0.05} onChange={(v) => updateOrbiting(currentOrbiting.id, { baseSpeed: v })} />
                               </div>
 
                               {/* 外观 */}

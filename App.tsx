@@ -447,7 +447,15 @@ const App: React.FC = () => {
           const cloudXing = config.theme?.xingConfig || (config as any).xingSparkConfig;
           if (cloudXing) {
             // 确保合并默认值，防止旧数据缺少字段
-            setXingConfig(prev => ({ ...prev, ...(cloudXing as any) }));
+            setXingConfig(prev => {
+              const merged = { ...DEFAULT_XING_CONFIG, ...prev, ...(cloudXing as any) };
+              // 特殊保护: 如果云端没有 gradientPresets 或者为空，但本地有且不为空，则保留本地的
+              // 防止云端旧数据覆盖了本地新创建的预设
+              if ((!merged.gradientPresets || merged.gradientPresets.length === 0) && prev.gradientPresets && prev.gradientPresets.length > 0) {
+                merged.gradientPresets = prev.gradientPresets;
+              }
+              return merged;
+            });
           }
 
           // 恢复模块预设到localStorage

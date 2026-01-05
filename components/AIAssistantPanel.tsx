@@ -160,7 +160,10 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === 窗口拖拽 ===
     const panelRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [savedPosition, setSavedPosition] = useState({ x: window.innerWidth - 650, y: 80 });
+    const [savedPosition, setSavedPosition] = useState({
+        x: Math.max(0, (window.innerWidth - 600) / 2),
+        y: Math.max(0, (window.innerHeight - 800) / 2)
+    });
     const dragRef = useRef({
         isDragging: false,
         startX: 0,
@@ -767,6 +770,18 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     </div>
                                     <span className="text-[10px] text-white/40">参考图已就绪</span>
                                 </div>
+                            )}
+
+                            {/* 最小化状态下的展开按钮 */}
+                            {isMinimized && (
+                                <button
+                                    onClick={() => setIsMinimized(false)}
+                                    className="absolute -top-8 right-0 bg-black/40 hover:bg-black/60 text-white/60 hover:text-white px-3 py-1 rounded-t-lg backdrop-blur text-xs flex items-center gap-1 transition-all border border-white/10 border-b-0"
+                                    title="展开面板"
+                                >
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></svg>
+                                    展开
+                                </button>
                             )}
 
                             {/* 输入区域容器 */}
