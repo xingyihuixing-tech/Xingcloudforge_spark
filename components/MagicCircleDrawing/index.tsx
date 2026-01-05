@@ -95,6 +95,9 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
     const currentStrokeRef = useRef<MagicCircleStroke | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
 
+    // 用于强制刷新实时预览的计数器
+    const [, forceUpdate] = useState(0);
+
     // 撤销/重做栈
     const [undoStack, setUndoStack] = useState<MagicCircleStroke[]>([]);
     const [redoStack, setRedoStack] = useState<MagicCircleStroke[]>([]);
@@ -179,6 +182,9 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
         currentStrokeRef.current.points.push({
             x, y, pressure, timestamp: Date.now()
         });
+
+        // 强制刷新以显示实时笔画
+        forceUpdate(n => n + 1);
     }, [isDrawing]);
 
     // 处理指针抬起
@@ -493,8 +499,8 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                     touchAction: 'none'
                 }}
             >
-                {/* SVG 预览层 */}
-                <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
+                {/* SVG 预览层 - pointer-events:none 让事件穿透到画布 */}
+                <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
                     {/* 已完成的笔画 */}
                     {currentLayer?.strokes.map(stroke => {
                         // 应用对称变换
