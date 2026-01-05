@@ -1,4 +1,4 @@
-import { useRef, useCallback, useEffect, useState } from 'react';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { XingSparkConfig } from '../components/XingSparkSettings';
 
 /**
@@ -6,7 +6,7 @@ import { XingSparkConfig } from '../components/XingSparkSettings';
  */
 export function useDraggableStar(
     xingConfig: XingSparkConfig,
-    setXingConfig: (newConfig: XingSparkConfig) => void,
+    setXingConfig: React.Dispatch<React.SetStateAction<XingSparkConfig>>,
     defaultPositionClasses: string = "top-24 right-1" // Fallback classes
 ) {
     const starRef = useRef<HTMLDivElement>(null);
@@ -87,12 +87,13 @@ export function useDraggableStar(
             const finalX = parseInt(style.left || '0', 10);
             const finalY = parseInt(style.top || '0', 10);
 
-            setXingConfig({
-                ...xingConfig,
+            // 使用函数式更新，避免闭包中的旧值覆盖最新配置
+            setXingConfig(prev => ({
+                ...prev,
                 starPosition: { x: finalX, y: finalY }
-            });
+            }));
         }
-    }, [xingConfig, setXingConfig]);
+    }, [setXingConfig]);
 
     return {
         starRef,
