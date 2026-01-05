@@ -11215,26 +11215,12 @@ void main() {
 
   // 脉冲效果
   float pulse = 1.0;
-            uniform float uPulseSpeed;
-            uniform float uPulseIntensity;
-            uniform float uPulseSync;
-
-void main() {
-  vPhase = aPhase;
-  vRandom = aRandom;
-  vRadialDist = aRadialDist;
-  vPosition = position;
-              
-              vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-
-              // 脉冲效果
-              float pulse = 1.0;
   if (uPulseEnabled > 0.5) {
-                float phaseOffset = uPulseSync > 0.5 ? 0.0 : aPhase;
+    float phaseOffset = uPulseSync > 0.5 ? 0.0 : aPhase;
     pulse = 1.0 + sin(uTime * uPulseSpeed + phaseOffset) * uPulseIntensity;
   }
               
-              float size = uBaseSize * aSize * pulse;
+  float size = uBaseSize * aSize * pulse;
   gl_PointSize = size * (300.0 / -mvPosition.z);
   gl_Position = projectionMatrix * mvPosition;
 }
