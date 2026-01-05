@@ -120,6 +120,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 }) => {
     // === 模式状态 ===
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
+    const [isMinimized, setIsMinimized] = useState(false);
 
     // === 模型选择 ===
     const [chatModel, setChatModel] = useState(DEFAULT_CHAT_MODEL);
@@ -148,7 +149,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
     // === XingSpark 设置 ===
     const [showSettings, setShowSettings] = useState(false);
-    const [isMinimized, setIsMinimized] = useState(false);
     // xingConfig moved to props
     const [logoState, setLogoState] = useState<'idle' | 'blinking'>('idle');
     const lastDoubleClickRef = useRef(0);
@@ -641,28 +641,16 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     <div className="ai-panel-border-right" style={{ background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
 
                     {/* 标题栏 (Drag Handle) */}
+                    {/* 标题栏 (Drag Handle) */}
                     <div
                         className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5"
                         onMouseDown={(e) => {
                             // 仅当点击标题栏区域时才允许拖拽
-                            // 这里我们假设整个外部容器作为 wrapper，实际的 drag handle 在内部
-                            // 但为了保持原有行为，我们可以在这里做检查，或者让 handleDragStart 传递给内部
-                            // 目前代码结构是 outer div 绑定了 mouseDown
-                            // 检查 target 是否由于 drag handle 触发?
-                            // 原代码是 outer div 有 onMouseDown={handleDragStart}
-                            // 以及 internal drag handle div 没有任何 mouse down?
-                            // 让我们看 line 640: drag-handle
-                            // 实际上为了更好的 UX，应该把 onMouseDown 移到 drag-handle 上，
-                            // 但为了最少改动且符合原逻辑，我们保持在 outer div 上，但可能需要判断
-                            // 不过原代码似乎就是整个面板可拖拽？不，通常是 title bar.
-                            // 让我们看原代码 640 行: <div className="drag-handle ... cursor-move">
-                            // 如果原代码是 line 610 绑定 onMouseDown，那说明整个面板都能拖？
-                            // 让我们保持原样。
                             handleDragStart(e);
                         }}
                     >
                         <div className="flex items-center gap-2 relative">
-                            {/* XingSpark Logo with Dynamic Gradient - 使用 CSS 类名触发动画 */}
+                            {/* XingSpark Logo with Dynamic Gradient */}
                             {(() => {
                                 const colors = xingConfig.gradient.colors;
                                 const normalized = colors.length >= 4 ? colors : [...colors, ...Array(4 - colors.length).fill(colors[colors.length - 1])];
@@ -673,7 +661,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                         title="双击打开设置"
                                         style={{
                                             fontSize: '1.6rem', // 明确设置 1.6rem
-                                            padding: '4px 0',    // 防止上下裁剪
+                                            padding: '4px 8px',  // 防止上下左右裁剪
                                             lineHeight: 1.2      // 优化行高
                                         }}
                                     >
@@ -684,14 +672,28 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     </span>
                                 );
                             })()}
-                            {/* 展开/收起指示 */}
-                            {/* 三角符号已移除 */}
                         </div>
-                        <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">✕</button>
+
+                        <div className="flex items-center gap-2">
+                            {/* 最小化按钮 */}
+                            <button
+                                onClick={() => setIsMinimized(!isMinimized)}
+                                className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors"
+                                title={isMinimized ? "展开" : "最小化"}
+                            >
+                                {isMinimized ? (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
+                                ) : (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                                )}
+                            </button>
+                            {/* 关闭按钮 */}
+                            <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
+                        </div>
                     </div>
 
                     {/* XingSpark 设置 - 显示在标题栏下方，无额外外框 */}
-                    {showSettings && (
+                    {!isMinimized && showSettings && (
                         <div className="flex-1 min-h-0">
                             <XingSparkSettingsPanel
                                 config={xingConfig}
@@ -703,8 +705,23 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         </div>
                     )}
 
+                    {/* 最小化时的预览气泡 */}
+                    {isMinimized && (
+                        <div
+                            className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
+                            onClick={() => setIsMinimized(false)}
+                        >
+                            <div className="text-white/60 text-sm truncate flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                {messages.length > 0
+                                    ? (messages[messages.length - 1].content.substring(0, 30) + (messages[messages.length - 1].content.length > 30 ? '...' : ''))
+                                    : "AI 助手准备就绪..."}
+                            </div>
+                        </div>
+                    )}
+
                     {/* 消息列表 - 当设置面板关闭时显示 */}
-                    {!showSettings && (
+                    {!isMinimized && !showSettings && (
                         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                             {messages.length === 0 && (
                                 <div className="h-full flex items-center justify-center text-white/10 text-sm italic select-none">

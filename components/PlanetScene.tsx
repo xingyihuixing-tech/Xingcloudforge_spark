@@ -8462,8 +8462,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                 if (strandUserData.initialRotation) {
                   strandMesh.rotation.copy(strandUserData.initialRotation);
                 }
-                // 在局部 Z 轴上累加自转
-                strandMesh.rotateZ(strandUserData.totalSelfRotation);
+                // 在局部 Y 轴上累加自转（丝线环在 XZ 平面，绕 Y 轴转动才是在平面内旋转）
+                strandMesh.rotateY(strandUserData.totalSelfRotation);
               });
 
               // Group 只负责 tilt 和公转 - 与粒子环一致（无偏移）
