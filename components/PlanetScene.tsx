@@ -8267,6 +8267,24 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                           }
                           material.uniforms.uColor.value.set(ornColor[0], ornColor[1], ornColor[2]);
                         }
+                        // 多色模式uniforms更新
+                        const gc = orn.gradientColor;
+                        if (material.uniforms.uColorMode && orn.colorMode === 'independent' && gc?.enabled) {
+                          // 设置颜色模式: 0=单色, 1=双色, 2=三色, 3=混色
+                          const modeMap: Record<string, number> = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
+                          material.uniforms.uColorMode.value = modeMap[gc.mode || 'none'] ?? 0;
+                          // 设置三色
+                          const colors = gc.colors || ['#ffffff', '#ffffff', '#ffffff'];
+                          const c1 = hexToRgb(colors[0] || '#ffffff');
+                          const c2 = hexToRgb(colors[1] || colors[0] || '#ffffff');
+                          const c3 = hexToRgb(colors[2] || colors[1] || colors[0] || '#ffffff');
+                          if (material.uniforms.uColor1) material.uniforms.uColor1.value.set(c1[0], c1[1], c1[2]);
+                          if (material.uniforms.uColor2) material.uniforms.uColor2.value.set(c2[0], c2[1], c2[2]);
+                          if (material.uniforms.uColor3) material.uniforms.uColor3.value.set(c3[0], c3[1], c3[2]);
+                          if (material.uniforms.uColorMidPosition) material.uniforms.uColorMidPosition.value = gc.colorMidPosition ?? 0.5;
+                        } else if (material.uniforms.uColorMode) {
+                          material.uniforms.uColorMode.value = 0; // 继承模式或单色
+                        }
                         // 更新公转速度倍率（存储在userData中）
                         subChild.userData.orbitSpeedMultiplier = orn.orbitSpeedMultiplier ?? 1.0;
                       }
@@ -11118,6 +11136,11 @@ void main() {
 `,
           fragmentShader: `
             uniform vec3 uColor;
+            uniform vec3 uColor1;
+            uniform vec3 uColor2;
+            uniform vec3 uColor3;
+            uniform float uColorMode;      // 0=inherit/单色, 1=双色, 2=三色, 3=混色
+            uniform float uColorMidPosition;
             uniform float uOpacity;
             uniform float uBrightness;
             uniform float uGlowIntensity;
@@ -11345,13 +11368,45 @@ void main() {
   float glow = smoothstep(1.2, 0.0, r) * uGlowIntensity * 0.3;
   alpha = alpha + glow;
   
-  vec3 finalColor = uColor * uBrightness;
+  // 根据颜色模式计算最终颜色
+  vec3 finalColor;
+  if (uColorMode < 0.5) {
+    // 0 = 单色/继承 - 使用uColor
+    finalColor = uColor;
+  } else if (uColorMode < 1.5) {
+    // 1 = 双色 - 根据vRandom在color1和color2之间选择
+    float t = vRandom;
+    finalColor = mix(uColor1, uColor2, t);
+  } else if (uColorMode < 2.5) {
+    // 2 = 三色 - 根据vRandom在三色之间渐变
+    float t = vRandom;
+    if (t < uColorMidPosition) {
+      float localT = t / uColorMidPosition;
+      finalColor = mix(uColor1, uColor2, localT);
+    } else {
+      float localT = (t - uColorMidPosition) / (1.0 - uColorMidPosition);
+      finalColor = mix(uColor2, uColor3, localT);
+    }
+  } else {
+    // 3 = 混色 - 使用随机混合三色
+    float t1 = vRandom;
+    float t2 = fract(vRandom * 2.7);
+    vec3 mixed = mix(uColor1, uColor2, t1);
+    finalColor = mix(mixed, uColor3, t2 * 0.5);
+  }
+  
+  finalColor *= uBrightness;
   gl_FragColor = vec4(finalColor, alpha * uOpacity);
 }
 `,
           uniforms: {
             uTime: { value: 0 },
             uColor: { value: ornColor },
+            uColor1: { value: new THREE.Vector3(1, 1, 1) },
+            uColor2: { value: new THREE.Vector3(1, 1, 1) },
+            uColor3: { value: new THREE.Vector3(1, 1, 1) },
+            uColorMode: { value: 0 },
+            uColorMidPosition: { value: 0.5 },
             uOpacity: { value: orn.opacity ?? 1.0 },
             uBrightness: { value: orn.brightness ?? 1.5 },
             uGlowIntensity: { value: orn.glowIntensity ?? 0.8 },

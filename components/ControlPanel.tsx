@@ -8000,6 +8000,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                 {currentParticleRing.ornament?.enabled && (() => {
                                   const orn = currentParticleRing.ornament!;
                                   const updateOrn = (updates: Partial<typeof orn>) => updateParticleRing(currentParticleRing.id, { ornament: { ...orn, ...updates } });
+                                  // XingSpark云端预设 - 暂用空数组，用户可用内置光效
+                                  const headTextureCloudPresets: { id: string; name: string; url: string }[] = [];
                                   return (
                                     <div className="space-y-2">
                                       {/* 样式选择 */}
