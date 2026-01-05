@@ -232,28 +232,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [logoState]);
 
-    // 加载云端配置
-    useEffect(() => {
-        if (userId) {
-            fetch(`/api/config?userId=${userId}`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.config?.xingSparkConfig) {
-                        const loaded = data.config.xingSparkConfig;
-                        // 深度合并默认值，确保旧配置缺少的新字段有默认值
-                        onConfigChange({
-                            ...DEFAULT_XING_CONFIG,
-                            ...loaded,
-                            gradient: { ...DEFAULT_XING_CONFIG.gradient, ...loaded.gradient },
-                            inputGlow: { ...DEFAULT_XING_CONFIG.inputGlow, ...loaded.inputGlow },
-                            theme: { ...DEFAULT_XING_CONFIG.theme, ...loaded.theme },
-                            userMsg: { ...DEFAULT_XING_CONFIG.userMsg, ...loaded.userMsg },
-                        });
-                    }
-                })
-                .catch(err => console.error('加载 XingSpark 配置失败:', err));
-        }
-    }, [userId, onConfigChange]);
+    // 加载云端配置 - REMOVED: App.tsx manages configuration to avoid double-fetch conflicts settings reset.
+    // useEffect(() => { ... }, [userId, onConfigChange]);
 
     // 自动滚动到底部
     useEffect(() => {
@@ -563,11 +543,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [userId, savingId, onSaveHeadTexture, onSaveBackground, onSaveMagicCircleTexture]);
 
-    // === 配置持久化 ===
-    // REMOVED internal saveToCloud: Rely on App.tsx to handle cloud sync via onConfigChange
-    // The previous implementation was saving to a different path (config.xingSparkConfig) 
-    // than what App.tsx reads (theme.xingConfig), causing sync issues.
-
     // 同步 XingSpark 颜色到全局 CSS 变量，供 ControlPanel 等组件使用
     useEffect(() => {
         const root = document.documentElement;
@@ -577,8 +552,6 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         root.style.setProperty('--xing-c4', xingConfig.gradient.colors[3] || '#37f1d2');
         root.style.setProperty('--xing-font', CHAT_FONT_OPTIONS.find(f => f.name === xingConfig.font)?.family || 'Pacifico');
     }, [xingConfig.gradient.colors, xingConfig.font]);
-
-    // if (!isOpen) return null; // REMOVED: Keep mounted for background generation
 
     // 当前选中的模型名称
     const currentChatModelName = CHAT_MODELS.find(m => m.id === chatModel)?.name || 'Chat';
@@ -614,9 +587,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             // onMouseDown removed from here to prevent dragging by content
             >
                 <div
-                    className="w-[600px] ai-panel-container"
+                    className="ai-panel-container"
                     style={{
-                        // 动态边框光晕效果 (参考 AISidebar.tsx 5610-5616)
+                        width: '600px', // Keep full width for input area
+                        height: isMinimized ? 'auto' : '85vh', // Auto height when minimized (Compact Mode)
+                        // 动态边框光晕效果
                         boxShadow: `
                             0 24px 48px rgba(0,0,0,0.15), 
                             0 8px 16px rgba(0,0,0,0.1),
@@ -626,43 +601,30 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         `,
                     }}
                 >
-                    {/* 4-Segment Breathe Borders - colors are in CSS, but check if they need to match user config. 
-                        Ref project uses fixed gradients for borders, but user asked for "follow logo color gradient preset".
-                        If strictly following reference AISidebar.tsx (which I can't fully see all lines of right now but know the concept),
-                        the border segments inside are gradient. The MAIN container border might be separate.
-                        User said: "ai面板的边框颜色也被你硬编码了... 跟随着logo颜色的渐变预设来的".
-                        So I will actually apply the Gradient Colors to the 4 border segments if possible, 
-                        OR just the main border if that's what they meant. 
-                        Let's apply dynamic main border first as per plan.
-                     */}
+                    {/* ... (borders) ... */}
                     <div className="ai-panel-border-top" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[0]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[2]} 80%, transparent 100%)` }}></div>
                     <div className="ai-panel-border-bottom" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[2]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[0]} 80%, transparent 100%)` }}></div>
                     <div className="ai-panel-border-left" style={{ background: `linear-gradient(to bottom, ${xingConfig.gradient.colors[0]}80 0%, ${xingConfig.gradient.colors[1]}80 50%, transparent 100%)` }}></div>
                     <div className="ai-panel-border-right" style={{ background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
 
                     {/* 标题栏 (Drag Handle) */}
-                    {/* 标题栏 (Drag Handle) */}
                     <div
                         className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5"
-                        onMouseDown={(e) => {
-                            // 仅当点击标题栏区域时才允许拖拽
-                            handleDragStart(e);
-                        }}
+                        onMouseDown={handleDragStart}
                     >
                         <div className="flex items-center gap-2 relative">
-                            {/* XingSpark Logo with Dynamic Gradient */}
+                            {/* XingSpark Logo */}
                             {(() => {
                                 const colors = xingConfig.gradient.colors;
-                                const normalized = colors.length >= 4 ? colors : [...colors, ...Array(4 - colors.length).fill(colors[colors.length - 1])];
                                 return (
                                     <span
                                         className={`xingspark-logo-title ${logoState === 'blinking' ? 'blinking' : ''}`}
                                         onDoubleClick={handleLogoDoubleClick}
                                         title="双击打开设置"
                                         style={{
-                                            fontSize: '1.6rem', // 明确设置 1.6rem
-                                            padding: '4px 8px',  // 防止上下左右裁剪
-                                            lineHeight: 1.2      // 优化行高
+                                            fontSize: '1.6rem',
+                                            padding: '4px 8px',
+                                            lineHeight: 1.2
                                         }}
                                     >
                                         <span style={{ fontSize: '1em' }}>X</span>
@@ -687,12 +649,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                                 )}
                             </button>
-                            {/* 关闭按钮 */}
                             <button onClick={onClose} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-white/10 text-white/40 hover:text-white transition-colors">✕</button>
                         </div>
                     </div>
 
-                    {/* XingSpark 设置 - 显示在标题栏下方，无额外外框 */}
+                    {/* XingSpark 设置 */}
                     {!isMinimized && showSettings && (
                         <div className="flex-1 min-h-0">
                             <XingSparkSettingsPanel
@@ -700,27 +661,13 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 setConfig={onConfigChange}
                                 onBack={() => setShowSettings(false)}
                                 userId={userId}
-                            // onSave removed: App.tsx handles saving via config change effects
                             />
                         </div>
                     )}
 
-                    {/* 最小化时的预览气泡 */}
-                    {isMinimized && (
-                        <div
-                            className="p-4 cursor-pointer hover:bg-white/5 transition-colors"
-                            onClick={() => setIsMinimized(false)}
-                        >
-                            <div className="text-white/60 text-sm truncate flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                {messages.length > 0
-                                    ? (messages[messages.length - 1].content.substring(0, 30) + (messages[messages.length - 1].content.length > 30 ? '...' : ''))
-                                    : "AI 助手准备就绪..."}
-                            </div>
-                        </div>
-                    )}
+                    {/* 预览气泡 REMOVED */}
 
-                    {/* 消息列表 - 当设置面板关闭时显示 */}
+                    {/* 消息列表 - 当设置面板关闭且不缩小时显示 */}
                     {!isMinimized && !showSettings && (
                         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                             {messages.length === 0 && (

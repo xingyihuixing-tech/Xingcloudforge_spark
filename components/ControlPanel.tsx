@@ -446,7 +446,7 @@ interface PresetItem {
 
 // 预设列表组件 Props
 interface PresetListBoxProps {
-  storageKey: string;  // localStorage 键
+  storageKey: string;  // localStorage 键（基础键，会自动追加userId）
   builtInPresets: { id: string; name: string; data: any }[];  // 内置预设
   currentData: any;  // 当前实例数据（用于保存）
   hasInstance: boolean;  // 是否有选中的实例
@@ -456,6 +456,7 @@ interface PresetListBoxProps {
   title?: string;
   accentColor?: string;  // 主题色 (如 'purple', 'orange', 'red')
   moduleName?: string;  // 模块名称，用于导入导出
+  userId?: string | null;  // 用户ID，用于隔离本地存储
 }
 
 // 预设列表组件
@@ -469,7 +470,8 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   onCreateInstance,
   title = '预设',
   accentColor = 'purple',
-  moduleName = 'preset'
+  moduleName = 'preset',
+  userId  // 新增：用户ID用于隔离存储
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [userPresets, setUserPresets] = useState<PresetItem[]>([]);
@@ -477,8 +479,11 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   const [editingName, setEditingName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 持久化当前选中的预设ID
-  const [activeSchemeId, setActiveSchemeId] = useLocalStorage<string | null>(`${storageKey}_active_scheme_id`, null);
+  // 计算用户隔离的实际存储键
+  const effectiveStorageKey = userId ? `${storageKey}_${userId}` : storageKey;
+
+  // 持久化当前选中的预设ID（也使用隔离键）
+  const [activeSchemeId, setActiveSchemeId] = useLocalStorage<string | null>(`${effectiveStorageKey}_active_scheme_id`, null);
 
   // 模态框状态
   const [applyModal, setApplyModal] = useState<{ isOpen: boolean; presetId: string; presetName: string; data: any }>({ isOpen: false, presetId: '', presetName: '', data: null });
@@ -490,7 +495,7 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
   useEffect(() => {
     const loadPresets = () => {
       try {
-        const saved = localStorage.getItem(storageKey);
+        const saved = localStorage.getItem(effectiveStorageKey);
         if (saved) {
           setUserPresets(JSON.parse(saved));
         }
@@ -504,13 +509,13 @@ const PresetListBox: React.FC<PresetListBoxProps> = ({
     // 监听 storage 事件以刷新预设列表
     window.addEventListener('storage', loadPresets);
     return () => window.removeEventListener('storage', loadPresets);
-  }, [storageKey]);
+  }, [effectiveStorageKey]);
 
   // 保存用户预设到 localStorage
   const saveUserPresets = (presets: PresetItem[]) => {
     setUserPresets(presets);
     try {
-      localStorage.setItem(storageKey, JSON.stringify(presets));
+      localStorage.setItem(effectiveStorageKey, JSON.stringify(presets));
     } catch (e) {
       console.error('Failed to save presets:', e);
     }
