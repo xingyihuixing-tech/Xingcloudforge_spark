@@ -8307,10 +8307,29 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
                           }
                           if (material.uniforms.uGradientStrength) material.uniforms.uGradientStrength.value = gc.proceduralIntensity ?? 1.0;
                         } else if (material.uniforms.uColorMode) {
-                          material.uniforms.uColorMode.value = 0; // 继承模式或单色
+                          // Note: If uColorMode is independent but gc.enabled is false, we should fall back to single color logic?
+                          // Logic above handles 'independent' + 'gc.enabled' -> sets mode 1/2/3.
+                          // If 'independent' but NO gc (gc.enabled is false), it sets ornColor based on orn.color.
+                          // So uColorMode should be 0.
+                          // The 'else if' handles cases where mode is Inherit Or Independent-But-No-GC.
+                          material.uniforms.uColorMode.value = 0;
+                        }
+
+                        if (material.uniforms.uSpeedRandomness) {
+                          material.uniforms.uSpeedRandomness.value = orn.orbitSpeedRandomness ?? 0.0;
                         }
                         // 更新公转速度倍率（存储在userData中）
                         subChild.userData.orbitSpeedMultiplier = orn.orbitSpeedMultiplier ?? 1.0;
+
+                        // Apply Orbit Speed Multiplier (Relative Rotation)
+                        // child (RingGroup) rotates by userData.totalRotation.
+                        // We want Ornaments to rotate by totalRotation * multiplier.
+                        // Since Ornaments are children of RingGroup, they already rotate by totalRotation.
+                        // We need to add extra rotation: totalRotation * (multiplier - 1).
+                        const multiplier = orn.orbitSpeedMultiplier ?? 1.0;
+                        const totalRot = child.userData.totalRotation || 0;
+                        const extraRot = totalRot * (multiplier - 1.0);
+                        subChild.rotation.y = extraRot;
                       }
                       return;
                     }
@@ -11101,6 +11120,14 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
         }
         ornGeom.setAttribute('aRadialDist', new THREE.BufferAttribute(radialDists, 1));
 
+        // Add aSpeedRandom attribute
+        const particleCount = ornamentData.randomSeeds.length;
+        const speedRandoms = new Float32Array(particleCount);
+        for (let i = 0; i < particleCount; i++) {
+          speedRandoms[i] = Math.random();
+        }
+        ornGeom.setAttribute('aSpeedRandom', new THREE.BufferAttribute(speedRandoms, 1));
+
         // 计算点缀颜色
         let ornColor = new THREE.Vector3(1, 1, 1);
         if (orn.colorMode === 'inherit') {
@@ -11141,6 +11168,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             attribute float aPhase;
             attribute float aRandom;
             attribute float aRadialDist;
+            attribute float aSpeedRandom; // [0-1]
             varying float vPhase;
             varying float vRandom;
             varying float vRadialDist;
@@ -11148,6 +11176,45 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraC
             uniform float uTime;
             uniform float uBaseSize;
             uniform float uPulseEnabled;
+            uniform float uPulseSpeed;
+            uniform float uPulseIntensity;
+            uniform float uPulseSync;
+            uniform float uSpeedRandomness; // Strength of random speed [0-1]
+            // We need base speed? Actually we only add OFFSET to angle.
+            // But we don't know the base speed here (it's CPU side).
+            // However, user wants "Random Speed Offset".
+            // Since we cannot easily access true orbit speed here (it varies by ring),
+            // we will simulate speed variation by adding a time-based offset to angle.
+            // angle += uTime * (aSpeedRandom - 0.5) * uSpeedRandomness * CONSTANT
+            
+            #define PI 3.14159265359
+
+void main() {
+  vPhase = aPhase;
+  vRandom = aRandom;
+  vRadialDist = aRadialDist;
+  
+  // Custom Rotation for Random Speed
+  vec3 pos = position;
+  if (uSpeedRandomness > 0.01) {
+     float angle = atan(pos.z, pos.x);
+     float r = length(pos.xz);
+     // Add random speed offset. Scale factor 0.5 ensures reasonable speed range.
+     // aSpeedRandom is 0..1. (aSpeedRandom - 0.5) is -0.5..0.5.
+     // uTime increases.
+     float speedOffset = (aSpeedRandom - 0.5) * uSpeedRandomness * 0.5;
+     angle += uTime * speedOffset; 
+     
+     pos.x = r * cos(angle);
+     pos.z = r * sin(angle);
+  }
+
+  vPosition = pos;
+              
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+
+  // 脉冲效果
+  float pulse = 1.0;
             uniform float uPulseSpeed;
             uniform float uPulseIntensity;
             uniform float uPulseSync;
@@ -11191,7 +11258,10 @@ void main() {
             uniform float uBandwidth;
             uniform float uBlendStrength; // 0-1
             uniform float uProceduralAxis; // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
+            uniform float uBlendStrength; // 0-1
+            uniform float uProceduralAxis; // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
             uniform float uGradientStrength; // 渐变强度 (Naturalness)
+            uniform float uSpeedRandomness; // Not used in Frag but declared in Uniforms list
             varying float vPhase;
             varying float vRandom;
             varying float vRadialDist;
@@ -11435,14 +11505,14 @@ void main() {
     } else {
 
     // 3 = 混色 - 改进的混色逻辑
-    // 目标：让uColor2(中间色)在中间显示，uBlendStrength控制色相跨度，uGradientStrength控制自然度
+    // 目标：让uColor1(初始色)在中心显示，uColor2/3向两侧发散
+    // uBlendStrength控制色相跨度，uGradientStrength控制自然度
     
     // 1. 计算基础 t (0-1)
     float t = 0.5;
     float spatial = 0.5;
     
     if (uProceduralAxis < 0.5) { // 径向
-       // vRadialDist是绝对半径. uRingRadius是中心. 
        float halfWidth = uBandwidth * 0.5;
        spatial = (vRadialDist - (uRingRadius - halfWidth)) / uBandwidth;
     } else if (uProceduralAxis < 1.5) { // 角度
@@ -11455,22 +11525,40 @@ void main() {
     }
     spatial = clamp(spatial, 0.0, 1.0);
     
-    // 2. 混合噪点 (GradientStrength = Naturalness)
-    // Strength 1.0 = Clean Spatial. Strength 0.0 = Random Noise.
+    // 2. 混合噪点
     float naturalness = clamp(uGradientStrength, 0.0, 1.0);
     t = mix(vRandom, spatial, naturalness);
     
-    // 3. 色相跨度 (BlendStrength = Span)
-    // Strength 0.0 = Only Middle Color. Strength 1.0 = Full Span.
-    float span = clamp(uBlendStrength, 0.0, 1.0);
-    t = (t - 0.5) * span + 0.5;
-    t = clamp(t, 0.0, 1.0);
+    // 3. 计算 "中心距离" (0=中心/选定色, 1=边缘)
+    float dist = abs(t - 0.5) * 2.0;
 
-    // 4. 三色混合
-    if (t < uColorMidPosition) {
-        finalColor = mix(uColor1, uColor2, t / uColorMidPosition);
-    } else {
-        finalColor = mix(uColor2, uColor3, (t - uColorMidPosition) / (1.0 - uColorMidPosition));
+    // 4. 应用跨度 (BlendStrength)
+    // BlendStrength 1.0 = Full Range. 0.0 = Only Center Color.
+    // Map dist: If dist > BlendStrength, clamp? 
+    // Or scale dist? dist = dist * BlendStrength? No, dist / BlendStrength.
+    // If BlendStrength is small, we want mix factor to stay near 0.
+    // mixFactor = dist * spanFactor.
+    float mixFactor = dist * clamp(uBlendStrength * 2.0, 0.0, 2.0); // Boost effect
+    mixFactor = clamp(mixFactor, 0.0, 1.0);
+
+    // 5. 颜色混合 (Center Out)
+    // Center (mix=0) -> uColor1
+    // Edge (mix=1) -> uColor2 (or mix of 2/3?)
+    // Let's keep it simple: C1 -> C2 -> C3 is standard gradient.
+    // If we want C1 in center, then C2/C3 are edges.
+    // Inner Edge (t<0.5) -> C2. Outer Edge (t>0.5) -> C3.
+    // If Two Color Mode: Just C1 -> C2.
+    
+    if (uColorMode < 1.5) { // 双色
+       finalColor = mix(uColor1, uColor2, mixFactor);
+    } else { // 三色 & 混色
+       // Determine side.
+       bool isOuter = t > 0.5;
+       if (isOuter) {
+          finalColor = mix(uColor1, uColor3, mixFactor);
+       } else {
+          finalColor = mix(uColor1, uColor2, mixFactor);
+       }
     }
     }
 
@@ -11590,7 +11678,9 @@ void main() {
             uBandwidth: { value: ring.bandwidth || 5 },
             uBlendStrength: { value: (orn.gradientColor as any)?.blendStrength ?? 0.5 },
             uProceduralAxis: { value: (orn.gradientColor as any)?.proceduralAxis ?? 0 },
-            uGradientStrength: { value: (orn.gradientColor as any)?.proceduralIntensity ?? 1.0 }
+
+            uGradientStrength: { value: (orn.gradientColor as any)?.proceduralIntensity ?? 1.0 },
+            uSpeedRandomness: { value: orn.orbitSpeedRandomness ?? 0.0 }
           },
           transparent: true,
           blending: THREE.AdditiveBlending,

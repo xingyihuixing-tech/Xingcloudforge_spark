@@ -8202,6 +8202,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                                       {/* 公转速度 */}
                                       <RangeControl label="公转倍率" value={orn.orbitSpeedMultiplier ?? 1} min={0} max={2} step={0.1} onChange={(v) => updateOrn({ orbitSpeedMultiplier: v })} />
+                                      <RangeControl label="速度随机" value={orn.orbitSpeedRandomness ?? 0} min={0} max={1} step={0.1} onChange={(v) => updateOrn({ orbitSpeedRandomness: v })} />
                                     </div>
                                   );
                                 })()}

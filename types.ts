@@ -1009,6 +1009,7 @@ export interface OrnamentSettings {
 
   // 公转
   orbitSpeedMultiplier: number;  // 公转速度倍率 0-2
+  orbitSpeedRandomness?: number; // 速度随机性 0-1
   orbitPhaseRandomness: number;  // 相位随机性 0-1
 }
 
