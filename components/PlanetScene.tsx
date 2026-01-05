@@ -11244,8 +11244,6 @@ void main() {
             uniform float uBandwidth;
             uniform float uBlendStrength; // 0-1
             uniform float uProceduralAxis; // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
-            uniform float uBlendStrength; // 0-1
-            uniform float uProceduralAxis; // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
             uniform float uGradientStrength; // 渐变强度 (Naturalness)
             uniform float uSpeedRandomness; // Not used in Frag but declared in Uniforms list
             varying float vPhase;
