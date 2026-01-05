@@ -168,7 +168,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
         return {
             x: Math.max(0, (window.innerWidth - 600) / 2),
-            y: 120 // 默认 Y 坐标，避开顶部导航栏
+            y: 80 // 默认 Y 坐标，避开顶部导航栏
         };
     });
 

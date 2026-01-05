@@ -50,6 +50,36 @@ const getUserScopedStorageKey = (baseKey: string, userId?: string | null): strin
   return baseKey;
 };
 
+// 深度合并工具函数：只用源对象的非空字段覆盖目标对象
+// 解决云端空数据覆盖本地有效数据的问题
+function deepMergeNonEmpty<T extends Record<string, any>>(target: T, source: Partial<T>): T {
+  const result = { ...target };
+  for (const key in source) {
+    const srcVal = source[key];
+    const tgtVal = result[key];
+
+    // 跳过 undefined 和 null
+    if (srcVal === undefined || srcVal === null) continue;
+
+    if (typeof srcVal === 'object' && !Array.isArray(srcVal) && srcVal !== null) {
+      // 递归合并嵌套对象（确保不是空对象）
+      if (Object.keys(srcVal).length > 0) {
+        result[key] = deepMergeNonEmpty(tgtVal || {}, srcVal) as any;
+      }
+      // 空对象则跳过，保留 target 的值
+    } else if (Array.isArray(srcVal)) {
+      // 数组：只有云端非空时才覆盖
+      if (srcVal.length > 0) {
+        result[key] = srcVal as any;
+      }
+    } else {
+      // 基础类型直接覆盖
+      result[key] = srcVal as any;
+    }
+  }
+  return result;
+}
+
 // 检查并清除旧版本数据
 const checkAndClearOldData = () => {
   try {
@@ -446,15 +476,12 @@ const App: React.FC = () => {
           // 加载 XingSpark 配置 (支持两个字段位置：theme.xingConfig和xingSparkConfig)
           const cloudXing = config.theme?.xingConfig || (config as any).xingSparkConfig;
           if (cloudXing) {
-            // 确保合并默认值，防止旧数据缺少字段
+            // 使用深度合并，避免云端空数据覆盖本地有效数据
             setXingConfig(prev => {
-              const merged = { ...DEFAULT_XING_CONFIG, ...prev, ...(cloudXing as any) };
-              // 特殊保护: 如果云端没有 gradientPresets 或者为空，但本地有且不为空，则保留本地的
-              // 防止云端旧数据覆盖了本地新创建的预设
-              if ((!merged.gradientPresets || merged.gradientPresets.length === 0) && prev.gradientPresets && prev.gradientPresets.length > 0) {
-                merged.gradientPresets = prev.gradientPresets;
-              }
-              return merged;
+              // 先合并默认值保证字段完整
+              const base = { ...DEFAULT_XING_CONFIG, ...prev };
+              // 再用深度合并处理云端数据，只覆盖非空字段
+              return deepMergeNonEmpty(base, cloudXing as any);
             });
           }
 
