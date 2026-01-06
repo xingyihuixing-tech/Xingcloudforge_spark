@@ -1533,7 +1533,8 @@ const MagicCircleControl: React.FC<{
   getButtonStyle?: (isActive: boolean) => React.CSSProperties;
   customMagicCircles?: import('../types').CustomMagicCircle[];
   onEnterDrawingMode?: () => void;
-}> = ({ planet, updatePlanet, getButtonStyle, customMagicCircles = [], onEnterDrawingMode }) => {
+  onUpdateCustomCircles?: (circles: import('../types').CustomMagicCircle[]) => void;
+}> = ({ planet, updatePlanet, getButtonStyle, customMagicCircles = [], onEnterDrawingMode, onUpdateCustomCircles }) => {
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const soloCircleId = planet.magicCircles?.soloId || null;
 
@@ -1668,55 +1669,66 @@ const MagicCircleControl: React.FC<{
               onChange={(v) => updateCircle(currentCircle.id, { texture: v, customCircleId: undefined })}
             />
 
-            {/* 自定义绘制法阵选择 */}
-            <div className="p-2 bg-purple-900/20 rounded border border-purple-500/30 mt-2">
+            {/* 自定义法阵列表 */}
+            <div className="p-2 rounded mt-2" style={{ border: '1px solid var(--ui-primary)', background: 'rgba(0,0,0,0.2)' }}>
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-purple-300">或使用自定义绘制</span>
-                {currentCircle.customCircleId && (
-                  <button
-                    onClick={() => updateCircle(currentCircle.id, { customCircleId: undefined })}
-                    className="text-[10px] text-red-400 hover:text-red-300"
-                    title="清除选中"
-                  >
-                    ✕ 清除
-                  </button>
-                )}
+                <span className="text-xs font-medium" style={{ color: 'var(--ui-primary)' }}>自定义法阵</span>
               </div>
               {customMagicCircles.length === 0 ? (
                 <div className="text-xs text-gray-500 text-center py-2">
                   暂无自定义法阵
                 </div>
               ) : (
-                <div className="space-y-1 max-h-24 overflow-y-auto">
+                <div className="space-y-1 max-h-32 overflow-y-auto">
                   {customMagicCircles.map(cc => {
-                    const strokeCount = cc.layers?.reduce((acc: number, layer: any) => acc + (layer.strokes?.length || 0), 0) || 0;
                     const isSelected = currentCircle.customCircleId === cc.id;
                     return (
-                      <button
+                      <div
                         key={cc.id}
-                        onClick={() => updateCircle(currentCircle.id, {
-                          customCircleId: cc.id,
-                          texture: ''
-                        })}
-                        className={`w-full text-left px-2 py-1 text-xs rounded transition-all ${isSelected ? 'bg-purple-600/50 text-white' : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'}`}
-                        style={isSelected ? { border: '1px solid rgba(168, 85, 247, 0.6)' } : { border: '1px solid transparent' }}
+                        className="flex items-center gap-2 px-2 py-1 rounded transition-all"
+                        style={{
+                          border: isSelected ? '1px solid var(--ui-primary)' : '1px solid transparent',
+                          background: 'transparent'
+                        }}
                       >
-                        <span className="mr-1">🔮</span>
-                        {cc.name}
-                        <span className="text-gray-500 ml-1">({strokeCount}笔画)</span>
-                        {isSelected && <span className="float-right text-green-400">✓</span>}
-                      </button>
+                        {/* 勾选框 - 控制是否显示 */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // 切换 enabled 状态
+                            const updatedCircles = customMagicCircles.map(c =>
+                              c.id === cc.id ? { ...c, enabled: !c.enabled } : c
+                            );
+                            onUpdateCustomCircles?.(updatedCircles);
+                          }}
+                          className="w-4 h-4 rounded border flex items-center justify-center transition-colors"
+                          style={{
+                            borderColor: 'var(--ui-secondary)',
+                            background: cc.enabled ? 'var(--ui-secondary)' : 'transparent'
+                          }}
+                          title={cc.enabled ? '点击隐藏' : '点击显示'}
+                        >
+                          {cc.enabled && <span className="text-white text-[10px]">✓</span>}
+                        </button>
+
+                        {/* 名称 - 点击选择 */}
+                        <button
+                          onClick={() => updateCircle(currentCircle.id, {
+                            customCircleId: cc.id,
+                            texture: ''
+                          })}
+                          className="flex-1 text-left text-xs truncate transition-colors"
+                          style={{ color: isSelected ? 'var(--ui-primary)' : '#ccc' }}
+                        >
+                          {cc.name}
+                        </button>
+                      </div>
                     );
                   })}
                 </div>
               )}
-              <button
-                onClick={() => onEnterDrawingMode?.()}
-                className="w-full mt-2 py-1.5 text-xs rounded bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 transition-all"
-              >
-                🎨 进入绘图模式
-              </button>
             </div>
+
 
             {/* 基础参数 */}
             <RangeControl label="Y轴偏移" value={currentCircle.yOffset} min={-500} max={500} step={10} onChange={(v) => updateCircle(currentCircle.id, { yOffset: v })} />
@@ -9680,6 +9692,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                       getButtonStyle={getOptionButtonStyle}
                       customMagicCircles={customMagicCircles}
                       onEnterDrawingMode={onEnterDrawingMode}
+                      onUpdateCustomCircles={onUpdateCircles}
                     />
                   );
                 })()}
