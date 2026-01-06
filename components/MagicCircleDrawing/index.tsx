@@ -30,6 +30,8 @@ import {
     DrawingSystemRefs,
     applySymmetryTransform
 } from '../../utils/drawingSystem';
+import { DrawingControlPanel } from './DrawingControlPanel';
+import { UndoIcon, RedoIcon } from './Icons';
 
 // ==================== 默认画笔设置 ====================
 
@@ -147,6 +149,18 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         return () => {
             disposeDrawingResources(refsRef.current);
             cancelAnimationFrame(animationFrameRef.current);
+            // 销毁渲染器
+            if (rendererRef.current) {
+                rendererRef.current.dispose();
+                rendererRef.current = null;
+            }
+            // 移除画布 DOM 元素
+            if (canvasElementRef.current && canvasContainerRef.current) {
+                try {
+                    canvasContainerRef.current.removeChild(canvasElementRef.current);
+                } catch (e) { /* 忽略 */ }
+                canvasElementRef.current = null;
+            }
         };
     }, [isActive]);
 
@@ -579,6 +593,42 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     const handleToggleSolo = useCallback((layerId: string) => {
         setSoloLayerId(prev => prev === layerId ? null : layerId);
     }, []);
+
+    // 创建新法阵
+    const handleCreateCircle = useCallback(() => {
+        const circleCount = customMagicCircles.length;
+        const newCircle = createNewCircle(`法阵${circleCount + 1}`);
+        onUpdateCircles([...customMagicCircles, newCircle]);
+        onSelectCircle(newCircle.id);
+        setCurrentLayerId(newCircle.layers[0]?.id || null);
+    }, [customMagicCircles, onUpdateCircles, onSelectCircle]);
+
+    // 删除法阵
+    const handleDeleteCircle = useCallback((circleId: string) => {
+        if (customMagicCircles.length <= 1) return; // 至少保留一个法阵
+        const updatedCircles = customMagicCircles.filter(c => c.id !== circleId);
+        onUpdateCircles(updatedCircles);
+        if (currentCircleId === circleId) {
+            onSelectCircle(updatedCircles[0]?.id || null);
+            setCurrentLayerId(updatedCircles[0]?.layers[0]?.id || null);
+        }
+    }, [customMagicCircles, currentCircleId, onUpdateCircles, onSelectCircle]);
+
+    // 重命名法阵
+    const handleRenameCircle = useCallback((circleId: string, newName: string) => {
+        const updatedCircles = customMagicCircles.map(c =>
+            c.id === circleId ? { ...c, name: newName, updatedAt: Date.now() } : c
+        );
+        onUpdateCircles(updatedCircles);
+    }, [customMagicCircles, onUpdateCircles]);
+
+    // 切换法阵显示/隐藏
+    const handleToggleCircleEnabled = useCallback((circleId: string, enabled: boolean) => {
+        const updatedCircles = customMagicCircles.map(c =>
+            c.id === circleId ? { ...c, enabled, updatedAt: Date.now() } : c
+        );
+        onUpdateCircles(updatedCircles);
+    }, [customMagicCircles, onUpdateCircles]);
 
     if (!isActive) return null;
 
@@ -1041,6 +1091,32 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     </button>
                 </div>
             </div>
+
+            {/* 右侧控制面板 - 法阵列表、对称设置、图层管理 */}
+            <DrawingControlPanel
+                customMagicCircles={customMagicCircles}
+                currentCircleId={currentCircleId}
+                onSelectCircle={(id) => {
+                    onSelectCircle(id);
+                    const circle = customMagicCircles.find(c => c.id === id);
+                    setCurrentLayerId(circle?.layers[0]?.id || null);
+                }}
+                onToggleCircleEnabled={handleToggleCircleEnabled}
+                onCreateCircle={handleCreateCircle}
+                onDeleteCircle={handleDeleteCircle}
+                onRenameCircle={handleRenameCircle}
+                currentLayerId={currentLayerId}
+                onSelectLayer={setCurrentLayerId}
+                onToggleLayerVisibility={handleToggleVisibility}
+                soloLayerId={soloLayerId}
+                onToggleLayerSolo={handleToggleSolo}
+                onDeleteLayer={handleDeleteLayer}
+                onCreateLayer={handleNewLayer}
+                symmetryMode={symmetryMode}
+                symmetryDivisions={symmetryDivisions}
+                onUpdateSymmetry={handleUpdateSymmetry}
+                onClose={onClose}
+            />
         </div>
     );
 };

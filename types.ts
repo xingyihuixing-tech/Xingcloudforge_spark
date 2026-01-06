@@ -1928,6 +1928,7 @@ export interface MagicCircleLayer {
 export interface CustomMagicCircle {
   id: string;
   name: string;
+  enabled: boolean;       // 是否在场景中显示
   createdAt: number;
   updatedAt: number;
   layers: MagicCircleLayer[];

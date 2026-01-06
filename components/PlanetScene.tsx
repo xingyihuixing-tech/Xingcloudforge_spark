@@ -7486,73 +7486,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
     }
   }, [geometryKey, settings, sceneReady]);
 
-  // ==================== 自定义法阵渲染 ====================
-  // 当 customMagicCircles 更新且不在绘图模式时，渲染到 customMagicCirclesGroupRef
-  useEffect(() => {
-    const group = customMagicCirclesGroupRef.current;
-    if (!group || !sceneReady) return;
-
-    // 绘图模式时隐藏
-    group.visible = !drawingModeActive;
-
-    // 清空现有内容
-    while (group.children.length > 0) {
-      const child = group.children[0];
-      if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
-        child.geometry?.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        } else if (Array.isArray(child.material)) {
-          child.material.forEach(m => m.dispose());
-        }
-      }
-      group.remove(child);
-    }
-
-    // 如果在绘图模式或没有法阵数据，停止
-    if (drawingModeActive || !customMagicCircles || customMagicCircles.length === 0) return;
-
-    // 渲染每个自定义法阵
-    customMagicCircles.forEach((circle: CustomMagicCircle) => {
-      if (!circle.layers) return;
-
-      circle.layers.forEach((layer: MagicCircleLayer) => {
-        if (!layer.strokes) return;
-
-        layer.strokes.forEach((stroke: MagicCircleStroke) => {
-          if (!stroke.points || stroke.points.length < 2) return;
-
-          let mesh: THREE.Object3D;
-          if (stroke.brushType === 'particle') {
-            mesh = createParticleStrokeMesh(
-              stroke.points,
-              stroke.color,
-              stroke.particleRingSettings || {},
-              layer.symmetryMode,
-              layer.symmetryDivisions
-            );
-          } else {
-            mesh = createLineStrokeMesh(
-              stroke.points,
-              stroke.color,
-              stroke.silkRingSettings || {},
-              layer.symmetryMode,
-              layer.symmetryDivisions
-            );
-          }
-
-          // 设置位置（法阵中心相对于行星实例）
-          mesh.position.set(0, 0, 0);
-
-          // 缩放到适合场景的大小
-          const circleScale = 200; // 调整法阵在场景中的大小
-          mesh.scale.setScalar(circleScale);
-
-          group.add(mesh);
-        });
-      });
-    });
-  }, [customMagicCircles, drawingModeActive, sceneReady]);
+  // 注意：自定义法阵渲染已移至 createMagicCircle 函数通过 customCircleId 实现
+  // 原直接渲染代码已删除以避免重复渲染
 
   // 更新后处理参数
   useEffect(() => {

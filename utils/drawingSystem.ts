@@ -709,6 +709,7 @@ export function createNewCircle(name: string = '新建法阵'): CustomMagicCircl
     return {
         id: `circle_${Date.now()}`,
         name,
+        enabled: true,  // 默认在场景中显示
         createdAt: Date.now(),
         updatedAt: Date.now(),
         layers: [createNewLayer()]

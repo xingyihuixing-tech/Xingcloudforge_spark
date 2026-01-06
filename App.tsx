@@ -18,6 +18,7 @@ import AIAssistantPanel from './components/AIAssistantPanel';
 import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSettings';
 import { useDraggableStar } from './hooks/useDraggableStar';
 import { DrawingCanvasOverlay } from './components/MagicCircleDrawing';
+import { DrawingModeButton } from './components/MagicCircleDrawing/DrawingModeButton';
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, CustomMagicCircle, DrawingModeState } from './types';
 import {
   DEFAULT_SETTINGS,
@@ -1737,6 +1738,13 @@ const App: React.FC = () => {
           }
         }}
       />
+
+      {/* 可拖动绘图模式按钮 - 仅在星球模式且未进入绘图模式时显示 */}
+      {appMode === 'planet' && !drawingModeActive && (
+        <DrawingModeButton
+          onClick={() => setDrawingModeActive(true)}
+        />
+      )}
 
       {/* 自定义法阵绘制系统覆盖层 */}
       <DrawingCanvasOverlay
