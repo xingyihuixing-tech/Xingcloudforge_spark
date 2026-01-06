@@ -1671,6 +1671,16 @@ const App: React.FC = () => {
             headTexturePresets={headTexturePresets}
             nebulaPresets={nebulaPresets}
             setNebulaPresets={setNebulaPresets}
+            customMagicCircles={customMagicCircles}
+            onUpdateCircles={setCustomMagicCircles}
+            onEnterDrawingMode={() => {
+              setDrawingModeActive(true);
+              setCurrentDrawingCircleId(null); // 新建法阵
+            }}
+            onSelectCircle={(id) => {
+              setDrawingModeActive(true);
+              setCurrentDrawingCircleId(id); // 编辑现有法阵
+            }}
           />
         )}
       </div>

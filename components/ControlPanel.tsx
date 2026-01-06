@@ -148,6 +148,9 @@ interface ControlPanelProps {
   materialSettings?: import('../types').MaterialSettings;  // 从 App 传入的材质配置（用于样式生成）
   xingConfig?: XingSparkConfig; // 用于 Logo 样式同步
   onEnterDrawingMode?: () => void;  // 进入法阵绘图模式
+  customMagicCircles?: import('../types').CustomMagicCircle[];  // 自定义法阵列表
+  onUpdateCircles?: (circles: import('../types').CustomMagicCircle[]) => void;  // 更新法阵列表
+  onSelectCircle?: (id: string | null) => void;  // 选择法阵进行编辑
 }
 
 const DepthModeLabels: Record<DepthMode, string> = {
@@ -2504,7 +2507,11 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
   materialSettings: propMaterialSettings,  // 从 App 传入的材质配置
   nebulaPresets,
   setNebulaPresets,
-  headTexturePresets = []
+  headTexturePresets = [],
+  customMagicCircles = [],
+  onUpdateCircles,
+  onSelectCircle,
+  onEnterDrawingMode
 }) => {
   // 获取当前用户信息用于上传图片
   const { currentUser } = useUser();
@@ -9614,7 +9621,123 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
                 {/* ===== 法阵 子Tab ===== */}
                 {planetSubTab === 'magicCircle' && (() => {
-                  return <MagicCircleControl planet={planet} updatePlanet={updatePlanet} getButtonStyle={getOptionButtonStyle} />;
+                  return (
+                    <>
+                      <MagicCircleControl planet={planet} updatePlanet={updatePlanet} getButtonStyle={getOptionButtonStyle} />
+
+                      {/* 自定义绘制法阵 */}
+                      <ControlGroup title="✨ 自定义绘制法阵">
+                        {/* 创建新法阵按钮 */}
+                        <div style={{ marginBottom: 12 }}>
+                          <button
+                            onClick={() => onEnterDrawingMode?.()}
+                            style={{
+                              width: '100%',
+                              padding: '10px 16px',
+                              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                              border: 'none',
+                              borderRadius: 8,
+                              color: '#fff',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 8,
+                              transition: 'all 0.2s',
+                              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
+                            }}
+                          >
+                            🎨 进入绘图模式
+                          </button>
+                        </div>
+
+                        {/* 法阵列表 */}
+                        {customMagicCircles.length === 0 ? (
+                          <div style={{
+                            textAlign: 'center',
+                            padding: '24px 16px',
+                            color: '#888',
+                            background: 'rgba(255,255,255,0.03)',
+                            borderRadius: 8,
+                            border: '1px dashed rgba(255,255,255,0.1)'
+                          }}>
+                            <div style={{ fontSize: 32, marginBottom: 8 }}>🌀</div>
+                            <div style={{ fontSize: 13 }}>暂无自定义法阵</div>
+                            <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>点击上方按钮开始绘制</div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {customMagicCircles.map((circle) => (
+                              <div
+                                key={circle.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '10px 12px',
+                                  background: 'rgba(255,255,255,0.05)',
+                                  borderRadius: 8,
+                                  border: '1px solid rgba(255,255,255,0.1)',
+                                  transition: 'all 0.2s'
+                                }}
+                              >
+                                {/* 法阵名称 */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                  <span style={{ fontSize: 18 }}>🔮</span>
+                                  <span style={{ color: '#fff', fontSize: 13 }}>{circle.name}</span>
+                                  <span style={{ color: '#666', fontSize: 11 }}>
+                                    ({circle.layers?.reduce((acc, layer) => acc + (layer.strokes?.length || 0), 0) || 0} 笔画)
+                                  </span>
+                                </div>
+
+                                {/* 操作按钮 */}
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  {/* 编辑按钮 */}
+                                  <button
+                                    onClick={() => onSelectCircle?.(circle.id)}
+                                    style={{
+                                      padding: '4px 10px',
+                                      background: 'rgba(59, 130, 246, 0.2)',
+                                      border: '1px solid rgba(59, 130, 246, 0.4)',
+                                      borderRadius: 5,
+                                      color: '#3b82f6',
+                                      fontSize: 11,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="编辑此法阵"
+                                  >
+                                    ✏️
+                                  </button>
+
+                                  {/* 删除按钮 */}
+                                  <button
+                                    onClick={() => {
+                                      if (confirm(`确定删除"${circle.name}"吗？`)) {
+                                        onUpdateCircles?.(customMagicCircles.filter(c => c.id !== circle.id));
+                                      }
+                                    }}
+                                    style={{
+                                      padding: '4px 10px',
+                                      background: 'rgba(239, 68, 68, 0.2)',
+                                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                                      borderRadius: 5,
+                                      color: '#ef4444',
+                                      fontSize: 11,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="删除此法阵"
+                                  >
+                                    🗑️
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </ControlGroup>
+                    </>
+                  );
                 })()}
 
                 {/* ===== 能量体 子Tab ===== */}
