@@ -17,8 +17,7 @@ import { AIStarButton } from './components/AIStarButton'; // Added import
 import AIAssistantPanel from './components/AIAssistantPanel';
 import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSettings';
 import { useDraggableStar } from './hooks/useDraggableStar';
-import MagicCircleDrawing from './components/MagicCircleDrawing';
-import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, CustomMagicCircle } from './types';
+import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, CustomMagicCircle, DrawingModeState } from './types';
 import {
   DEFAULT_SETTINGS,
   SAMPLE_IMAGES,
@@ -1509,6 +1508,11 @@ const App: React.FC = () => {
               nebulaSettings={overlayMode ? settings : undefined}
               nebulaInstancesData={overlayMode ? nebulaInstancesData : undefined}
               sidebarOpen={showControls}
+              drawingModeActive={drawingModeActive}
+              customMagicCircles={customMagicCircles}
+              onUpdateCircles={setCustomMagicCircles}
+              currentDrawingCircleId={currentDrawingCircleId}
+              onDrawingClose={() => setDrawingModeActive(false)}
             />
           </div>
         )}
@@ -1721,16 +1725,6 @@ const App: React.FC = () => {
             console.error('Failed to save magic circle texture preset:', preset.name);
           }
         }}
-      />
-
-      {/* 自定义法阵绘制系统 */}
-      <MagicCircleDrawing
-        isActive={drawingModeActive}
-        customMagicCircles={customMagicCircles}
-        onUpdateCircles={setCustomMagicCircles}
-        onClose={() => setDrawingModeActive(false)}
-        currentCircleId={currentDrawingCircleId}
-        onSelectCircle={setCurrentDrawingCircleId}
       />
     </div>
   );

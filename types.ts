@@ -1888,28 +1888,6 @@ export interface MaterialPreset {
 // 对称模式
 export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope';
 
-// 粒子画笔形状
-export type DrawingBrushShape = 'circle' | 'star' | 'glow' | 'spark';
-
-// 粒子画笔设置
-export interface ParticleBrushSettings {
-  baseSize: number;       // 基础粒子大小 5-50
-  baseDensity: number;    // 基础密度 0.1-1.0
-  glowIntensity: number;  // 发光强度 0-2
-  shape: DrawingBrushShape;
-  pulseEnabled: boolean;
-  pulseSpeed: number;     // 0.5-3
-}
-
-// 线环画笔设置
-export interface LineRingBrushSettings {
-  baseWidth: number;      // 基础线宽 1-10
-  glowIntensity: number;  // 发光强度 0-2
-  dashEnabled: boolean;
-  dashRatio: number;      // 0.1-0.9
-  flowSpeed: number;      // 0-3
-}
-
 // 画笔类型
 export type DrawingBrushType = 'particle' | 'lineRing';
 
@@ -1921,12 +1899,14 @@ export interface StrokePoint {
   timestamp: number;
 }
 
-// 笔画
+// 笔画 - 直接复用现有 ParticleRingSettings 和 SilkRingSettings
 export interface MagicCircleStroke {
   id: string;
   brushType: DrawingBrushType;
-  brushSettings: ParticleBrushSettings | LineRingBrushSettings;
-  color: string;
+  // 完全复用现有类型（部分字段可选，允许按需配置）
+  particleRingSettings?: Partial<ParticleRingSettings>;
+  silkRingSettings?: Partial<SilkRingSettings>;
+  color: string;  // 主色调（覆盖 settings 中的 color）
   points: StrokePoint[];
 }
 
@@ -1958,9 +1938,11 @@ export interface DrawingModeState {
   currentCircleId: string | null;
   currentLayerId: string | null;
   currentBrushType: DrawingBrushType;
-  particleBrushSettings: ParticleBrushSettings;
-  lineRingBrushSettings: LineRingBrushSettings;
+  // 直接复用现有设置类型
+  particleRingSettings: Partial<ParticleRingSettings>;
+  silkRingSettings: Partial<SilkRingSettings>;
   currentColor: string;
   undoStack: MagicCircleStroke[];
   redoStack: MagicCircleStroke[];
 }
+

@@ -6500,6 +6500,12 @@ interface PlanetSceneProps {
   nebulaSettings?: AppSettings;
   nebulaInstancesData?: Map<string, ProcessedData>;
   sidebarOpen?: boolean;  // 侧边栏是否展开
+  // 自定义法阵绘制系统
+  drawingModeActive?: boolean;
+  customMagicCircles?: import('../types').CustomMagicCircle[];
+  onUpdateCircles?: (circles: import('../types').CustomMagicCircle[]) => void;
+  currentDrawingCircleId?: string | null;
+  onDrawingClose?: () => void;
 }
 
 // �嘥��豢㦤霈曄蔭
@@ -6510,7 +6516,11 @@ const INITIAL_CAMERA = {
 
 // ==================== 銝餌�隞?====================
 
-const PlanetScene: React.FC<PlanetSceneProps> = ({ settings, handData, onCameraChange, resetCameraRef, overlayMode = false, nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false }) => {
+const PlanetScene: React.FC<PlanetSceneProps> = ({
+  settings, handData, onCameraChange, resetCameraRef, overlayMode = false,
+  nebulaData, nebulaSettings, nebulaInstancesData, sidebarOpen = false,
+  drawingModeActive = false, customMagicCircles = [], onUpdateCircles, currentDrawingCircleId, onDrawingClose
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
