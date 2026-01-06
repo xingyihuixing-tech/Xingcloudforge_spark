@@ -161,17 +161,6 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                         : 'hover:bg-white/5 border border-transparent'
                                         }`}
                                 >
-                                    {/* 勾选框 - 控制显示 */}
-                                    <button
-                                        onClick={() => onToggleCircleEnabled(circle.id, !circle.enabled)}
-                                        className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${circle.enabled
-                                            ? 'bg-green-600 border-green-500'
-                                            : 'bg-transparent border-gray-500 hover:border-gray-400'
-                                            }`}
-                                        title={circle.enabled ? '点击隐藏' : '点击显示'}
-                                    >
-                                        {circle.enabled && <CheckIcon size={10} />}
-                                    </button>
 
                                     {/* 名称 (可编辑) */}
                                     <div className="flex-1 min-w-0">
@@ -198,17 +187,6 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                         )}
                                     </div>
 
-                                    {/* 编辑按钮 */}
-                                    <button
-                                        onClick={() => onSelectCircle(circle.id)}
-                                        className={`p-1 rounded transition-colors ${isSelected
-                                            ? 'text-purple-400'
-                                            : 'text-gray-500 hover:text-gray-300'
-                                            }`}
-                                        title="编辑此法阵"
-                                    >
-                                        <EditIcon size={12} />
-                                    </button>
 
                                     {/* 删除按钮 */}
                                     <button
@@ -255,19 +233,37 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
 
                     {/* 分割数 (仅非 none 模式显示) */}
                     {symmetryMode !== 'none' && (
-                        <div className="flex flex-wrap gap-1">
-                            {divisionOptions.map(n => (
-                                <button
-                                    key={n}
-                                    onClick={() => onUpdateSymmetry(symmetryMode, n)}
-                                    className={`px-2 py-1 text-xs rounded transition-all ${symmetryDivisions === n
-                                        ? 'bg-green-600 text-white'
-                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                                        }`}
-                                >
-                                    {n}
-                                </button>
-                            ))}
+                        <div className="flex items-center gap-2">
+                            {/* 减按钮 */}
+                            <button
+                                onClick={() => onUpdateSymmetry(symmetryMode, Math.max(2, symmetryDivisions - 1))}
+                                className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 flex items-center justify-center text-sm"
+                                title="减少"
+                            >
+                                −
+                            </button>
+
+                            {/* 滑块 */}
+                            <input
+                                type="range"
+                                min={2}
+                                max={100}
+                                value={symmetryDivisions}
+                                onChange={(e) => onUpdateSymmetry(symmetryMode, Number(e.target.value))}
+                                className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                            />
+
+                            {/* 加按钮 */}
+                            <button
+                                onClick={() => onUpdateSymmetry(symmetryMode, Math.min(100, symmetryDivisions + 1))}
+                                className="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 flex items-center justify-center text-sm"
+                                title="增加"
+                            >
+                                +
+                            </button>
+
+                            {/* 数值显示 */}
+                            <span className="text-xs text-white w-8 text-center">{symmetryDivisions}</span>
                         </div>
                     )}
                 </div>

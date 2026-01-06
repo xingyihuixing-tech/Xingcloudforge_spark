@@ -126,10 +126,14 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     // 图层 solo 模式（仅显示当前图层）
     const [soloLayerId, setSoloLayerId] = useState<string | null>(null);
 
-    // 初始化绘图场景
+    // 初始化绘图场景、画布、渲染器和渲染循环（统一在一个 useEffect 中）
     useEffect(() => {
         if (!isActive) return;
 
+        const container = canvasContainerRef.current;
+        if (!container) return;
+
+        // 1. 创建场景
         const { scene, camera, canvasGroup, strokesGroup, symmetryAxesGroup, centerPoint, border } = createDrawingScene();
 
         refsRef.current = {
@@ -146,18 +150,56 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         // 初始化对称轴
         updateSymmetryAxes(symmetryAxesGroup, symmetryDivisions, symmetryMode);
 
+        // 2. 创建画布元素
+        const canvas = document.createElement('canvas');
+        canvas.style.position = 'absolute';
+        canvas.style.top = '0';
+        canvas.style.left = '0';
+        canvas.style.width = '100%';
+        canvas.style.height = '100%';
+        canvas.style.pointerEvents = 'none';
+        container.appendChild(canvas);
+        canvasElementRef.current = canvas;
+
+        // 3. 创建渲染器
+        const renderer = new THREE.WebGLRenderer({
+            canvas: canvas,
+            alpha: true,
+            antialias: true
+        });
+        renderer.setClearColor(0x000000, 0);
+        rendererRef.current = renderer;
+
+        const rect = container.getBoundingClientRect();
+        renderer.setSize(rect.width, rect.height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // 4. 渲染循环
+        const animate = () => {
+            animationFrameRef.current = requestAnimationFrame(animate);
+
+            const refs = refsRef.current;
+            if (!refs.scene || !refs.camera) return;
+
+            renderer.render(refs.scene, refs.camera);
+        };
+
+        animate();
+
+        // 清理函数
         return () => {
-            disposeDrawingResources(refsRef.current);
             cancelAnimationFrame(animationFrameRef.current);
+            disposeDrawingResources(refsRef.current);
+
             // 销毁渲染器
             if (rendererRef.current) {
                 rendererRef.current.dispose();
                 rendererRef.current = null;
             }
             // 移除画布 DOM 元素
-            if (canvasElementRef.current && canvasContainerRef.current) {
+            if (canvasElementRef.current && container) {
                 try {
-                    canvasContainerRef.current.removeChild(canvasElementRef.current);
+                    container.removeChild(canvasElementRef.current);
                 } catch (e) { /* 忽略 */ }
                 canvasElementRef.current = null;
             }
@@ -224,61 +266,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         }
     }, [currentCircle, soloLayerId]);
 
-    // 渲染器和画布
+    // 渲染器和画布 ref（创建在第一个 useEffect 中）
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     const canvasElementRef = useRef<HTMLCanvasElement | null>(null);
-
-    // 渲染循环
-    useEffect(() => {
-        if (!isActive) return;
-
-        const container = canvasContainerRef.current;
-        if (!container) return;
-
-        // 创建画布元素
-        if (!canvasElementRef.current) {
-            const canvas = document.createElement('canvas');
-            canvas.style.position = 'absolute';
-            canvas.style.top = '0';
-            canvas.style.left = '0';
-            canvas.style.width = '100%';
-            canvas.style.height = '100%';
-            canvas.style.pointerEvents = 'none';
-            container.appendChild(canvas);
-            canvasElementRef.current = canvas;
-        }
-
-        // 创建渲染器
-        if (!rendererRef.current) {
-            rendererRef.current = new THREE.WebGLRenderer({
-                canvas: canvasElementRef.current,
-                alpha: true,
-                antialias: true
-            });
-            rendererRef.current.setClearColor(0x000000, 0);
-        }
-
-        const renderer = rendererRef.current;
-        const rect = container.getBoundingClientRect();
-        renderer.setSize(rect.width, rect.height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-        const animate = () => {
-            animationFrameRef.current = requestAnimationFrame(animate);
-
-            const refs = refsRef.current;
-            if (!refs.scene || !refs.camera) return;
-
-            // 渲染绘图场景
-            renderer.render(refs.scene, refs.camera);
-        };
-
-        animate();
-
-        return () => {
-            cancelAnimationFrame(animationFrameRef.current);
-        };
-    }, [isActive]);
 
     // 初始化：如果没有选中的法阵，创建一个新的
     useEffect(() => {
