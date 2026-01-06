@@ -7527,7 +7527,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
             mesh = createParticleStrokeMesh(
               stroke.points,
               stroke.color,
-              stroke.particleSettings || {},
+              stroke.particleRingSettings || {},
               layer.symmetryMode,
               layer.symmetryDivisions
             );
@@ -7535,7 +7535,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
             mesh = createLineStrokeMesh(
               stroke.points,
               stroke.color,
-              stroke.silkSettings || {},
+              stroke.silkRingSettings || {},
               layer.symmetryMode,
               layer.symmetryDivisions
             );

@@ -121,6 +121,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     const [undoStack, setUndoStack] = useState<MagicCircleStroke[]>([]);
     const [redoStack, setRedoStack] = useState<MagicCircleStroke[]>([]);
 
+    // 图层 solo 模式（仅显示当前图层）
+    const [soloLayerId, setSoloLayerId] = useState<string | null>(null);
+
     // 初始化绘图场景
     useEffect(() => {
         if (!isActive) return;
@@ -154,12 +157,58 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         }
     }, [symmetryDivisions, symmetryMode]);
 
-    // 当图层改变时重新渲染笔画
+    // 当图层或内容改变时，重新渲染所有可见图层的笔画
     useEffect(() => {
-        if (refsRef.current.strokesGroup) {
-            renderStrokesToGroup(refsRef.current.strokesGroup, currentLayer);
+        if (!refsRef.current.strokesGroup || !currentCircle) return;
+
+        // 清空笔画组
+        const strokesGroup = refsRef.current.strokesGroup;
+        while (strokesGroup.children.length > 0) {
+            const child = strokesGroup.children[0];
+            if (child instanceof THREE.Points || child instanceof THREE.Mesh || child instanceof THREE.Group) {
+                child.traverse((obj: THREE.Object3D) => {
+                    if (obj instanceof THREE.Points || obj instanceof THREE.Mesh) {
+                        obj.geometry?.dispose();
+                        if (obj.material instanceof THREE.Material) {
+                            obj.material.dispose();
+                        } else if (Array.isArray(obj.material)) {
+                            obj.material.forEach(m => m.dispose());
+                        }
+                    }
+                });
+            }
+            strokesGroup.remove(child);
         }
-    }, [currentLayer]);
+
+        // 渲染所有可见图层 (或 solo 图层)
+        const layersToRender = soloLayerId
+            ? currentCircle.layers.filter(l => l.id === soloLayerId)
+            : currentCircle.layers.filter(l => l.visible !== false);
+
+        for (const layer of layersToRender) {
+            for (const stroke of layer.strokes) {
+                let mesh: THREE.Object3D;
+                if (stroke.brushType === 'particle') {
+                    mesh = createParticleStrokeMesh(
+                        stroke.points,
+                        stroke.color,
+                        stroke.particleRingSettings || {},
+                        layer.symmetryMode,
+                        layer.symmetryDivisions
+                    );
+                } else {
+                    mesh = createLineStrokeMesh(
+                        stroke.points,
+                        stroke.color,
+                        stroke.silkRingSettings || {},
+                        layer.symmetryMode,
+                        layer.symmetryDivisions
+                    );
+                }
+                strokesGroup.add(mesh);
+            }
+        }
+    }, [currentCircle, soloLayerId]);
 
     // 渲染器和画布
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -482,6 +531,54 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         onUpdateCircles(updatedCircles);
     }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
+
+    // 删除图层
+    const handleDeleteLayer = useCallback((layerId: string) => {
+        if (!currentCircle || currentCircle.layers.length <= 1) return; // 至少保留一个图层
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: c.layers.filter(l => l.id !== layerId)
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+
+        // 如果删除的是当前图层，切换到第一个
+        if (currentLayerId === layerId) {
+            const remaining = currentCircle.layers.filter(l => l.id !== layerId);
+            setCurrentLayerId(remaining[0]?.id || null);
+        }
+        // 如果删除的是 solo 图层，退出 solo 模式
+        if (soloLayerId === layerId) {
+            setSoloLayerId(null);
+        }
+    }, [currentCircle, currentLayerId, soloLayerId, customMagicCircles, onUpdateCircles]);
+
+    // 切换图层可见性
+    const handleToggleVisibility = useCallback((layerId: string) => {
+        if (!currentCircle) return;
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: c.layers.map(l => {
+                    if (l.id !== layerId) return l;
+                    return { ...l, visible: l.visible === false ? true : false };
+                })
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+    }, [currentCircle, customMagicCircles, onUpdateCircles]);
+
+    // 切换 solo 模式
+    const handleToggleSolo = useCallback((layerId: string) => {
+        setSoloLayerId(prev => prev === layerId ? null : layerId);
+    }, []);
 
     if (!isActive) return null;
 
@@ -831,23 +928,80 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     >
                         [+]
                     </button>
-                    {currentCircle?.layers.map(layer => (
-                        <button
-                            key={layer.id}
-                            onClick={() => setCurrentLayerId(layer.id)}
-                            style={{
-                                padding: '5px 10px',
-                                background: currentLayerId === layer.id ? 'rgba(255, 170, 0, 0.3)' : 'rgba(50, 50, 60, 0.8)',
-                                border: `1px solid ${currentLayerId === layer.id ? '#ffaa00' : 'rgba(100, 100, 120, 0.5)'}`,
-                                borderRadius: 5,
-                                color: currentLayerId === layer.id ? '#ffaa00' : '#aaa',
-                                fontSize: 11,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {layer.visible ? '👁️' : '🙈'} {layer.name}
-                        </button>
-                    ))}
+                    {currentCircle?.layers.map(layer => {
+                        const isSelected = currentLayerId === layer.id;
+                        const isSolo = soloLayerId === layer.id;
+                        const isVisible = layer.visible !== false;
+                        return (
+                            <div key={layer.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                {/* 可见性切换 */}
+                                <button
+                                    onClick={() => handleToggleVisibility(layer.id)}
+                                    style={{
+                                        padding: '3px 5px',
+                                        background: 'transparent',
+                                        border: 'none',
+                                        fontSize: 12,
+                                        cursor: 'pointer',
+                                        opacity: isVisible ? 1 : 0.5
+                                    }}
+                                    title={isVisible ? '隐藏图层' : '显示图层'}
+                                >
+                                    {isVisible ? '👁️' : '🙈'}
+                                </button>
+                                {/* Solo 切换 */}
+                                <button
+                                    onClick={() => handleToggleSolo(layer.id)}
+                                    style={{
+                                        padding: '3px 5px',
+                                        background: isSolo ? 'rgba(255, 170, 0, 0.3)' : 'transparent',
+                                        border: 'none',
+                                        fontSize: 10,
+                                        cursor: 'pointer',
+                                        borderRadius: 3,
+                                        color: isSolo ? '#ffaa00' : '#666'
+                                    }}
+                                    title={isSolo ? '退出独显' : '仅显示此图层'}
+                                >
+                                    S
+                                </button>
+                                {/* 图层选择 */}
+                                <button
+                                    onClick={() => setCurrentLayerId(layer.id)}
+                                    style={{
+                                        padding: '5px 8px',
+                                        background: isSelected ? 'rgba(255, 170, 0, 0.3)' : 'rgba(50, 50, 60, 0.8)',
+                                        border: `1px solid ${isSelected ? '#ffaa00' : 'rgba(100, 100, 120, 0.5)'}`,
+                                        borderRadius: 5,
+                                        color: isSelected ? '#ffaa00' : '#aaa',
+                                        fontSize: 11,
+                                        cursor: 'pointer',
+                                        minWidth: 60
+                                    }}
+                                >
+                                    {layer.name}
+                                </button>
+                                {/* 删除按钮 */}
+                                {currentCircle.layers.length > 1 && (
+                                    <button
+                                        onClick={() => handleDeleteLayer(layer.id)}
+                                        style={{
+                                            padding: '3px 6px',
+                                            background: 'rgba(255, 80, 80, 0.2)',
+                                            border: 'none',
+                                            borderRadius: 3,
+                                            fontSize: 10,
+                                            cursor: 'pointer',
+                                            color: '#f88'
+                                        }}
+                                        title="删除图层"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
 
                 {/* 分隔线 */}
