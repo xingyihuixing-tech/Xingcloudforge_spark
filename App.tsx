@@ -1560,8 +1560,8 @@ const App: React.FC = () => {
 
 
 
-        {/* 视角信息面板 - 仅星球模式显示 - 玻璃样式 */}
-        {appMode === 'planet' && cameraInfo && (
+        {/* 视角信息面板 - 仅星球模式显示 - 绘图模式时隐藏 */}
+        {appMode === 'planet' && cameraInfo && !drawingModeActive && (
           <div
             className="absolute bottom-24 md:bottom-8 left-4 z-40 rounded-xl p-3"
             style={{

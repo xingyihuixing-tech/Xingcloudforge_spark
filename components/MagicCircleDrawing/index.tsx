@@ -642,16 +642,17 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     top: '50%',
                     transform: 'translateY(-50%)',
                     width: 200,
-                    background: 'rgba(20, 20, 30, 0.95)',
+                    background: 'linear-gradient(135deg, rgba(15,15,20,0.9) 0%, rgba(20,20,30,0.9) 100%)',
                     borderRadius: 12,
                     padding: 16,
                     pointerEvents: 'auto',
-                    border: '1px solid rgba(255, 170, 0, 0.3)',
-                    backdropFilter: 'blur(10px)'
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(20px)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
                 }}
             >
-                <div style={{ color: '#ffaa00', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <BrushIcon size={16} style={{ color: '#ffaa00' }} />
+                <div style={{ color: 'var(--ui-primary)', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BrushIcon size={16} style={{ color: 'var(--ui-primary)' }} />
                     <span>画笔工具</span>
                 </div>
 
@@ -664,10 +665,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             style={{
                                 flex: 1,
                                 padding: '8px 0',
-                                background: brushType === type ? 'rgba(255, 170, 0, 0.3)' : 'rgba(50, 50, 60, 0.8)',
-                                border: `1px solid ${brushType === type ? '#ffaa00' : 'rgba(100, 100, 120, 0.5)'}`,
+                                background: brushType === type ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
+                                border: brushType === type ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
                                 borderRadius: 6,
-                                color: brushType === type ? '#ffaa00' : '#aaa',
+                                color: brushType === type ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
                                 fontSize: 12,
                                 cursor: 'pointer',
                                 transition: 'all 0.2s'
@@ -686,7 +687,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>粒子大小</span>
-                                    <span style={{ color: '#ffaa00' }}>{(particleSettings.particleSize || 2).toFixed(1)}</span>
+                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.particleSize || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -702,7 +703,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>粒子密度</span>
-                                    <span style={{ color: '#ffaa00' }}>{(particleSettings.particleDensity || 3).toFixed(1)}</span>
+                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.particleDensity || 3).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -718,7 +719,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>亮度</span>
-                                    <span style={{ color: '#ffaa00' }}>{(particleSettings.brightness || 2).toFixed(1)}</span>
+                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.brightness || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -734,7 +735,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>笔触粗细</span>
-                                    <span style={{ color: '#ffaa00' }}>{particleSettings.bandwidth || 15}</span>
+                                    <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.bandwidth || 15}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -753,7 +754,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>线环粗细</span>
-                                    <span style={{ color: '#00ffff' }}>{((silkSettings.thickness || 0.02) * 1000).toFixed(0)}</span>
+                                    <span style={{ color: 'var(--ui-secondary)' }}>{((silkSettings.thickness || 0.02) * 1000).toFixed(0)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -769,7 +770,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>发光强度</span>
-                                    <span style={{ color: '#00ffff' }}>{(silkSettings.emissive || 2).toFixed(1)}</span>
+                                    <span style={{ color: 'var(--ui-secondary)' }}>{(silkSettings.emissive || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -785,7 +786,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>菲涅尔边缘</span>
-                                    <span style={{ color: '#00ffff' }}>{(silkSettings.fresnelPower || 2).toFixed(1)}</span>
+                                    <span style={{ color: 'var(--ui-secondary)' }}>{(silkSettings.fresnelPower || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -878,11 +879,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             <div
                 style={{
                     position: 'absolute',
-                    left: 'calc(50% + min(32.5vh, 32.5vw) + 12px)',
-                    top: 'calc(50% - min(32.5vh, 32.5vw) - 48px)',
+                    // 画布右边界 - 右侧面板宽度(320px) - 按钮宽度 - 边距
+                    right: 340,
+                    top: 'calc(50% - min(32.5vh, 32.5vw) + 12px)',
                     display: 'flex',
                     flexDirection: 'row',
-                    gap: 8,
+                    gap: 6,
                     pointerEvents: 'auto'
                 }}
             >
@@ -890,37 +892,39 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     onClick={handleUndo}
                     disabled={undoStack.length === 0}
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 8,
-                        background: undoStack.length > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(50,50,60,0.3)',
-                        border: '1px solid rgba(255,255,255,0.2)',
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
+                        background: undoStack.length > 0 ? 'rgba(255,255,255,0.08)' : 'rgba(50,50,60,0.2)',
+                        border: 'none',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        cursor: undoStack.length > 0 ? 'pointer' : 'not-allowed'
+                        cursor: undoStack.length > 0 ? 'pointer' : 'not-allowed',
+                        transition: 'background 0.2s'
                     }}
                     title="撤销"
                 >
-                    <UndoIcon size={18} style={{ color: undoStack.length > 0 ? '#fff' : '#555' }} />
+                    <UndoIcon size={14} style={{ color: undoStack.length > 0 ? 'rgba(255,255,255,0.7)' : '#444' }} />
                 </button>
                 <button
                     onClick={handleRedo}
                     disabled={redoStack.length === 0}
                     style={{
-                        width: 36,
-                        height: 36,
-                        borderRadius: 8,
-                        background: redoStack.length > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(50,50,60,0.3)',
-                        border: '1px solid rgba(255,255,255,0.2)',
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
+                        background: redoStack.length > 0 ? 'rgba(255,255,255,0.08)' : 'rgba(50,50,60,0.2)',
+                        border: 'none',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        cursor: redoStack.length > 0 ? 'pointer' : 'not-allowed'
+                        cursor: redoStack.length > 0 ? 'pointer' : 'not-allowed',
+                        transition: 'background 0.2s'
                     }}
                     title="重做"
                 >
-                    <RedoIcon size={18} style={{ color: redoStack.length > 0 ? '#fff' : '#555' }} />
+                    <RedoIcon size={14} style={{ color: redoStack.length > 0 ? 'rgba(255,255,255,0.7)' : '#444' }} />
                 </button>
             </div>
 
