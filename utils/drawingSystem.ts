@@ -263,27 +263,44 @@ export function createParticleStrokeMesh(
     const particleColors: number[] = [];
     const particleAlphas: number[] = [];
 
-    const baseSize = settings.particleDensity || 1;
+    // 从设置中获取参数
+    const particleSize = settings.particleSize ?? 2;        // 粒子大小 0.5-5
+    const particleDensity = settings.particleDensity ?? 3;  // 粒子密度 0.5-10
+    const strokeThickness = settings.bandwidth ?? 15;       // 笔触粗细 (散布范围) 1-50
     const colorObj = new THREE.Color(color);
 
+    // 根据密度计算采样间隔 - 密度越高，采样点越多
+    const sampleStep = Math.max(1, Math.floor(points.length / (Math.ceil(points.length * particleDensity / 5))));
+
     // 对每个采样点应用对称变换
-    for (const point of points) {
+    for (let i = 0; i < points.length; i += sampleStep) {
+        const point = points[i];
         const symmetricPoints = applySymmetryTransform(
             { x: point.x - 0.5, y: 0.5 - point.y }, // 转换到画布坐标系
             symmetryMode,
             symmetryDivisions
         );
 
-        for (const sp of symmetricPoints) {
-            // 添加一些抖动
-            const jitter = (settings.bandwidth || 5) * 0.001;
-            const jx = (Math.random() - 0.5) * jitter;
-            const jy = (Math.random() - 0.5) * jitter;
+        // 每个采样点生成多个粒子（根据密度）
+        const particlesPerPoint = Math.ceil(particleDensity);
 
-            particlePositions.push(sp.x + jx, sp.y + jy, 0);
-            particleSizes.push(baseSize * (0.5 + point.pressure * 0.5) * 0.02);
-            particleColors.push(colorObj.r, colorObj.g, colorObj.b);
-            particleAlphas.push(0.8);
+        for (const sp of symmetricPoints) {
+            for (let p = 0; p < particlesPerPoint; p++) {
+                // 添加散布抖动 (笔触粗细控制)
+                const jitter = strokeThickness * 0.002; // 映射到画布单位
+                const jx = (Math.random() - 0.5) * jitter;
+                const jy = (Math.random() - 0.5) * jitter;
+
+                particlePositions.push(sp.x + jx, sp.y + jy, 0);
+
+                // 粒子大小 = 基础大小 × 压感 × 随机变化
+                const sizeVariation = 0.7 + Math.random() * 0.6;
+                const pressureFactor = 0.5 + point.pressure * 0.5;
+                particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.008);
+
+                particleColors.push(colorObj.r, colorObj.g, colorObj.b);
+                particleAlphas.push(0.7 + Math.random() * 0.3);
+            }
         }
     }
 

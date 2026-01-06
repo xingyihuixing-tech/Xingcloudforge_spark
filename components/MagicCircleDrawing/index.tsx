@@ -34,16 +34,21 @@ import {
 // ==================== 默认画笔设置 ====================
 
 const defaultParticleSettings: Partial<ParticleRingSettings> = {
-    particleDensity: 2,
-    bandwidth: 10,
-    brightness: 1.5,
-    particleSize: 2
+    particleDensity: 3,      // 粒子密度 0.5-10
+    brightness: 2.0,         // 亮度 0.5-4
+    particleSize: 2,         // 粒子大小 0.5-5
+    bandwidth: 15            // 笔触粗细 (映射到散布) 1-50
 };
 
 const defaultSilkSettings: Partial<SilkRingSettings> = {
-    thickness: 0.03,
-    opacity: 0.85,
-    emissive: 1.5
+    thickness: 0.02,         // 线环粗细 0.005-0.08
+    opacity: 0.9,            // 透明度
+    emissive: 2.0,           // 发光强度 0.5-4
+    fresnelPower: 2.0,       // 菲涅尔边缘 0.5-5
+    sparkleEnabled: false,   // 闪点开关
+    sparkleThreshold: 0.95,  // 闪点阈值 0.8-0.99
+    flowSpeed: 1.0,          // 流动速度 0-3
+    strandDensity: 30        // 丝线密度
 };
 
 // ==================== Props 接口 ====================
@@ -536,68 +541,160 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 </div>
 
                 {/* 画笔参数 */}
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 16, maxHeight: 280, overflowY: 'auto' }}>
                     {brushType === 'particle' ? (
                         <>
-                            <div style={{ marginBottom: 8 }}>
-                                <span style={{ display: 'block', marginBottom: 4 }}>密度</span>
+                            {/* 粒子大小 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>粒子大小</span>
+                                    <span style={{ color: '#ffaa00' }}>{(particleSettings.particleSize || 2).toFixed(1)}</span>
+                                </div>
                                 <input
                                     type="range"
                                     min={0.5}
                                     max={5}
                                     step={0.1}
-                                    value={particleSettings.particleDensity || 2}
+                                    value={particleSettings.particleSize || 2}
+                                    onChange={(e) => setParticleSettings(prev => ({ ...prev, particleSize: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 粒子密度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>粒子密度</span>
+                                    <span style={{ color: '#ffaa00' }}>{(particleSettings.particleDensity || 3).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.5}
+                                    max={10}
+                                    step={0.5}
+                                    value={particleSettings.particleDensity || 3}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleDensity: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <span style={{ display: 'block', marginBottom: 4 }}>散布</span>
-                                <input
-                                    type="range"
-                                    min={1}
-                                    max={30}
-                                    value={particleSettings.bandwidth || 10}
-                                    onChange={(e) => setParticleSettings(prev => ({ ...prev, bandwidth: Number(e.target.value) }))}
-                                    style={{ width: '100%' }}
-                                />
-                            </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <span style={{ display: 'block', marginBottom: 4 }}>亮度</span>
+                            {/* 亮度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>亮度</span>
+                                    <span style={{ color: '#ffaa00' }}>{(particleSettings.brightness || 2).toFixed(1)}</span>
+                                </div>
                                 <input
                                     type="range"
                                     min={0.5}
-                                    max={3}
+                                    max={4}
                                     step={0.1}
-                                    value={particleSettings.brightness || 1.5}
+                                    value={particleSettings.brightness || 2}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, brightness: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 笔触粗细 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>笔触粗细</span>
+                                    <span style={{ color: '#ffaa00' }}>{particleSettings.bandwidth || 15}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={50}
+                                    step={1}
+                                    value={particleSettings.bandwidth || 15}
+                                    onChange={(e) => setParticleSettings(prev => ({ ...prev, bandwidth: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>
                         </>
                     ) : (
                         <>
-                            <div style={{ marginBottom: 8 }}>
-                                <span style={{ display: 'block', marginBottom: 4 }}>线宽</span>
+                            {/* 线环粗细 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>线环粗细</span>
+                                    <span style={{ color: '#00ffff' }}>{((silkSettings.thickness || 0.02) * 1000).toFixed(0)}</span>
+                                </div>
                                 <input
                                     type="range"
-                                    min={0.01}
-                                    max={0.1}
-                                    step={0.005}
-                                    value={silkSettings.thickness || 0.03}
-                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, thickness: Number(e.target.value) }))}
+                                    min={5}
+                                    max={80}
+                                    step={1}
+                                    value={(silkSettings.thickness || 0.02) * 1000}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, thickness: Number(e.target.value) / 1000 }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>
-                            <div style={{ marginBottom: 8 }}>
-                                <span style={{ display: 'block', marginBottom: 4 }}>透明度</span>
+                            {/* 发光强度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>发光强度</span>
+                                    <span style={{ color: '#00ffff' }}>{(silkSettings.emissive || 2).toFixed(1)}</span>
+                                </div>
                                 <input
                                     type="range"
-                                    min={0.3}
-                                    max={1}
-                                    step={0.05}
-                                    value={silkSettings.opacity || 0.85}
-                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, opacity: Number(e.target.value) }))}
+                                    min={0.5}
+                                    max={4}
+                                    step={0.1}
+                                    value={silkSettings.emissive || 2}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, emissive: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 菲涅尔边缘 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>菲涅尔边缘</span>
+                                    <span style={{ color: '#00ffff' }}>{(silkSettings.fresnelPower || 2).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.5}
+                                    max={5}
+                                    step={0.1}
+                                    value={silkSettings.fresnelPower || 2}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, fresnelPower: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 闪点效果 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                                    <span>闪点效果</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={silkSettings.sparkleEnabled || false}
+                                        onChange={(e) => setSilkSettings(prev => ({ ...prev, sparkleEnabled: e.target.checked }))}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                </div>
+                                {silkSettings.sparkleEnabled && (
+                                    <input
+                                        type="range"
+                                        min={80}
+                                        max={99}
+                                        step={1}
+                                        value={(silkSettings.sparkleThreshold || 0.95) * 100}
+                                        onChange={(e) => setSilkSettings(prev => ({ ...prev, sparkleThreshold: Number(e.target.value) / 100 }))}
+                                        style={{ width: '100%' }}
+                                    />
+                                )}
+                            </div>
+                            {/* 流动速度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>流动速度</span>
+                                    <span style={{ color: '#00ffff' }}>{(silkSettings.flowSpeed || 1).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={3}
+                                    step={0.1}
+                                    value={silkSettings.flowSpeed || 1}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, flowSpeed: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>

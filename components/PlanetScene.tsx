@@ -55,6 +55,11 @@ import {
   getEdgeLightData,
   getDwellingVertices
 } from '../services/lightFlowPath';
+import {
+  createParticleStrokeMesh,
+  createLineStrokeMesh
+} from '../utils/drawingSystem';
+import { CustomMagicCircle, MagicCircleLayer, MagicCircleStroke } from '../types';
 
 // ==================== 撣賊� ====================
 const TRAIL_LENGTH = 50; // 憓𧼮�頧刻蕨�踹漲隞亥繮敺埈凒餈噼敞����?
@@ -6602,6 +6607,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
 
   // 雿梶妖��㦛
   const volumeFogRef = useRef<THREE.Group | null>(null);
+
+  // 自定义法阵渲染组
+  const customMagicCirclesGroupRef = useRef<THREE.Group | null>(null);
 
   // �厩��舐狩
   const lightOrbsRef = useRef<{
