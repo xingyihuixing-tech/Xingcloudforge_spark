@@ -7102,6 +7102,13 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       lastSpawnTime: 0
     };
 
+    // 4. 自定义法阵渲染组
+    const customMagicCirclesGroup = new THREE.Group();
+    customMagicCirclesGroup.name = 'customMagicCircles';
+    customMagicCirclesGroup.visible = !drawingModeActive; // 绘图模式时隐藏，避免重复渲染
+    scene.add(customMagicCirclesGroup);
+    customMagicCirclesGroupRef.current = customMagicCirclesGroup;
+
     // �滚�撘?
     const handleResize = () => {
       if (!container || !camera || !renderer || !composer) return;
@@ -7213,6 +7220,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       starRainRef.current = null;
       volumeFogRef.current = null;
       lightOrbsRef.current = null;
+      customMagicCirclesGroupRef.current = null;
       backgroundSphereRef.current = null;
 
       nebulaPointsRef.current = null;
@@ -7478,6 +7486,74 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
     }
   }, [geometryKey, settings, sceneReady]);
 
+  // ==================== 自定义法阵渲染 ====================
+  // 当 customMagicCircles 更新且不在绘图模式时，渲染到 customMagicCirclesGroupRef
+  useEffect(() => {
+    const group = customMagicCirclesGroupRef.current;
+    if (!group || !sceneReady) return;
+
+    // 绘图模式时隐藏
+    group.visible = !drawingModeActive;
+
+    // 清空现有内容
+    while (group.children.length > 0) {
+      const child = group.children[0];
+      if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (child.material instanceof THREE.Material) {
+          child.material.dispose();
+        } else if (Array.isArray(child.material)) {
+          child.material.forEach(m => m.dispose());
+        }
+      }
+      group.remove(child);
+    }
+
+    // 如果在绘图模式或没有法阵数据，停止
+    if (drawingModeActive || !customMagicCircles || customMagicCircles.length === 0) return;
+
+    // 渲染每个自定义法阵
+    customMagicCircles.forEach((circle: CustomMagicCircle) => {
+      if (!circle.layers) return;
+
+      circle.layers.forEach((layer: MagicCircleLayer) => {
+        if (!layer.strokes) return;
+
+        layer.strokes.forEach((stroke: MagicCircleStroke) => {
+          if (!stroke.points || stroke.points.length < 2) return;
+
+          let mesh: THREE.Object3D;
+          if (stroke.brushType === 'particle') {
+            mesh = createParticleStrokeMesh(
+              stroke.points,
+              stroke.color,
+              stroke.particleSettings || {},
+              layer.symmetryMode,
+              layer.symmetryDivisions
+            );
+          } else {
+            mesh = createLineStrokeMesh(
+              stroke.points,
+              stroke.color,
+              stroke.silkSettings || {},
+              layer.symmetryMode,
+              layer.symmetryDivisions
+            );
+          }
+
+          // 设置位置（法阵中心相对于行星实例）
+          mesh.position.set(0, 0, 0);
+
+          // 缩放到适合场景的大小
+          const circleScale = 200; // 调整法阵在场景中的大小
+          mesh.scale.setScalar(circleScale);
+
+          group.add(mesh);
+        });
+      });
+    });
+  }, [customMagicCircles, drawingModeActive, sceneReady]);
+
   // 更新后处理参数
   useEffect(() => {
     // 检测移动设备
@@ -7643,6 +7719,29 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       nebulaInstanceMaterialsOutsideRef.current.forEach((mat) => {
         mat.uniforms.uTime.value = time;
       });
+
+      // 更新自定义法阵笔画的 uTime
+      if (customMagicCirclesGroupRef.current) {
+        customMagicCirclesGroupRef.current.traverse((child) => {
+          if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
+            const material = child.material as THREE.ShaderMaterial;
+            if (material?.uniforms?.uTime) {
+              material.uniforms.uTime.value = time;
+            }
+          }
+          // 处理 Group 中的子物体（丝环画笔）
+          if (child instanceof THREE.Group) {
+            child.children.forEach((subChild) => {
+              if (subChild instanceof THREE.Mesh) {
+                const subMat = subChild.material as THREE.ShaderMaterial;
+                if (subMat?.uniforms?.uTime) {
+                  subMat.uniforms.uTime.value = time;
+                }
+              }
+            });
+          }
+        });
+      }
 
       // === 霈∠��祈蓮雿滨蔭 ===
       // 雿輻鍂 Map 摮睃�瘥譍葵�毺���恣蝞堒�雿滨蔭嚗�����曉��祈蓮嚗?
