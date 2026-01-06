@@ -245,13 +245,23 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         for (const layer of layersToRender) {
             for (const stroke of layer.strokes) {
                 let mesh: THREE.Object3D;
+                // 画布渲染使用默认参数（无法阵级别调节，脉冲关闭）
+                const defaultMcSettings = {
+                    opacity: 1.0,
+                    hueShift: 0,
+                    brightness: 1.0,
+                    pulseEnabled: false,
+                    pulseSpeed: 1.0,
+                    pulseIntensity: 0.3
+                };
                 if (stroke.brushType === 'particle') {
                     mesh = createParticleStrokeMesh(
                         stroke.points,
                         stroke.color,
                         stroke.particleRingSettings || {},
                         layer.symmetryMode,
-                        layer.symmetryDivisions
+                        layer.symmetryDivisions,
+                        defaultMcSettings
                     );
                 } else {
                     mesh = createLineStrokeMesh(
@@ -259,7 +269,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.color,
                         stroke.silkRingSettings || {},
                         layer.symmetryMode,
-                        layer.symmetryDivisions
+                        layer.symmetryDivisions,
+                        defaultMcSettings
                     );
                 }
                 strokesGroup.add(mesh);

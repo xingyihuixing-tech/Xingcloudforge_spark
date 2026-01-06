@@ -316,9 +316,9 @@ export function createParticleStrokeMesh(
     const material = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
-            uGlowIntensity: { value: settings.brightness ?? 2.5 },
-            uEmissive: { value: 2.0 },
-            uCoreBrightness: { value: 3.0 },
+            uGlowIntensity: { value: settings.brightness ?? 3.5 },
+            uEmissive: { value: 4.0 },  // 增大以提高亮度
+            uCoreBrightness: { value: 5.0 },  // 增大以提高核心亮度
             uPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
             uPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
             uPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
