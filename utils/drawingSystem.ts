@@ -293,45 +293,89 @@ export function createParticleStrokeMesh(
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(particleColors, 3));
     geometry.setAttribute('alpha', new THREE.Float32BufferAttribute(particleAlphas, 1));
 
-    // 简化的粒子着色器 (复用粒子环核心逻辑)
+    // 粒子着色器 - 匹配 PlanetScene 粒子环效果
     const material = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
-            uGlowIntensity: { value: settings.brightness || 1.5 }
+            uGlowIntensity: { value: settings.brightness ?? 2.5 },
+            uEmissive: { value: 2.0 },
+            uCoreBrightness: { value: 3.0 },
+            uPulseEnabled: { value: 0.0 },  // 静态效果
+            uPulseSpeed: { value: 1.0 }
         },
         vertexShader: `
-      attribute float size;
-      attribute float alpha;
-      attribute vec3 color;
-      varying vec3 vColor;
-      varying float vAlpha;
-      
-      void main() {
-        vColor = color;
-        vAlpha = alpha;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        gl_PointSize = size * (300.0 / -mvPosition.z);
-        gl_Position = projectionMatrix * mvPosition;
-      }
-    `,
+precision highp float;
+
+attribute float size;
+attribute float alpha;
+attribute vec3 color;
+
+varying vec3 vColor;
+varying float vAlpha;
+varying float vSize;
+
+uniform float uTime;
+uniform float uPulseEnabled;
+uniform float uPulseSpeed;
+
+void main() {
+  vColor = color;
+  vAlpha = alpha;
+  vSize = size;
+  
+  // 脉冲效果
+  float pulse = 1.0;
+  if (uPulseEnabled > 0.5) {
+    pulse = 0.8 + 0.4 * sin(uTime * uPulseSpeed + position.x * 10.0 + position.y * 10.0);
+  }
+  
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = size * pulse * (300.0 / -mvPosition.z);
+  gl_Position = projectionMatrix * mvPosition;
+}
+        `,
         fragmentShader: `
-      uniform float uGlowIntensity;
-      varying vec3 vColor;
-      varying float vAlpha;
-      
-      void main() {
-        vec2 uv = gl_PointCoord - 0.5;
-        float dist = length(uv);
-        if (dist > 0.5) discard;
-        
-        float alpha = smoothstep(0.5, 0.0, dist);
-        alpha = pow(alpha, 1.0 / uGlowIntensity);
-        
-        gl_FragColor = vec4(vColor, alpha * vAlpha);
-      }
-    `,
+precision highp float;
+
+uniform float uGlowIntensity;
+uniform float uEmissive;
+uniform float uCoreBrightness;
+uniform float uTime;
+
+varying vec3 vColor;
+varying float vAlpha;
+
+void main() {
+  vec2 uv = gl_PointCoord - 0.5;
+  float dist = length(uv);
+  if (dist > 0.5) discard;
+  
+  // 核心亮度 (中心更亮)
+  float core = 1.0 - smoothstep(0.0, 0.15, dist);
+  
+  // 光晕衰减 (软边缘)
+  float glow = 1.0 - smoothstep(0.0, 0.5, dist);
+  glow = pow(glow, 1.0 / uGlowIntensity);
+  
+  // 外层光晕 (更柔和的边缘)
+  float outerGlow = 1.0 - smoothstep(0.3, 0.5, dist);
+  outerGlow = pow(outerGlow, 0.5);
+  
+  // 合成亮度
+  float brightness = core * uCoreBrightness + glow * uEmissive + outerGlow * 0.5;
+  
+  // 最终颜色 - 应用发光
+  vec3 finalColor = vColor * brightness;
+  
+  // Alpha
+  float alpha = glow * vAlpha;
+  
+  gl_FragColor = vec4(finalColor, alpha);
+}
+        `,
         transparent: true,
         depthTest: false,
+        depthWrite: false,
         blending: THREE.AdditiveBlending
     });
 
@@ -339,6 +383,112 @@ export function createParticleStrokeMesh(
     mesh.renderOrder = 50;
     return mesh;
 }
+
+// ==================== 丝环着色器 (复制自 PlanetScene.tsx) ====================
+
+const silkRingVertexShader = `
+precision highp float;
+
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+uniform float uTime;
+
+void main() {
+  vUv = uv;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  vViewPosition = -mvPosition.xyz;
+  vNormal = normalize(normalMatrix * normal);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const silkRingFragmentShader = `
+precision highp float;
+
+uniform float uTime;
+uniform float uFlowSpeed;
+uniform float uStrandDensity;
+uniform float uSparkleEnabled;
+uniform float uSparkleThreshold;
+uniform float uFresnelPower;
+uniform float uOpacity;
+uniform float uEmissive;
+uniform float uBloomBoost;
+
+uniform float uColorMode;
+uniform vec3 uBaseColor;
+uniform vec3 uColor1;
+uniform vec3 uColor2;
+uniform vec3 uColor3;
+uniform float uColorMidPos;
+uniform float uProceduralIntensity;
+
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+vec3 getColor(float t) {
+  int mode = int(uColorMode);
+  if (mode == 0) {
+    return uBaseColor;
+  } else if (mode == 1) {
+    return mix(uColor1, uColor2, t);
+  } else if (mode == 2) {
+    if (t < uColorMidPos) {
+      return mix(uColor1, uColor2, t / uColorMidPos);
+    } else {
+      return mix(uColor2, uColor3, (t - uColorMidPos) / (1.0 - uColorMidPos));
+    }
+  } else {
+    float noise = sin(t * uProceduralIntensity * 10.0 + uTime) * 0.5 + 0.5;
+    vec3 c1 = mix(uColor1, uColor2, t);
+    vec3 c2 = mix(uColor2, uColor3, t);
+    return mix(c1, c2, noise);
+  }
+}
+
+void main() {
+  float xRepeat = 20.0;
+  float flowOffset = uTime * uFlowSpeed * 2.0;
+  float x = vUv.x * xRepeat + flowOffset;
+  float y = vUv.y;
+
+  // 1. 丝线纹理
+  float strands = sin(y * uStrandDensity + x * 0.5) * 0.5 + 0.5;
+  strands = pow(strands, 4.0);
+
+  // 2. 能量脉冲
+  float energy = sin(x) * 0.5 + 0.5;
+  energy *= sin(x * 0.3 + 2.0) * 0.5 + 0.5;
+
+  // 3. 闪点效果
+  float sparkle = 0.0;
+  if (uSparkleEnabled > 0.5) {
+    sparkle = step(uSparkleThreshold, fract(sin(dot(vec2(x, y), vec2(12.9898, 78.233))) * 43758.5453));
+  }
+
+  float brightness = strands * (energy * 1.5 + sparkle);
+
+  // 4. 菲涅尔边缘
+  vec3 normal = normalize(vNormal);
+  vec3 viewDir = normalize(vViewPosition);
+  float fresnel = pow(1.0 - abs(dot(normal, viewDir)), uFresnelPower);
+  brightness *= fresnel;
+
+  float colorT = fract(vUv.x + sin(uTime * 0.5) * 0.1);
+  vec3 baseColor = getColor(colorT);
+  
+  vec3 finalColor = baseColor * (1.0 + brightness * uEmissive);
+  finalColor *= (1.0 + uBloomBoost * brightness * 0.5);
+  
+  float alpha = brightness * uOpacity;
+  alpha = smoothstep(0.05, 0.8, alpha);
+
+  gl_FragColor = vec4(finalColor, alpha);
+}
+`;
 
 // ==================== 创建线环画笔笔画 (复用丝环着色器) ====================
 
@@ -354,7 +504,7 @@ export function createLineStrokeMesh(
     if (points.length < 2) return group;
 
     const colorObj = new THREE.Color(color);
-    const lineWidth = (settings.thickness || 0.05) * 0.5;
+    const lineWidth = (settings.thickness || 0.02) * 0.3;
 
     // 为每个对称副本创建线条
     const allPaths: THREE.Vector3[][] = [];
@@ -391,16 +541,38 @@ export function createLineStrokeMesh(
         }
     }
 
-    // 为每条路径创建线条
+    // 为每条路径创建线条 - 使用真正的丝环着色器
     for (const path of allPaths) {
-        const curve = new THREE.CatmullRomCurve3(path);
-        const tubeGeometry = new THREE.TubeGeometry(curve, Math.max(8, path.length * 2), lineWidth, 8, false);
+        if (path.length < 2) continue;
 
-        const material = new THREE.MeshBasicMaterial({
-            color: colorObj,
+        const curve = new THREE.CatmullRomCurve3(path);
+        const tubeGeometry = new THREE.TubeGeometry(curve, Math.max(16, path.length * 3), lineWidth, 8, false);
+
+        // 使用与 PlanetScene 丝环相同的 ShaderMaterial
+        const material = new THREE.ShaderMaterial({
+            vertexShader: silkRingVertexShader,
+            fragmentShader: silkRingFragmentShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
+                uStrandDensity: { value: settings.strandDensity ?? 30.0 },
+                uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
+                uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
+                uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
+                uOpacity: { value: settings.opacity ?? 0.85 },
+                uEmissive: { value: settings.emissive ?? 1.5 },
+                uBloomBoost: { value: 0.3 },
+                uColorMode: { value: 0 }, // 单色模式
+                uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+                uColor1: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+                uColor2: { value: new THREE.Vector3(1, 1, 1) },
+                uColor3: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+                uColorMidPos: { value: 0.5 },
+                uProceduralIntensity: { value: 1.0 }
+            },
             transparent: true,
-            opacity: settings.opacity || 0.8,
-            depthTest: false,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
             side: THREE.DoubleSide
         });
 
