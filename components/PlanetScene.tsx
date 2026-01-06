@@ -4423,7 +4423,7 @@ void main() {
 // 瘜閖猐餈鞱��嗆㺭�格𦻖�?
 interface MagicCircleRuntimeData {
   id: string;
-  mesh: THREE.Mesh;
+  mesh: THREE.Object3D;  // Mesh for texture, Group for custom drawn
   settings: import('../types').MagicCircleSettings;
 }
 
@@ -7430,7 +7430,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       currentSettings.planets.forEach(planet => {
         if (!planet.enabled) return;
 
-        const meshes = createPlanetMeshes(planet, currentSettings);
+        const meshes = createPlanetMeshes(planet, currentSettings, customMagicCircles);
         planetMeshesRef.current.set(planet.id, meshes);
 
         // 霈曄蔭雿滨蔭
@@ -9276,62 +9276,65 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
             circleData.mesh.scale.setScalar(currentScale);
 
             // �湔鰵�鞱捶 uniforms
-            const material = circleData.mesh.material as THREE.ShaderMaterial;
-            if (material.uniforms) {
-              material.uniforms.uOpacity.value = settings.opacity;
-              material.uniforms.uHueShift.value = settings.hueShift;
-              material.uniforms.uSaturationBoost.value = settings.saturationBoost ?? 1.0;
-              material.uniforms.uBrightness.value = settings.brightness;
+            // 更新材质 uniforms (仅对贴图法阵)
+            if (circleData.mesh instanceof THREE.Mesh) {
+              const material = circleData.mesh.material as THREE.ShaderMaterial;
+              if (material.uniforms) {
+                material.uniforms.uOpacity.value = settings.opacity;
+                material.uniforms.uHueShift.value = settings.hueShift;
+                material.uniforms.uSaturationBoost.value = settings.saturationBoost ?? 1.0;
+                material.uniforms.uBrightness.value = settings.brightness;
 
-              // �匧��穃����
-              let pulse = 0;
-              if (settings.pulseEnabled) {
-                pulse = (Math.sin(time * settings.pulseSpeed * 3) * 0.5 + 0.5) * settings.pulseIntensity;
-              }
-              material.uniforms.uPulse.value = pulse;
-
-              // �湔鰵�閗𠧧璅∪���㺭
-              material.uniforms.uBaseHue.value = settings.baseHue ?? 200;
-              material.uniforms.uBaseSaturation.value = settings.baseSaturation ?? 1.0;
-
-              // �湔鰵皜𣂼��脣��?
-              const gc = settings.gradientColor;
-              if (gc) {
-                const colorModeMap: { [key: string]: number } = { 'none': 0, 'single': 4, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
-                const directionMap: { [key: string]: number } = { 'radial': 0, 'linearX': 1, 'linearY': 2, 'spiral': 3 };
-                material.uniforms.uColorMode.value = gc.enabled ? (colorModeMap[gc.mode] || 0) : 0;
-                material.uniforms.uGradientDir.value = directionMap[gc.direction || 'radial'] || 0;
-                material.uniforms.uColorMidPos.value = gc.colorMidPosition ?? 0.5;
-                material.uniforms.uColorMidWidth.value = gc.colorMidWidth ?? 1;
-                material.uniforms.uColorMidWidth2.value = gc.colorMidWidth2 ?? 0;
-                material.uniforms.uSpiralDensity.value = gc.spiralDensity ?? 2;
-                material.uniforms.uProceduralIntensity.value = gc.proceduralIntensity ?? 1;
-
-                // �湔鰵憸𡏭𠧧
-                const parseColor = (hex: string) => {
-                  const c = hex.replace('#', '');
-                  return new THREE.Vector3(
-                    parseInt(c.substring(0, 2), 16) / 255,
-                    parseInt(c.substring(2, 4), 16) / 255,
-                    parseInt(c.substring(4, 6), 16) / 255
-                  );
-                };
-                if (gc.colors?.[0]) material.uniforms.uColor1.value = parseColor(gc.colors[0]);
-                if (gc.colors?.[1]) material.uniforms.uColor2.value = parseColor(gc.colors[1]);
-                if (gc.colors?.[2]) material.uniforms.uColor3.value = parseColor(gc.colors[2]);
-              }
-
-              // �冽��凒�啗斐�?
-              if (settings.texture && settings.texture !== circleData.settings.texture) {
-                let texture = textureCache.current.get(settings.texture);
-                if (!texture) {
-                  const loader = new THREE.TextureLoader();
-                  texture = loader.load(settings.texture);
-                  textureCache.current.set(settings.texture, texture);
+                // �匧��穃����
+                let pulse = 0;
+                if (settings.pulseEnabled) {
+                  pulse = (Math.sin(time * settings.pulseSpeed * 3) * 0.5 + 0.5) * settings.pulseIntensity;
                 }
-                material.uniforms.uTexture.value = texture;
-                material.uniforms.uHasTexture.value = texture ? 1.0 : 0.0;
-                circleData.settings = settings;
+                material.uniforms.uPulse.value = pulse;
+
+                // �湔鰵�閗𠧧璅∪���㺭
+                material.uniforms.uBaseHue.value = settings.baseHue ?? 200;
+                material.uniforms.uBaseSaturation.value = settings.baseSaturation ?? 1.0;
+
+                // �湔鰵皜𣂼��脣��?
+                const gc = settings.gradientColor;
+                if (gc) {
+                  const colorModeMap: { [key: string]: number } = { 'none': 0, 'single': 4, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
+                  const directionMap: { [key: string]: number } = { 'radial': 0, 'linearX': 1, 'linearY': 2, 'spiral': 3 };
+                  material.uniforms.uColorMode.value = gc.enabled ? (colorModeMap[gc.mode] || 0) : 0;
+                  material.uniforms.uGradientDir.value = directionMap[gc.direction || 'radial'] || 0;
+                  material.uniforms.uColorMidPos.value = gc.colorMidPosition ?? 0.5;
+                  material.uniforms.uColorMidWidth.value = gc.colorMidWidth ?? 1;
+                  material.uniforms.uColorMidWidth2.value = gc.colorMidWidth2 ?? 0;
+                  material.uniforms.uSpiralDensity.value = gc.spiralDensity ?? 2;
+                  material.uniforms.uProceduralIntensity.value = gc.proceduralIntensity ?? 1;
+
+                  // �湔鰵憸𡏭𠧧
+                  const parseColor = (hex: string) => {
+                    const c = hex.replace('#', '');
+                    return new THREE.Vector3(
+                      parseInt(c.substring(0, 2), 16) / 255,
+                      parseInt(c.substring(2, 4), 16) / 255,
+                      parseInt(c.substring(4, 6), 16) / 255
+                    );
+                  };
+                  if (gc.colors?.[0]) material.uniforms.uColor1.value = parseColor(gc.colors[0]);
+                  if (gc.colors?.[1]) material.uniforms.uColor2.value = parseColor(gc.colors[1]);
+                  if (gc.colors?.[2]) material.uniforms.uColor3.value = parseColor(gc.colors[2]);
+                }
+
+                // �冽��凒�啗斐�?
+                if (settings.texture && settings.texture !== circleData.settings.texture) {
+                  let texture = textureCache.current.get(settings.texture);
+                  if (!texture) {
+                    const loader = new THREE.TextureLoader();
+                    texture = loader.load(settings.texture);
+                    textureCache.current.set(settings.texture, texture);
+                  }
+                  material.uniforms.uTexture.value = texture;
+                  material.uniforms.uHasTexture.value = texture ? 1.0 : 0.0;
+                  circleData.settings = settings;
+                }
               }
             }
           });
@@ -11067,7 +11070,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
 
   // ==================== 创建星球 Mesh ====================
 
-  function createPlanetMeshes(planet: PlanetSettings, sceneSettings: PlanetSceneSettings) {
+  function createPlanetMeshes(planet: PlanetSettings, sceneSettings: PlanetSceneSettings, customCirclesData?: CustomMagicCircle[]) {
     // 璉�瘚讠宏�刻挽憭?
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
@@ -12197,7 +12200,7 @@ void main() {
     if (planet.magicCircles?.enabled) {
       planet.magicCircles.circles.forEach(circleSettings => {
         if (!circleSettings.enabled) return;
-        const circleData = createMagicCircle(circleSettings);
+        const circleData = createMagicCircle(circleSettings, customCirclesData);
         magicCircles.add(circleData.mesh);
         magicCircleDataList.push(circleData);
       });
@@ -12868,8 +12871,39 @@ void main() {
   }
 
   // �𥕦遣瘜閖猐
-  function createMagicCircle(settings: import('../types').MagicCircleSettings): MagicCircleRuntimeData {
+  function createMagicCircle(settings: import('../types').MagicCircleSettings, customCirclesData?: CustomMagicCircle[]): MagicCircleRuntimeData {
     // �𥕦遣��耦�牐�雿?
+    // 检查是否使用自定义绘制法阵
+    if (settings.customCircleId && customCirclesData) {
+      const customCircle = customCirclesData.find((c: CustomMagicCircle) => c.id === settings.customCircleId);
+      if (customCircle && customCircle.layers) {
+        const group = new THREE.Group();
+        group.userData = { circleId: settings.id, isCustomDrawn: true };
+        customCircle.layers.forEach((layer: MagicCircleLayer) => {
+          if (layer.visible === false || !layer.strokes) return;
+          layer.strokes.forEach((stroke: MagicCircleStroke) => {
+            if (!stroke.points || stroke.points.length < 2) return;
+            let strokeMesh: THREE.Object3D;
+            if (stroke.brushType === 'particle') {
+              strokeMesh = createParticleStrokeMesh(stroke.points, stroke.color, stroke.particleRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions);
+            } else {
+              strokeMesh = createLineStrokeMesh(stroke.points, stroke.color, stroke.silkRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions);
+            }
+            strokeMesh.scale.setScalar(settings.radius);
+            group.add(strokeMesh);
+          });
+        });
+        const tiltAngles = getTiltAngles(settings.tilt ?? DEFAULT_TILT_SETTINGS);
+        group.rotation.x = -Math.PI / 2 + THREE.MathUtils.degToRad(tiltAngles.x);
+        group.rotation.y = THREE.MathUtils.degToRad(tiltAngles.y);
+        group.rotation.z = THREE.MathUtils.degToRad(tiltAngles.z);
+        group.position.y = settings.yOffset;
+        group.renderOrder = 50;
+        return { id: settings.id, mesh: group, settings };
+      }
+    }
+
+    // 原有贴图法阵逻辑
     const geometry = new THREE.CircleGeometry(settings.radius, 64);
 
     // �㰘蝸韐游㦛
