@@ -31,7 +31,7 @@ import {
     applySymmetryTransform
 } from '../../utils/drawingSystem';
 import { DrawingControlPanel } from './DrawingControlPanel';
-import { UndoIcon, RedoIcon } from './Icons';
+import { UndoIcon, RedoIcon, BrushIcon } from './Icons';
 
 // ==================== 默认画笔设置 ====================
 
@@ -660,8 +660,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     backdropFilter: 'blur(10px)'
                 }}
             >
-                <div style={{ color: '#ffaa00', fontSize: 13, marginBottom: 12, fontWeight: 600 }}>
-                    🎨 画笔工具
+                <div style={{ color: '#ffaa00', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <BrushIcon size={16} style={{ color: '#ffaa00' }} />
+                    <span>画笔工具</span>
                 </div>
 
                 {/* 画笔类型 */}
@@ -682,7 +683,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 transition: 'all 0.2s'
                             }}
                         >
-                            {type === 'particle' ? '⚡ 粒子' : '○ 丝环'}
+                            {type === 'particle' ? '粒子' : '丝环'}
                         </button>
                     ))}
                 </div>
@@ -861,23 +862,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace' }}>{brushColor}</span>
                 </div>
 
-                {/* 退出按钮 */}
-                <button
-                    onClick={onClose}
-                    style={{
-                        width: '100%',
-                        padding: '10px 0',
-                        background: 'rgba(255, 80, 80, 0.2)',
-                        border: '1px solid rgba(255, 80, 80, 0.5)',
-                        borderRadius: 8,
-                        color: '#ff8080',
-                        fontSize: 12,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                    }}
-                >
-                    ✕ 退出绘图
-                </button>
             </div>
 
             {/* 中央画布区域 */}
@@ -900,196 +884,54 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 }}
             />
 
-            {/* 底部控制面板 */}
+            {/* 画布右上角：撤销/重做 */}
             <div
                 style={{
                     position: 'absolute',
-                    left: '50%',
-                    bottom: 24,
-                    transform: 'translateX(-50%)',
+                    left: 'calc(50% + min(32.5vh, 32.5vw) + 12px)',
+                    top: 'calc(50% - min(32.5vh, 32.5vw) - 48px)',
                     display: 'flex',
-                    gap: 16,
-                    background: 'rgba(20, 20, 30, 0.95)',
-                    borderRadius: 12,
-                    padding: 14,
-                    pointerEvents: 'auto',
-                    border: '1px solid rgba(255, 170, 0, 0.3)',
-                    backdropFilter: 'blur(10px)'
+                    flexDirection: 'column',
+                    gap: 8,
+                    pointerEvents: 'auto'
                 }}
             >
-                {/* 对称模式 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12, color: '#888' }}>对称:</span>
-                    {(['none', 'radial', 'kaleidoscope'] as SymmetryMode[]).map(mode => (
-                        <button
-                            key={mode}
-                            onClick={() => handleUpdateSymmetry(mode, symmetryDivisions)}
-                            style={{
-                                padding: '5px 10px',
-                                background: symmetryMode === mode ? 'rgba(255, 170, 0, 0.3)' : 'rgba(50, 50, 60, 0.8)',
-                                border: `1px solid ${symmetryMode === mode ? '#ffaa00' : 'rgba(100, 100, 120, 0.5)'}`,
-                                borderRadius: 5,
-                                color: symmetryMode === mode ? '#ffaa00' : '#aaa',
-                                fontSize: 11,
-                                cursor: 'pointer'
-                            }}
-                        >
-                            {mode === 'none' ? '无' : mode === 'radial' ? '径向' : '万花筒'}
-                        </button>
-                    ))}
-                    {symmetryMode !== 'none' && (
-                        <input
-                            type="number"
-                            min={3}
-                            max={36}
-                            value={symmetryDivisions}
-                            onChange={(e) => handleUpdateSymmetry(symmetryMode, Number(e.target.value))}
-                            style={{
-                                width: 45,
-                                padding: '5px',
-                                background: 'rgba(50, 50, 60, 0.8)',
-                                border: '1px solid rgba(100, 100, 120, 0.5)',
-                                borderRadius: 5,
-                                color: '#fff',
-                                fontSize: 11,
-                                textAlign: 'center'
-                            }}
-                        />
-                    )}
-                </div>
-
-                {/* 分隔线 */}
-                <div style={{ width: 1, background: 'rgba(100, 100, 120, 0.5)' }} />
-
-                {/* 图层 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 12, color: '#888' }}>图层:</span>
-                    <button
-                        onClick={handleNewLayer}
-                        style={{
-                            padding: '5px 10px',
-                            background: 'rgba(100, 200, 100, 0.2)',
-                            border: '1px solid rgba(100, 200, 100, 0.5)',
-                            borderRadius: 5,
-                            color: '#8f8',
-                            fontSize: 11,
-                            cursor: 'pointer'
-                        }}
-                    >
-                        [+]
-                    </button>
-                    {currentCircle?.layers.map(layer => {
-                        const isSelected = currentLayerId === layer.id;
-                        const isSolo = soloLayerId === layer.id;
-                        const isVisible = layer.visible !== false;
-                        return (
-                            <div key={layer.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                {/* 可见性切换 */}
-                                <button
-                                    onClick={() => handleToggleVisibility(layer.id)}
-                                    style={{
-                                        padding: '3px 5px',
-                                        background: 'transparent',
-                                        border: 'none',
-                                        fontSize: 12,
-                                        cursor: 'pointer',
-                                        opacity: isVisible ? 1 : 0.5
-                                    }}
-                                    title={isVisible ? '隐藏图层' : '显示图层'}
-                                >
-                                    {isVisible ? '👁️' : '🙈'}
-                                </button>
-                                {/* Solo 切换 */}
-                                <button
-                                    onClick={() => handleToggleSolo(layer.id)}
-                                    style={{
-                                        padding: '3px 5px',
-                                        background: isSolo ? 'rgba(255, 170, 0, 0.3)' : 'transparent',
-                                        border: 'none',
-                                        fontSize: 10,
-                                        cursor: 'pointer',
-                                        borderRadius: 3,
-                                        color: isSolo ? '#ffaa00' : '#666'
-                                    }}
-                                    title={isSolo ? '退出独显' : '仅显示此图层'}
-                                >
-                                    S
-                                </button>
-                                {/* 图层选择 */}
-                                <button
-                                    onClick={() => setCurrentLayerId(layer.id)}
-                                    style={{
-                                        padding: '5px 8px',
-                                        background: isSelected ? 'rgba(255, 170, 0, 0.3)' : 'rgba(50, 50, 60, 0.8)',
-                                        border: `1px solid ${isSelected ? '#ffaa00' : 'rgba(100, 100, 120, 0.5)'}`,
-                                        borderRadius: 5,
-                                        color: isSelected ? '#ffaa00' : '#aaa',
-                                        fontSize: 11,
-                                        cursor: 'pointer',
-                                        minWidth: 60
-                                    }}
-                                >
-                                    {layer.name}
-                                </button>
-                                {/* 删除按钮 */}
-                                {currentCircle.layers.length > 1 && (
-                                    <button
-                                        onClick={() => handleDeleteLayer(layer.id)}
-                                        style={{
-                                            padding: '3px 6px',
-                                            background: 'rgba(255, 80, 80, 0.2)',
-                                            border: 'none',
-                                            borderRadius: 3,
-                                            fontSize: 10,
-                                            cursor: 'pointer',
-                                            color: '#f88'
-                                        }}
-                                        title="删除图层"
-                                    >
-                                        ✕
-                                    </button>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* 分隔线 */}
-                <div style={{ width: 1, background: 'rgba(100, 100, 120, 0.5)' }} />
-
-                {/* 撤销/重做 */}
-                <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                        onClick={handleUndo}
-                        disabled={undoStack.length === 0}
-                        style={{
-                            padding: '5px 12px',
-                            background: 'rgba(50, 50, 60, 0.8)',
-                            border: '1px solid rgba(100, 100, 120, 0.5)',
-                            borderRadius: 5,
-                            color: undoStack.length > 0 ? '#fff' : '#555',
-                            fontSize: 11,
-                            cursor: undoStack.length > 0 ? 'pointer' : 'not-allowed'
-                        }}
-                    >
-                        ↩️ 撤销
-                    </button>
-                    <button
-                        onClick={handleRedo}
-                        disabled={redoStack.length === 0}
-                        style={{
-                            padding: '5px 12px',
-                            background: 'rgba(50, 50, 60, 0.8)',
-                            border: '1px solid rgba(100, 100, 120, 0.5)',
-                            borderRadius: 5,
-                            color: redoStack.length > 0 ? '#fff' : '#555',
-                            fontSize: 11,
-                            cursor: redoStack.length > 0 ? 'pointer' : 'not-allowed'
-                        }}
-                    >
-                        ↪️ 重做
-                    </button>
-                </div>
+                <button
+                    onClick={handleUndo}
+                    disabled={undoStack.length === 0}
+                    style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        background: undoStack.length > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(50,50,60,0.3)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: undoStack.length > 0 ? 'pointer' : 'not-allowed'
+                    }}
+                    title="撤销"
+                >
+                    <UndoIcon size={18} style={{ color: undoStack.length > 0 ? '#fff' : '#555' }} />
+                </button>
+                <button
+                    onClick={handleRedo}
+                    disabled={redoStack.length === 0}
+                    style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 8,
+                        background: redoStack.length > 0 ? 'rgba(255,255,255,0.1)' : 'rgba(50,50,60,0.3)',
+                        border: '1px solid rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: redoStack.length > 0 ? 'pointer' : 'not-allowed'
+                    }}
+                    title="重做"
+                >
+                    <RedoIcon size={18} style={{ color: redoStack.length > 0 ? '#fff' : '#555' }} />
+                </button>
             </div>
 
             {/* 右侧控制面板 - 法阵列表、对称设置、图层管理 */}

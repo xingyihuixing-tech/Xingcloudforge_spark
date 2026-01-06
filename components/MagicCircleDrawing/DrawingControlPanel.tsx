@@ -108,7 +108,16 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
     };
 
     return (
-        <div className="fixed right-0 top-0 bottom-0 w-72 bg-gray-900/95 backdrop-blur-md border-l border-white/10 flex flex-col z-50">
+        <div
+            className="fixed right-0 top-0 bottom-0 w-80 flex flex-col z-[200]"
+            style={{
+                background: 'linear-gradient(135deg, rgba(15,15,20,0.85) 0%, rgba(20,20,30,0.85) 100%)',
+                backdropFilter: 'blur(24px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(24px)',
+                borderLeft: '1px solid rgba(255,255,255,0.1)',
+                boxShadow: '-4px 0 24px rgba(0,0,0,0.3)'
+            }}
+        >
             {/* 头部 - 关闭按钮 */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
                 <span className="text-white font-medium">绘图模式</span>
@@ -147,16 +156,16 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 <div
                                     key={circle.id}
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-all ${isSelected
-                                            ? 'bg-purple-600/30 border border-purple-500/50'
-                                            : 'hover:bg-white/5 border border-transparent'
+                                        ? 'bg-purple-600/30 border border-purple-500/50'
+                                        : 'hover:bg-white/5 border border-transparent'
                                         }`}
                                 >
                                     {/* 勾选框 - 控制显示 */}
                                     <button
                                         onClick={() => onToggleCircleEnabled(circle.id, !circle.enabled)}
                                         className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${circle.enabled
-                                                ? 'bg-green-600 border-green-500'
-                                                : 'bg-transparent border-gray-500 hover:border-gray-400'
+                                            ? 'bg-green-600 border-green-500'
+                                            : 'bg-transparent border-gray-500 hover:border-gray-400'
                                             }`}
                                         title={circle.enabled ? '点击隐藏' : '点击显示'}
                                     >
@@ -192,8 +201,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                     <button
                                         onClick={() => onSelectCircle(circle.id)}
                                         className={`p-1 rounded transition-colors ${isSelected
-                                                ? 'text-purple-400'
-                                                : 'text-gray-500 hover:text-gray-300'
+                                            ? 'text-purple-400'
+                                            : 'text-gray-500 hover:text-gray-300'
                                             }`}
                                         title="编辑此法阵"
                                     >
@@ -234,8 +243,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 key={mode}
                                 onClick={() => onUpdateSymmetry(mode, symmetryDivisions)}
                                 className={`flex-1 px-2 py-1.5 text-xs rounded transition-all ${symmetryMode === mode
-                                        ? 'bg-blue-600 text-white'
-                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                     }`}
                             >
                                 {label}
@@ -251,8 +260,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                     key={n}
                                     onClick={() => onUpdateSymmetry(symmetryMode, n)}
                                     className={`px-2 py-1 text-xs rounded transition-all ${symmetryDivisions === n
-                                            ? 'bg-green-600 text-white'
-                                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                        ? 'bg-green-600 text-white'
+                                        : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                                         }`}
                                 >
                                     {n}
@@ -288,8 +297,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                     key={layer.id}
                                     onClick={() => onSelectLayer(layer.id)}
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-all ${isSelected
-                                            ? 'bg-blue-600/30 border border-blue-500/50'
-                                            : 'hover:bg-white/5 border border-transparent'
+                                        ? 'bg-blue-600/30 border border-blue-500/50'
+                                        : 'hover:bg-white/5 border border-transparent'
                                         }`}
                                 >
                                     {/* 可见性按钮 */}
@@ -299,8 +308,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             onToggleLayerVisibility(layer.id);
                                         }}
                                         className={`p-0.5 rounded transition-colors ${layer.visible
-                                                ? 'text-white hover:text-gray-300'
-                                                : 'text-gray-500 hover:text-gray-400'
+                                            ? 'text-white hover:text-gray-300'
+                                            : 'text-gray-500 hover:text-gray-400'
                                             }`}
                                         title={layer.visible ? '隐藏图层' : '显示图层'}
                                     >
@@ -320,8 +329,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             onToggleLayerSolo(layer.id);
                                         }}
                                         className={`p-0.5 rounded transition-colors ${isSolo
-                                                ? 'text-yellow-400 bg-yellow-600/30'
-                                                : 'text-gray-500 hover:text-yellow-400'
+                                            ? 'text-yellow-400 bg-yellow-600/30'
+                                            : 'text-gray-500 hover:text-yellow-400'
                                             }`}
                                         title={isSolo ? '取消 Solo' : 'Solo 此图层'}
                                     >
