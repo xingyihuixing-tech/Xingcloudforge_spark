@@ -1624,6 +1624,8 @@ export interface MagicCircleSettings {
   breathEnabled: boolean;
   breathSpeed: number;        // 呼吸速度 0 ~ 3
   breathIntensity: number;    // 呼吸幅度 0 ~ 0.5
+  // 自定义绘制法阵
+  customCircleId?: string;    // 如果设置，使用自定义绘制法阵而非贴图
 }
 
 // 法阵系统配置

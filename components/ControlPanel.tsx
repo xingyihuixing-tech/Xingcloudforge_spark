@@ -1531,7 +1531,9 @@ const MagicCircleControl: React.FC<{
   planet: PlanetSettings;
   updatePlanet: (updates: Partial<PlanetSettings>) => void;
   getButtonStyle?: (isActive: boolean) => React.CSSProperties;
-}> = ({ planet, updatePlanet, getButtonStyle }) => {
+  customMagicCircles?: import('../types').CustomMagicCircle[];
+  onEnterDrawingMode?: () => void;
+}> = ({ planet, updatePlanet, getButtonStyle, customMagicCircles = [], onEnterDrawingMode }) => {
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const soloCircleId = planet.magicCircles?.soloId || null;
 
@@ -1663,8 +1665,58 @@ const MagicCircleControl: React.FC<{
             <ImageSelectDropdown
               label="贴图"
               value={currentCircle.texture}
-              onChange={(v) => updateCircle(currentCircle.id, { texture: v })}
+              onChange={(v) => updateCircle(currentCircle.id, { texture: v, customCircleId: undefined })}
             />
+
+            {/* 自定义绘制法阵选择 */}
+            <div className="p-2 bg-purple-900/20 rounded border border-purple-500/30 mt-2">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs text-purple-300">或使用自定义绘制</span>
+                {currentCircle.customCircleId && (
+                  <button
+                    onClick={() => updateCircle(currentCircle.id, { customCircleId: undefined })}
+                    className="text-[10px] text-red-400 hover:text-red-300"
+                    title="清除选中"
+                  >
+                    ✕ 清除
+                  </button>
+                )}
+              </div>
+              {customMagicCircles.length === 0 ? (
+                <div className="text-xs text-gray-500 text-center py-2">
+                  暂无自定义法阵
+                </div>
+              ) : (
+                <div className="space-y-1 max-h-24 overflow-y-auto">
+                  {customMagicCircles.map(cc => {
+                    const strokeCount = cc.layers?.reduce((acc: number, layer: any) => acc + (layer.strokes?.length || 0), 0) || 0;
+                    const isSelected = currentCircle.customCircleId === cc.id;
+                    return (
+                      <button
+                        key={cc.id}
+                        onClick={() => updateCircle(currentCircle.id, {
+                          customCircleId: cc.id,
+                          texture: ''
+                        })}
+                        className={`w-full text-left px-2 py-1 text-xs rounded transition-all ${isSelected ? 'bg-purple-600/50 text-white' : 'bg-gray-800/50 text-gray-300 hover:bg-gray-700/50'}`}
+                        style={isSelected ? { border: '1px solid rgba(168, 85, 247, 0.6)' } : { border: '1px solid transparent' }}
+                      >
+                        <span className="mr-1">🔮</span>
+                        {cc.name}
+                        <span className="text-gray-500 ml-1">({strokeCount}笔画)</span>
+                        {isSelected && <span className="float-right text-green-400">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              <button
+                onClick={() => onEnterDrawingMode?.()}
+                className="w-full mt-2 py-1.5 text-xs rounded bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:from-purple-500 hover:to-indigo-500 transition-all"
+              >
+                🎨 进入绘图模式
+              </button>
+            </div>
 
             {/* 基础参数 */}
             <RangeControl label="Y轴偏移" value={currentCircle.yOffset} min={-500} max={500} step={10} onChange={(v) => updateCircle(currentCircle.id, { yOffset: v })} />
@@ -9622,121 +9674,13 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                 {/* ===== 法阵 子Tab ===== */}
                 {planetSubTab === 'magicCircle' && (() => {
                   return (
-                    <>
-                      <MagicCircleControl planet={planet} updatePlanet={updatePlanet} getButtonStyle={getOptionButtonStyle} />
-
-                      {/* 自定义绘制法阵 */}
-                      <ControlGroup title="✨ 自定义绘制法阵">
-                        {/* 创建新法阵按钮 */}
-                        <div style={{ marginBottom: 12 }}>
-                          <button
-                            onClick={() => onEnterDrawingMode?.()}
-                            style={{
-                              width: '100%',
-                              padding: '10px 16px',
-                              background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                              border: 'none',
-                              borderRadius: 8,
-                              color: '#fff',
-                              fontWeight: 500,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 8,
-                              transition: 'all 0.2s',
-                              boxShadow: '0 2px 8px rgba(99, 102, 241, 0.3)'
-                            }}
-                          >
-                            🎨 进入绘图模式
-                          </button>
-                        </div>
-
-                        {/* 法阵列表 */}
-                        {customMagicCircles.length === 0 ? (
-                          <div style={{
-                            textAlign: 'center',
-                            padding: '24px 16px',
-                            color: '#888',
-                            background: 'rgba(255,255,255,0.03)',
-                            borderRadius: 8,
-                            border: '1px dashed rgba(255,255,255,0.1)'
-                          }}>
-                            <div style={{ fontSize: 32, marginBottom: 8 }}>🌀</div>
-                            <div style={{ fontSize: 13 }}>暂无自定义法阵</div>
-                            <div style={{ fontSize: 11, color: '#666', marginTop: 4 }}>点击上方按钮开始绘制</div>
-                          </div>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                            {customMagicCircles.map((circle) => (
-                              <div
-                                key={circle.id}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  padding: '10px 12px',
-                                  background: 'rgba(255,255,255,0.05)',
-                                  borderRadius: 8,
-                                  border: '1px solid rgba(255,255,255,0.1)',
-                                  transition: 'all 0.2s'
-                                }}
-                              >
-                                {/* 法阵名称 */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                  <span style={{ fontSize: 18 }}>🔮</span>
-                                  <span style={{ color: '#fff', fontSize: 13 }}>{circle.name}</span>
-                                  <span style={{ color: '#666', fontSize: 11 }}>
-                                    ({circle.layers?.reduce((acc, layer) => acc + (layer.strokes?.length || 0), 0) || 0} 笔画)
-                                  </span>
-                                </div>
-
-                                {/* 操作按钮 */}
-                                <div style={{ display: 'flex', gap: 6 }}>
-                                  {/* 编辑按钮 */}
-                                  <button
-                                    onClick={() => onSelectCircle?.(circle.id)}
-                                    style={{
-                                      padding: '4px 10px',
-                                      background: 'rgba(59, 130, 246, 0.2)',
-                                      border: '1px solid rgba(59, 130, 246, 0.4)',
-                                      borderRadius: 5,
-                                      color: '#3b82f6',
-                                      fontSize: 11,
-                                      cursor: 'pointer'
-                                    }}
-                                    title="编辑此法阵"
-                                  >
-                                    ✏️
-                                  </button>
-
-                                  {/* 删除按钮 */}
-                                  <button
-                                    onClick={() => {
-                                      if (confirm(`确定删除"${circle.name}"吗？`)) {
-                                        onUpdateCircles?.(customMagicCircles.filter(c => c.id !== circle.id));
-                                      }
-                                    }}
-                                    style={{
-                                      padding: '4px 10px',
-                                      background: 'rgba(239, 68, 68, 0.2)',
-                                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                                      borderRadius: 5,
-                                      color: '#ef4444',
-                                      fontSize: 11,
-                                      cursor: 'pointer'
-                                    }}
-                                    title="删除此法阵"
-                                  >
-                                    🗑️
-                                  </button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </ControlGroup>
-                    </>
+                    <MagicCircleControl
+                      planet={planet}
+                      updatePlanet={updatePlanet}
+                      getButtonStyle={getOptionButtonStyle}
+                      customMagicCircles={customMagicCircles}
+                      onEnterDrawingMode={onEnterDrawingMode}
+                    />
                   );
                 })()}
 
