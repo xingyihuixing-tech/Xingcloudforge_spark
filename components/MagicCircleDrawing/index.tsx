@@ -875,12 +875,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 }}
             />
 
-            {/* 画布右上角：撤销/重做 */}
+            {/* 画布内右上角：撤销/重做 */}
             <div
                 style={{
                     position: 'absolute',
-                    // 画布右边界 - 右侧面板宽度(320px) - 按钮宽度 - 边距
-                    right: 340,
+                    // 画布右边缘 = 50% + min(32.5vh, 32.5vw)，按钮在画布内部距离边缘12px
+                    left: 'calc(50% + min(32.5vh, 32.5vw) - 72px)',
                     top: 'calc(50% - min(32.5vh, 32.5vw) + 12px)',
                     display: 'flex',
                     flexDirection: 'row',

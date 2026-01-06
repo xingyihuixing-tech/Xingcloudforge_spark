@@ -1683,46 +1683,21 @@ const MagicCircleControl: React.FC<{
                   {customMagicCircles.map(cc => {
                     const isSelected = currentCircle.customCircleId === cc.id;
                     return (
-                      <div
+                      <button
                         key={cc.id}
-                        className="flex items-center gap-2 px-2 py-1 rounded transition-all"
+                        onClick={() => updateCircle(currentCircle.id, {
+                          customCircleId: cc.id,
+                          texture: ''
+                        })}
+                        className="w-full text-left px-2 py-1 text-xs rounded transition-all truncate"
                         style={{
                           border: isSelected ? '1px solid var(--ui-primary)' : '1px solid transparent',
-                          background: 'transparent'
+                          background: 'transparent',
+                          color: isSelected ? 'var(--ui-primary)' : '#ccc'
                         }}
                       >
-                        {/* 勾选框 - 控制是否显示 */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            // 切换 enabled 状态
-                            const updatedCircles = customMagicCircles.map(c =>
-                              c.id === cc.id ? { ...c, enabled: !c.enabled } : c
-                            );
-                            onUpdateCustomCircles?.(updatedCircles);
-                          }}
-                          className="w-4 h-4 rounded border flex items-center justify-center transition-colors"
-                          style={{
-                            borderColor: 'var(--ui-secondary)',
-                            background: cc.enabled ? 'var(--ui-secondary)' : 'transparent'
-                          }}
-                          title={cc.enabled ? '点击隐藏' : '点击显示'}
-                        >
-                          {cc.enabled && <span className="text-white text-[10px]">✓</span>}
-                        </button>
-
-                        {/* 名称 - 点击选择 */}
-                        <button
-                          onClick={() => updateCircle(currentCircle.id, {
-                            customCircleId: cc.id,
-                            texture: ''
-                          })}
-                          className="flex-1 text-left text-xs truncate transition-colors"
-                          style={{ color: isSelected ? 'var(--ui-primary)' : '#ccc' }}
-                        >
-                          {cc.name}
-                        </button>
-                      </div>
+                        {cc.name}
+                      </button>
                     );
                   })}
                 </div>
@@ -4044,7 +4019,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
 
   return (
     <div
-      className="w-80 h-full overflow-y-auto p-4 transition-all"
+      className="control-panel-scroll-container w-80 h-full overflow-y-auto p-4 transition-all"
       style={{
         position: 'relative',
         zIndex: 100,

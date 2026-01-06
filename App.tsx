@@ -395,6 +395,7 @@ const App: React.FC = () => {
   const [customMagicCircles, setCustomMagicCircles] = useState<CustomMagicCircle[]>([]);
   const [drawingModeActive, setDrawingModeActive] = useState(false);
   const [currentDrawingCircleId, setCurrentDrawingCircleId] = useState<string | null>(null);
+  const controlPanelScrollRef = useRef<number>(0);  // 保存控制台滚动位置
 
   // 多星云实例的粒子数据缓存
   const [nebulaInstancesData, setNebulaInstancesData] = useState<Map<string, ProcessedData>>(new Map());
@@ -415,6 +416,19 @@ const App: React.FC = () => {
     setXingConfig(loadXingConfig(userId));
     setNebulaPresets(loadNebulaPresets(userId));
   }, [currentUser?.id]);
+
+  // 退出绘图模式后恢复控制台滚动位置（问题3修复）
+  useEffect(() => {
+    if (!drawingModeActive && controlPanelScrollRef.current > 0) {
+      // 延迟恢复以确保 DOM 已渲染
+      setTimeout(() => {
+        const panel = document.querySelector('.control-panel-scroll-container');
+        if (panel) {
+          panel.scrollTop = controlPanelScrollRef.current;
+        }
+      }, 50);
+    }
+  }, [drawingModeActive]);
 
   // Cloud Sync: Load data on user login
   useEffect(() => {
@@ -1652,10 +1666,16 @@ const App: React.FC = () => {
             customMagicCircles={customMagicCircles}
             onUpdateCircles={setCustomMagicCircles}
             onEnterDrawingMode={() => {
+              // 保存控制台滚动位置
+              const panel = document.querySelector('.control-panel-scroll-container');
+              if (panel) controlPanelScrollRef.current = panel.scrollTop;
               setDrawingModeActive(true);
               setCurrentDrawingCircleId(null); // 新建法阵
             }}
             onSelectCircle={(id) => {
+              // 保存控制台滚动位置
+              const panel = document.querySelector('.control-panel-scroll-container');
+              if (panel) controlPanelScrollRef.current = panel.scrollTop;
               setDrawingModeActive(true);
               setCurrentDrawingCircleId(id); // 编辑现有法阵
             }}

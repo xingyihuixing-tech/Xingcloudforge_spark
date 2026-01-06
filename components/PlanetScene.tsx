@@ -7325,9 +7325,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       ).join('|') + `/wander:${p.fireflies.wanderingEnabled}|` + p.fireflies.wanderingGroups.map(g =>
         `${g.id}:${g.enabled}:${g.count}:${g.size}:${g.color}:${g.brightness}`
       ).join('|');
-      // 瘜閖猐��㺭
+      // 法阵key - 加入 customCircleId 确保自定义法阵选择变化触发重渲染
       const magicCircleKey = `mc:${p.magicCircles?.enabled ?? false}|` + (p.magicCircles?.circles || []).map(c =>
-        `${c.id}:${c.enabled}:${c.texture}:${c.radius}`
+        `${c.id}:${c.enabled}:${c.texture}:${c.customCircleId || ''}:${c.radius}`
       ).join('|');
       // �賡�雿枏��?- �芸��急��𤑳㮾�喳��堆��牐�雿梶����嚗峕甅撘誯�朞� uniforms �峕郊
       // �𤘪���㺭嚗䮝olyhedronType, radius, subdivisionLevel, spherize, renderMode
@@ -7485,6 +7485,23 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       });
     }
   }, [geometryKey, settings, sceneReady]);
+
+  // 绘图模式时隐藏整个星球场景（问题1修复）
+  useEffect(() => {
+    planetMeshesRef.current.forEach((meshes) => {
+      meshes.core.visible = !drawingModeActive;
+      meshes.flames.visible = !drawingModeActive;
+      meshes.rings.visible = !drawingModeActive;
+      meshes.radiation.visible = !drawingModeActive;
+      meshes.fireflies.visible = !drawingModeActive;
+      meshes.magicCircles.visible = !drawingModeActive;
+      meshes.energyBodies.visible = !drawingModeActive;
+    });
+    // 也隐藏自定义法阵组
+    if (customMagicCirclesGroupRef.current) {
+      customMagicCirclesGroupRef.current.visible = !drawingModeActive;
+    }
+  }, [drawingModeActive]);
 
   // 注意：自定义法阵渲染已移至 createMagicCircle 函数通过 customCircleId 实现
   // 原直接渲染代码已删除以避免重复渲染
