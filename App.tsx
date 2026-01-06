@@ -1629,8 +1629,8 @@ const App: React.FC = () => {
         overflow-hidden
         z-[100]
       `}>
-        {/* Control Panel (UI Overlay) */}
-        {showControls && !drawingModeActive && (
+        {/* Control Panel (UI Overlay) - 使用 CSS 隐藏而非条件渲染，保留内部状态 */}
+        <div style={{ display: showControls && !drawingModeActive ? 'block' : 'none', height: '100%' }}>
           <ControlPanel
             settings={settings}
             setSettings={setSettings}
@@ -1666,21 +1666,15 @@ const App: React.FC = () => {
             customMagicCircles={customMagicCircles}
             onUpdateCircles={setCustomMagicCircles}
             onEnterDrawingMode={() => {
-              // 保存控制台滚动位置
-              const panel = document.querySelector('.control-panel-scroll-container');
-              if (panel) controlPanelScrollRef.current = panel.scrollTop;
               setDrawingModeActive(true);
               setCurrentDrawingCircleId(null); // 新建法阵
             }}
             onSelectCircle={(id) => {
-              // 保存控制台滚动位置
-              const panel = document.querySelector('.control-panel-scroll-container');
-              if (panel) controlPanelScrollRef.current = panel.scrollTop;
               setDrawingModeActive(true);
               setCurrentDrawingCircleId(id); // 编辑现有法阵
             }}
           />
-        )}
+        </div>
       </div>
 
       {/* AI 助手面板 - 始终渲染以保持后台生成，使用 CSS 隐藏 */}
