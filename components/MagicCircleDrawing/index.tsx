@@ -7,6 +7,7 @@
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
     CustomMagicCircle,
     MagicCircleLayer,
@@ -126,6 +127,13 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     // 图层 solo 模式（仅显示当前图层）
     const [soloLayerId, setSoloLayerId] = useState<string | null>(null);
 
+    // Edit/Preview 模式切换
+    const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
+    const orbitControlsRef = useRef<OrbitControls | null>(null);
+
+    // 相机默认位置（用于重置视角）
+    const defaultCameraPosition = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
+
     // 初始化绘图场景、画布、渲染器和渲染循环（统一在一个 useEffect 中）
     useEffect(() => {
         if (!isActive) return;
@@ -146,6 +154,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             border,
             currentStrokeMesh: null
         };
+
+        // 保存相机默认位置（用于重置视角）
+        defaultCameraPosition.current = camera.position.clone();
 
         // 初始化对称轴
         updateSymmetryAxes(symmetryAxesGroup, symmetryDivisions, symmetryMode);
@@ -181,6 +192,11 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             const refs = refsRef.current;
             if (!refs.scene || !refs.camera) return;
 
+            // 更新 OrbitControls（如果存在）
+            if (orbitControlsRef.current) {
+                orbitControlsRef.current.update();
+            }
+
             renderer.render(refs.scene, refs.camera);
         };
 
@@ -212,6 +228,61 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             updateSymmetryAxes(refsRef.current.symmetryAxesGroup, symmetryDivisions, symmetryMode);
         }
     }, [symmetryDivisions, symmetryMode]);
+
+    // Edit/Preview 模式切换处理
+    useEffect(() => {
+        const refs = refsRef.current;
+        const renderer = rendererRef.current;
+        const canvas = canvasElementRef.current;
+
+        if (!refs.camera || !renderer || !canvas) return;
+
+        if (viewMode === 'preview') {
+            // 创建 OrbitControls
+            const controls = new OrbitControls(refs.camera, canvas);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.enableZoom = true;
+            controls.enablePan = false;
+            controls.minDistance = 0.3;
+            controls.maxDistance = 3;
+            orbitControlsRef.current = controls;
+
+            // 启用画布指针事件
+            canvas.style.pointerEvents = 'auto';
+
+            // 隐藏辅助元素（边框、中心点、对称轴）
+            if (refs.centerPoint) refs.centerPoint.visible = false;
+            if (refs.border) refs.border.visible = false;
+            if (refs.symmetryAxesGroup) refs.symmetryAxesGroup.visible = false;
+        } else {
+            // 销毁 OrbitControls
+            if (orbitControlsRef.current) {
+                orbitControlsRef.current.dispose();
+                orbitControlsRef.current = null;
+            }
+
+            // 禁用画布指针事件
+            canvas.style.pointerEvents = 'none';
+
+            // 重置相机位置和角度
+            refs.camera.position.copy(defaultCameraPosition.current);
+            refs.camera.lookAt(0, 0, 0);
+            refs.camera.up.set(0, 1, 0);
+
+            // 显示辅助元素
+            if (refs.centerPoint) refs.centerPoint.visible = true;
+            if (refs.border) refs.border.visible = true;
+            if (refs.symmetryAxesGroup) refs.symmetryAxesGroup.visible = true;
+        }
+
+        return () => {
+            if (orbitControlsRef.current) {
+                orbitControlsRef.current.dispose();
+                orbitControlsRef.current = null;
+            }
+        };
+    }, [viewMode]);
 
     // 当图层或内容改变时，重新渲染所有可见图层的笔画
     // 添加 isActive 依赖确保场景初始化后能触发渲染
@@ -297,6 +368,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
     // 处理指针按下
     const handlePointerDown = useCallback((e: React.PointerEvent) => {
+        // Preview模式下禁止绘制
+        if (viewMode === 'preview') return;
         if (!currentCircle || !currentLayer || currentLayer.locked) return;
 
         const container = canvasContainerRef.current;
@@ -329,7 +402,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         // 捕获指针
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    }, [currentCircle, currentLayer]);
+    }, [viewMode, currentCircle, currentLayer]);
 
     // 处理指针移动
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -886,6 +959,53 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     touchAction: 'none'
                 }}
             />
+
+            {/* 画布左上角：Edit/Preview 模式切换按钮 */}
+            <div
+                style={{
+                    position: 'absolute',
+                    // 画布左边缘 = 50% - min(32.5vh, 32.5vw)，按钮在边框之上
+                    left: 'calc(50% - min(32.5vh, 32.5vw))',
+                    top: 'calc(50% - min(32.5vh, 32.5vw) - 36px)',
+                    display: 'flex',
+                    flexDirection: 'row',
+                    gap: 4,
+                    pointerEvents: 'auto'
+                }}
+            >
+                <button
+                    onClick={() => setViewMode('edit')}
+                    style={{
+                        padding: '6px 12px',
+                        background: viewMode === 'edit' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.2)' : 'rgba(50, 50, 60, 0.6)',
+                        border: viewMode === 'edit' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '6px 0 0 6px',
+                        color: viewMode === 'edit' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.5)',
+                        fontSize: 12,
+                        fontWeight: viewMode === 'edit' ? 600 : 400,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    Edit
+                </button>
+                <button
+                    onClick={() => setViewMode('preview')}
+                    style={{
+                        padding: '6px 12px',
+                        background: viewMode === 'preview' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.2)' : 'rgba(50, 50, 60, 0.6)',
+                        border: viewMode === 'preview' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: '0 6px 6px 0',
+                        color: viewMode === 'preview' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.5)',
+                        fontSize: 12,
+                        fontWeight: viewMode === 'preview' ? 600 : 400,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                    }}
+                >
+                    Preview
+                </button>
+            </div>
 
             {/* 画布内右上角：撤销/重做 */}
             <div

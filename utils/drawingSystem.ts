@@ -40,7 +40,7 @@ export interface DrawingSystemState {
 // ==================== 绘图系统引用 ====================
 
 export interface DrawingSystemRefs {
-    camera: THREE.OrthographicCamera | null;
+    camera: THREE.PerspectiveCamera | null;
     scene: THREE.Scene | null;
     canvasGroup: THREE.Group | null;
     strokesGroup: THREE.Group | null;
@@ -54,7 +54,7 @@ export interface DrawingSystemRefs {
 
 export function createDrawingScene(): {
     scene: THREE.Scene;
-    camera: THREE.OrthographicCamera;
+    camera: THREE.PerspectiveCamera;
     canvasGroup: THREE.Group;
     strokesGroup: THREE.Group;
     symmetryAxesGroup: THREE.Group;
@@ -65,15 +65,15 @@ export function createDrawingScene(): {
     const scene = new THREE.Scene();
     scene.background = null; // 透明背景
 
-    // 创建正交相机 (固定看向 XY 平面)
+    // 创建透视相机（与场景渲染一致，确保粒子大小计算正确）
+    // 计算相机距离：使画布区域（宽度1）正好填满视口
+    // tan(fov/2) = (canvasSize/2) / distance => distance = 0.5 / tan(37.5°) ≈ 0.65
+    const fov = 75;
     const aspect = 1; // 正方形画布
-    const frustumSize = 1;
-    const camera = new THREE.OrthographicCamera(
-        -frustumSize / 2, frustumSize / 2,
-        frustumSize / 2, -frustumSize / 2,
-        0.1, 10
-    );
-    camera.position.set(0, 0, 1);
+    const camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 1000);
+    // 相机向后拉，距离计算确保画布宽度1正好填满视口
+    const distance = 0.5 / Math.tan(THREE.MathUtils.degToRad(fov / 2));
+    camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
 
     // 画布主 Group

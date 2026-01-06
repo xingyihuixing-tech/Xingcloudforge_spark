@@ -9289,6 +9289,18 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
                 }
               }
             }
+
+            // 更新自定义绘制法阵的 uTime（使脉冲和流动效果生效）
+            if (circleData.mesh instanceof THREE.Group && circleData.mesh.userData?.isCustomDrawn) {
+              circleData.mesh.traverse((child: THREE.Object3D) => {
+                if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
+                  const mat = (child as any).material as THREE.ShaderMaterial;
+                  if (mat?.uniforms?.uTime) {
+                    mat.uniforms.uTime.value = time;
+                  }
+                }
+              });
+            }
           });
         }
 
