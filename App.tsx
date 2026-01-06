@@ -1720,6 +1720,7 @@ const App: React.FC = () => {
       {appMode === 'planet' && !drawingModeActive && (
         <DrawingModeButton
           onClick={() => setDrawingModeActive(true)}
+          showControls={showControls}
         />
       )}
 

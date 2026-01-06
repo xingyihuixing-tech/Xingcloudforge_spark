@@ -891,7 +891,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     left: 'calc(50% + min(32.5vh, 32.5vw) + 12px)',
                     top: 'calc(50% - min(32.5vh, 32.5vw) - 48px)',
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: 'row',
                     gap: 8,
                     pointerEvents: 'auto'
                 }}

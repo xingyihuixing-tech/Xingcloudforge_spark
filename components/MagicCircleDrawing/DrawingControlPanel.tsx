@@ -115,7 +115,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                 backdropFilter: 'blur(24px) saturate(180%)',
                 WebkitBackdropFilter: 'blur(24px)',
                 borderLeft: '1px solid rgba(255,255,255,0.1)',
-                boxShadow: '-4px 0 24px rgba(0,0,0,0.3)'
+                boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
+                pointerEvents: 'auto'
             }}
         >
             {/* 头部 - 关闭按钮 */}
