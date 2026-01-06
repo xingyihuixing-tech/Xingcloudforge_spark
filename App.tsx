@@ -367,6 +367,33 @@ const saveNebulaPresets = (presets: NebulaPreset[], userId?: string | null) => {
   }
 };
 
+// ==================== 自定义法阵存储 ====================
+const CUSTOM_MAGIC_CIRCLES_STORAGE_KEY = 'custom_magic_circles_v1';
+
+// 加载自定义法阵（支持用户隔离）
+const loadCustomMagicCircles = (userId?: string | null): CustomMagicCircle[] => {
+  try {
+    const key = getUserScopedStorageKey(CUSTOM_MAGIC_CIRCLES_STORAGE_KEY, userId);
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      return JSON.parse(saved);
+    }
+  } catch (e) {
+    console.warn('Failed to load custom magic circles:', e);
+  }
+  return [];
+};
+
+// 保存自定义法阵（支持用户隔离）
+const saveCustomMagicCircles = (circles: CustomMagicCircle[], userId?: string | null) => {
+  try {
+    const key = getUserScopedStorageKey(CUSTOM_MAGIC_CIRCLES_STORAGE_KEY, userId);
+    localStorage.setItem(key, JSON.stringify(circles));
+  } catch (e) {
+    console.warn('Failed to save custom magic circles:', e);
+  }
+};
+
 const App: React.FC = () => {
   // 用户登录状态
   const { currentUser, isLoading: isUserLoading, saveCloudConfig, loadCloudConfig } = useUser();
@@ -391,8 +418,8 @@ const App: React.FC = () => {
   // 星云预览模式
   const [nebulaPreviewMode, setNebulaPreviewMode] = useState(false);
 
-  // 自定义法阵绘制系统
-  const [customMagicCircles, setCustomMagicCircles] = useState<CustomMagicCircle[]>([]);
+  // 自定义法阵绘制系统 - 初始化时从本地存储加载
+  const [customMagicCircles, setCustomMagicCircles] = useState<CustomMagicCircle[]>(() => loadCustomMagicCircles(null));
   const [drawingModeActive, setDrawingModeActive] = useState(false);
   const [currentDrawingCircleId, setCurrentDrawingCircleId] = useState<string | null>(null);
   const controlPanelScrollRef = useRef<number>(0);  // 保存控制台滚动位置
@@ -415,6 +442,7 @@ const App: React.FC = () => {
     setUserMaterialPresets(loadUserMaterialPresets(userId));
     setXingConfig(loadXingConfig(userId));
     setNebulaPresets(loadNebulaPresets(userId));
+    setCustomMagicCircles(loadCustomMagicCircles(userId));  // 加载自定义法阵
   }, [currentUser?.id]);
 
   // 退出绘图模式后恢复控制台滚动位置（问题3修复）
@@ -567,6 +595,7 @@ const App: React.FC = () => {
       saveUserMaterialPresets(userMaterialPresets, userId);
       saveXingConfig(xingConfig, userId);
       saveNebulaPresets(nebulaPresets, userId);
+      saveCustomMagicCircles(customMagicCircles, userId);  // 保存自定义法阵
 
       // If logged in and hydrated, save to cloud
       if (currentUser && hasHydratedFromCloud) {

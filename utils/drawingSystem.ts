@@ -294,10 +294,10 @@ export function createParticleStrokeMesh(
 
                 particlePositions.push(sp.x + jx, sp.y + jy, 0);
 
-                // 粒子大小 = 基础大小 × 压感 × 随机变化
+                // 粒子大小 = 基础大小 × 压感 × 随机变化（增大系数使粒子更明显）
                 const sizeVariation = 0.7 + Math.random() * 0.6;
                 const pressureFactor = 0.5 + point.pressure * 0.5;
-                particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.008);
+                particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.05);
 
                 particleColors.push(colorObj.r, colorObj.g, colorObj.b);
                 particleAlphas.push(0.7 + Math.random() * 0.3);

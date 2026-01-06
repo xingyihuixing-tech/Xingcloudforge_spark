@@ -7325,9 +7325,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       ).join('|') + `/wander:${p.fireflies.wanderingEnabled}|` + p.fireflies.wanderingGroups.map(g =>
         `${g.id}:${g.enabled}:${g.count}:${g.size}:${g.color}:${g.brightness}`
       ).join('|');
-      // 法阵key - 加入 customCircleId 确保自定义法阵选择变化触发重渲染
+      // 法阵key - 加入 customCircleId 和参数确保变化触发重渲染
       const magicCircleKey = `mc:${p.magicCircles?.enabled ?? false}|` + (p.magicCircles?.circles || []).map(c =>
-        `${c.id}:${c.enabled}:${c.texture}:${c.customCircleId || ''}:${c.radius}`
+        `${c.id}:${c.enabled}:${c.texture}:${c.customCircleId || ''}:${c.radius}:${c.opacity}:${c.hueShift}:${c.brightness}:${c.pulseEnabled}:${c.pulseSpeed}:${c.pulseIntensity}`
       ).join('|');
       // �賡�雿枏��?- �芸��急��𤑳㮾�喳��堆��牐�雿梶����嚗峕甅撘誯�朞� uniforms �峕郊
       // �𤘪���㺭嚗䮝olyhedronType, radius, subdivisionLevel, spherize, renderMode

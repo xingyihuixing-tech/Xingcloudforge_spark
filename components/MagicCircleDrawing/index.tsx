@@ -214,8 +214,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     }, [symmetryDivisions, symmetryMode]);
 
     // 当图层或内容改变时，重新渲染所有可见图层的笔画
+    // 添加 isActive 依赖确保场景初始化后能触发渲染
     useEffect(() => {
-        if (!refsRef.current.strokesGroup || !currentCircle) return;
+        if (!isActive || !refsRef.current.strokesGroup || !currentCircle) return;
 
         // 清空笔画组
         const strokesGroup = refsRef.current.strokesGroup;
@@ -264,7 +265,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 strokesGroup.add(mesh);
             }
         }
-    }, [currentCircle, soloLayerId]);
+    }, [isActive, currentCircle, soloLayerId]);
 
     // 渲染器和画布 ref（创建在第一个 useEffect 中）
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
