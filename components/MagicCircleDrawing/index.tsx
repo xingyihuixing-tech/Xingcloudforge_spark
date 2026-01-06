@@ -1,6 +1,6 @@
 /**
  * input: drawingMode state, customMagicCircles from App.tsx
- * output: Drawing overlay UI with canvas, tools, layers
+ * output: Drawing overlay UI with 3D canvas, tools, layers
  * pos: Main entry for custom magic circle drawing system
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  */
@@ -15,6 +15,7 @@ import {
     LineRingBrushSettings,
     SymmetryMode
 } from '../../types';
+import { DrawingRenderer } from './DrawingRenderer';
 
 // 默认画笔设置
 const defaultParticleBrush: ParticleBrushSettings = {
@@ -94,9 +95,7 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
     const [isDrawing, setIsDrawing] = useState(false);
     const currentStrokeRef = useRef<MagicCircleStroke | null>(null);
     const canvasRef = useRef<HTMLDivElement>(null);
-
-    // 用于强制刷新实时预览的计数器
-    const [, forceUpdate] = useState(0);
+    const rendererRef = useRef<DrawingRenderer | null>(null);
 
     // 撤销/重做栈
     const [undoStack, setUndoStack] = useState<MagicCircleStroke[]>([]);
@@ -105,44 +104,43 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
     // 当前图层
     const currentLayer = currentCircle?.layers.find(l => l.id === currentLayerId) || null;
 
-    // 应用对称变换
-    const applySymmetry = useCallback((
-        point: StrokePoint,
-        mode: SymmetryMode,
-        divisions: number
-    ): StrokePoint[] => {
-        if (mode === 'none') return [point];
-
-        const results: StrokePoint[] = [];
-        const angleStep = (Math.PI * 2) / divisions;
-
-        // 转换为相对中心的坐标
-        const dx = point.x - 0.5;
-        const dy = point.y - 0.5;
-        const radius = Math.sqrt(dx * dx + dy * dy);
-        const baseAngle = Math.atan2(dy, dx);
-
-        for (let i = 0; i < divisions; i++) {
-            const angle = baseAngle + angleStep * i;
-            results.push({
-                ...point,
-                x: 0.5 + radius * Math.cos(angle),
-                y: 0.5 + radius * Math.sin(angle)
-            });
-
-            // 万花筒模式：每份内部镜像
-            if (mode === 'kaleidoscope') {
-                const mirroredAngle = angleStep * (i + 0.5) * 2 - angle;
-                results.push({
-                    ...point,
-                    x: 0.5 + radius * Math.cos(mirroredAngle),
-                    y: 0.5 + radius * Math.sin(mirroredAngle)
-                });
-            }
+    // 初始化 Three.js 渲染器
+    useEffect(() => {
+        if (isActive && canvasRef.current && !rendererRef.current) {
+            rendererRef.current = new DrawingRenderer(canvasRef.current);
         }
 
-        return results;
-    }, []);
+        return () => {
+            if (rendererRef.current) {
+                rendererRef.current.dispose();
+                rendererRef.current = null;
+            }
+        };
+    }, [isActive]);
+
+    // 更新辅助线
+    useEffect(() => {
+        if (rendererRef.current && currentLayer) {
+            rendererRef.current.updateGuides(
+                currentLayer.symmetryMode,
+                currentLayer.symmetryDivisions
+            );
+        }
+    }, [currentLayer?.symmetryMode, currentLayer?.symmetryDivisions]);
+
+    // 重绘所有笔画
+    useEffect(() => {
+        if (rendererRef.current && currentLayer) {
+            rendererRef.current.clearStrokes();
+            currentLayer.strokes.forEach(stroke => {
+                rendererRef.current!.addStroke(
+                    stroke,
+                    currentLayer.symmetryMode,
+                    currentLayer.symmetryDivisions
+                );
+            });
+        }
+    }, [currentLayer?.strokes, currentLayer?.symmetryMode, currentLayer?.symmetryDivisions]);
 
     // 处理指针按下
     const handlePointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -152,7 +150,7 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
         if (!rect) return;
 
         const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
+        const y = 1 - (e.clientY - rect.top) / rect.height; // 翻转 Y 轴以匹配 Three.js 坐标系
         const pressure = e.pressure || 0.5;
 
         setIsDrawing(true);
@@ -170,28 +168,39 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
 
     // 处理指针移动
     const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-        if (!isDrawing || !currentStrokeRef.current) return;
+        if (!isDrawing || !currentStrokeRef.current || !currentLayer) return;
 
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
 
         const x = (e.clientX - rect.left) / rect.width;
-        const y = (e.clientY - rect.top) / rect.height;
+        const y = 1 - (e.clientY - rect.top) / rect.height; // 翻转 Y 轴
         const pressure = e.pressure || 0.5;
 
         currentStrokeRef.current.points.push({
             x, y, pressure, timestamp: Date.now()
         });
 
-        // 强制刷新以显示实时笔画
-        forceUpdate(n => n + 1);
-    }, [isDrawing]);
+        // 更新 3D 预览
+        if (rendererRef.current) {
+            rendererRef.current.updateCurrentStroke(
+                currentStrokeRef.current,
+                currentLayer.symmetryMode,
+                currentLayer.symmetryDivisions
+            );
+        }
+    }, [isDrawing, currentLayer]);
 
     // 处理指针抬起
     const handlePointerUp = useCallback(() => {
-        if (!isDrawing || !currentStrokeRef.current || !currentCircle || !currentLayerId) return;
+        if (!isDrawing || !currentStrokeRef.current || !currentCircle || !currentLayerId || !currentLayer) return;
 
         const stroke = currentStrokeRef.current;
+
+        // 清除当前绘制中的笔画预览
+        if (rendererRef.current) {
+            rendererRef.current.updateCurrentStroke(null, 'none', 8);
+        }
 
         // 只有当有采样点时才添加笔画
         if (stroke.points.length > 1) {
@@ -217,7 +226,7 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
 
         setIsDrawing(false);
         currentStrokeRef.current = null;
-    }, [isDrawing, currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
+    }, [isDrawing, currentCircle, currentLayerId, currentLayer, customMagicCircles, onUpdateCircles]);
 
     // 撤销
     const handleUndo = useCallback(() => {
@@ -275,6 +284,8 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
         onUpdateCircles([...customMagicCircles, newCircle]);
         onSelectCircle(newCircle.id);
         setCurrentLayerId(newCircle.layers[0].id);
+        setUndoStack([]);
+        setRedoStack([]);
     }, [customMagicCircles, onUpdateCircles, onSelectCircle]);
 
     // 新建图层
@@ -294,6 +305,8 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
 
         onUpdateCircles(updatedCircles);
         setCurrentLayerId(newLayer.id);
+        setUndoStack([]);
+        setRedoStack([]);
     }, [currentCircle, customMagicCircles, onUpdateCircles]);
 
     // 更新图层对称模式
@@ -314,6 +327,24 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
         onUpdateCircles(updatedCircles);
     }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
 
+    // 保存法阵 (生成缩略图)
+    const handleSaveCircle = useCallback(() => {
+        if (!currentCircle || !rendererRef.current) return;
+
+        const thumbnail = rendererRef.current.generateThumbnail();
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                thumbnail,
+                updatedAt: Date.now()
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+    }, [currentCircle, customMagicCircles, onUpdateCircles]);
+
     // 初始化：如果没有选中的法阵，创建一个新的
     useEffect(() => {
         if (isActive && !currentCircleId && customMagicCircles.length === 0) {
@@ -323,6 +354,15 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
             setCurrentLayerId(customMagicCircles[0].layers[0]?.id || null);
         }
     }, [isActive, currentCircleId, customMagicCircles.length]);
+
+    // 切换法阵时重置
+    useEffect(() => {
+        if (currentCircle) {
+            setCurrentLayerId(currentCircle.layers[0]?.id || null);
+            setUndoStack([]);
+            setRedoStack([]);
+        }
+    }, [currentCircleId]);
 
     if (!isActive) return null;
 
@@ -459,6 +499,24 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                     />
                 </div>
 
+                {/* 保存按钮 */}
+                <button
+                    onClick={handleSaveCircle}
+                    style={{
+                        width: '100%',
+                        padding: '8px 0',
+                        marginBottom: 8,
+                        background: 'rgba(100, 200, 100, 0.2)',
+                        border: '1px solid rgba(100, 200, 100, 0.5)',
+                        borderRadius: 6,
+                        color: '#8f8',
+                        fontSize: 11,
+                        cursor: 'pointer'
+                    }}
+                >
+                    💾 保存法阵
+                </button>
+
                 {/* 退出按钮 */}
                 <button
                     onClick={onClose}
@@ -477,7 +535,7 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                 </button>
             </div>
 
-            {/* 中央画布 */}
+            {/* 中央 3D 画布 */}
             <div
                 ref={canvasRef}
                 onPointerDown={handlePointerDown}
@@ -491,107 +549,15 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                     transform: 'translate(-50%, -50%)',
                     width: 'min(60vh, 60vw)',
                     height: 'min(60vh, 60vw)',
-                    background: 'rgba(10, 10, 20, 0.8)',
+                    background: 'rgba(10, 10, 20, 0.9)',
                     border: '2px solid rgba(255, 170, 0, 0.5)',
                     borderRadius: 8,
                     pointerEvents: 'auto',
                     cursor: 'crosshair',
-                    touchAction: 'none'
+                    touchAction: 'none',
+                    overflow: 'hidden'
                 }}
-            >
-                {/* SVG 预览层 - pointer-events:none 让事件穿透到画布 */}
-                <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none' }}>
-                    {/* 已完成的笔画 */}
-                    {currentLayer?.strokes.map(stroke => {
-                        // 应用对称变换
-                        const allPoints: StrokePoint[][] = [];
-                        if (currentLayer.symmetryMode === 'none') {
-                            allPoints.push(stroke.points);
-                        } else {
-                            // 为每个对称副本生成点列表
-                            const divisions = currentLayer.symmetryDivisions;
-                            for (let i = 0; i < divisions; i++) {
-                                const angle = (Math.PI * 2 / divisions) * i;
-                                const transformedPoints = stroke.points.map(p => {
-                                    const dx = p.x - 0.5;
-                                    const dy = p.y - 0.5;
-                                    const cos = Math.cos(angle);
-                                    const sin = Math.sin(angle);
-                                    return {
-                                        ...p,
-                                        x: 0.5 + dx * cos - dy * sin,
-                                        y: 0.5 + dx * sin + dy * cos
-                                    };
-                                });
-                                allPoints.push(transformedPoints);
-
-                                // 万花筒镜像
-                                if (currentLayer.symmetryMode === 'kaleidoscope') {
-                                    const mirroredPoints = transformedPoints.map(p => ({
-                                        ...p,
-                                        x: 1 - p.x
-                                    }));
-                                    allPoints.push(mirroredPoints);
-                                }
-                            }
-                        }
-
-                        return allPoints.map((points, idx) => (
-                            <polyline
-                                key={`${stroke.id}_${idx}`}
-                                points={points.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
-                                fill="none"
-                                stroke={stroke.color}
-                                strokeWidth={stroke.brushType === 'particle'
-                                    ? (stroke.brushSettings as ParticleBrushSettings).baseSize / 5
-                                    : (stroke.brushSettings as LineRingBrushSettings).baseWidth
-                                }
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                opacity={0.8}
-                            />
-                        ));
-                    })}
-
-                    {/* 正在绘制的笔画 */}
-                    {isDrawing && currentStrokeRef.current && currentLayer && (() => {
-                        const stroke = currentStrokeRef.current;
-                        const divisions = currentLayer.symmetryDivisions;
-                        const lines: JSX.Element[] = [];
-
-                        for (let i = 0; i < (currentLayer.symmetryMode === 'none' ? 1 : divisions); i++) {
-                            const angle = (Math.PI * 2 / divisions) * i;
-                            const transformedPoints = stroke.points.map(p => {
-                                if (currentLayer.symmetryMode === 'none') return p;
-                                const dx = p.x - 0.5;
-                                const dy = p.y - 0.5;
-                                const cos = Math.cos(angle);
-                                const sin = Math.sin(angle);
-                                return {
-                                    ...p,
-                                    x: 0.5 + dx * cos - dy * sin,
-                                    y: 0.5 + dx * sin + dy * cos
-                                };
-                            });
-
-                            lines.push(
-                                <polyline
-                                    key={`drawing_${i}`}
-                                    points={transformedPoints.map(p => `${p.x * 100},${p.y * 100}`).join(' ')}
-                                    fill="none"
-                                    stroke={brushColor}
-                                    strokeWidth={brushType === 'particle' ? particleSettings.baseSize / 5 : lineRingSettings.baseWidth}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    opacity={0.8}
-                                />
-                            );
-                        }
-
-                        return lines;
-                    })()}
-                </svg>
-            </div>
+            />
 
             {/* 底部控制面板 */}
             <div
@@ -609,6 +575,48 @@ export const MagicCircleDrawing: React.FC<MagicCircleDrawingProps> = ({
                     border: '1px solid rgba(255, 170, 0, 0.3)'
                 }}
             >
+                {/* 法阵选择 */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11, color: '#888' }}>法阵:</span>
+                    <button
+                        onClick={handleNewCircle}
+                        style={{
+                            padding: '4px 8px',
+                            background: 'rgba(100, 200, 100, 0.2)',
+                            border: '1px solid rgba(100, 200, 100, 0.5)',
+                            borderRadius: 4,
+                            color: '#8f8',
+                            fontSize: 10,
+                            cursor: 'pointer'
+                        }}
+                    >
+                        [+]
+                    </button>
+                    {customMagicCircles.map(circle => (
+                        <button
+                            key={circle.id}
+                            onClick={() => {
+                                onSelectCircle(circle.id);
+                                setCurrentLayerId(circle.layers[0]?.id || null);
+                            }}
+                            style={{
+                                padding: '4px 8px',
+                                background: currentCircleId === circle.id ? 'rgba(255, 170, 0, 0.3)' : 'rgba(50, 50, 60, 0.8)',
+                                border: `1px solid ${currentCircleId === circle.id ? '#ffaa00' : 'rgba(100, 100, 120, 0.5)'}`,
+                                borderRadius: 4,
+                                color: currentCircleId === circle.id ? '#ffaa00' : '#aaa',
+                                fontSize: 10,
+                                cursor: 'pointer'
+                            }}
+                        >
+                            {circle.name}
+                        </button>
+                    ))}
+                </div>
+
+                {/* 分隔线 */}
+                <div style={{ width: 1, background: 'rgba(100, 100, 120, 0.5)' }} />
+
                 {/* 对称模式 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 11, color: '#888' }}>对称:</span>
