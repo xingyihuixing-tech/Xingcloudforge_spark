@@ -642,7 +642,7 @@ const App: React.FC = () => {
     }, 1000); // 1 second debounce
 
     return () => clearTimeout(handler);
-  }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, nebulaPresets, currentUser, hasHydratedFromCloud, saveCloudConfig]);
+  }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, nebulaPresets, customMagicCircles, currentUser, hasHydratedFromCloud, saveCloudConfig]);
 
   // 应用主题 CSS 变量
   useEffect(() => {

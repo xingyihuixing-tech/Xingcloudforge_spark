@@ -255,7 +255,8 @@ export function createParticleStrokeMesh(
     color: string,
     settings: Partial<ParticleRingSettings>,
     symmetryMode: SymmetryMode,
-    symmetryDivisions: number
+    symmetryDivisions: number,
+    magicCircleSettings?: { opacity?: number; hueShift?: number; brightness?: number; pulseEnabled?: boolean; pulseSpeed?: number; pulseIntensity?: number }
 ): THREE.Points {
     // 沿路径采样粒子位置
     const particlePositions: number[] = [];
@@ -311,14 +312,20 @@ export function createParticleStrokeMesh(
     geometry.setAttribute('alpha', new THREE.Float32BufferAttribute(particleAlphas, 1));
 
     // 粒子着色器 - 匹配 PlanetScene 粒子环效果
+    const mcSettings = magicCircleSettings || {};
     const material = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
             uGlowIntensity: { value: settings.brightness ?? 2.5 },
             uEmissive: { value: 2.0 },
             uCoreBrightness: { value: 3.0 },
-            uPulseEnabled: { value: 0.0 },  // 静态效果
-            uPulseSpeed: { value: 1.0 }
+            uPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+            uPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+            uPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
+            // 法阵级别参数
+            uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+            uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+            uMCBrightness: { value: mcSettings.brightness ?? 1.0 }
         },
         vertexShader: `
 precision highp float;
@@ -334,6 +341,7 @@ varying float vSize;
 uniform float uTime;
 uniform float uPulseEnabled;
 uniform float uPulseSpeed;
+uniform float uPulseIntensity;
 
 void main() {
   vColor = color;
@@ -343,7 +351,7 @@ void main() {
   // 脉冲效果
   float pulse = 1.0;
   if (uPulseEnabled > 0.5) {
-    pulse = 0.8 + 0.4 * sin(uTime * uPulseSpeed + position.x * 10.0 + position.y * 10.0);
+    pulse = 1.0 + sin(uTime * uPulseSpeed + position.x * 10.0 + position.y * 10.0) * uPulseIntensity;
   }
   
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
@@ -358,6 +366,9 @@ uniform float uGlowIntensity;
 uniform float uEmissive;
 uniform float uCoreBrightness;
 uniform float uTime;
+uniform float uMCOpacity;
+uniform float uMCHueShift;
+uniform float uMCBrightness;
 
 varying vec3 vColor;
 varying float vAlpha;
@@ -384,8 +395,22 @@ void main() {
   // 最终颜色 - 应用发光
   vec3 finalColor = vColor * brightness;
   
-  // Alpha
-  float alpha = glow * vAlpha;
+  // 应用法阵级别色相偏移
+  if (uMCHueShift > 0.001 || uMCHueShift < -0.001) {
+    float h = atan(finalColor.g - finalColor.b, finalColor.r - finalColor.g) / 6.283185 + 0.5;
+    float s = length(finalColor - vec3(dot(finalColor, vec3(0.299, 0.587, 0.114))));
+    float v = max(max(finalColor.r, finalColor.g), finalColor.b);
+    h = fract(h + uMCHueShift);
+    // 简化的HSV转RGB
+    vec3 rgb = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+    finalColor = v * mix(vec3(1.0), rgb, s);
+  }
+  
+  // 应用法阵级别亮度
+  finalColor *= uMCBrightness;
+  
+  // Alpha - 应用法阵级别透明度
+  float alpha = glow * vAlpha * uMCOpacity;
   
   gl_FragColor = vec4(finalColor, alpha);
 }
@@ -441,6 +466,14 @@ uniform vec3 uColor2;
 uniform vec3 uColor3;
 uniform float uColorMidPos;
 uniform float uProceduralIntensity;
+
+// 法阵级别参数
+uniform float uMCOpacity;
+uniform float uMCHueShift;
+uniform float uMCBrightness;
+uniform float uMCPulseEnabled;
+uniform float uMCPulseSpeed;
+uniform float uMCPulseIntensity;
 
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -500,7 +533,28 @@ void main() {
   vec3 finalColor = baseColor * (1.0 + brightness * uEmissive);
   finalColor *= (1.0 + uBloomBoost * brightness * 0.5);
   
-  float alpha = brightness * uOpacity;
+  // 应用法阵级别脉冲
+  if (uMCPulseEnabled > 0.5) {
+    float pulse = 1.0 + sin(uTime * uMCPulseSpeed) * uMCPulseIntensity;
+    finalColor *= pulse;
+  }
+  
+  // 应用法阵级别色相偏移 (简化处理)
+  if (uMCHueShift > 0.001 || uMCHueShift < -0.001) {
+    float luminance = dot(finalColor, vec3(0.299, 0.587, 0.114));
+    vec3 shifted = vec3(
+      finalColor.r * cos(uMCHueShift * 6.283) - finalColor.g * sin(uMCHueShift * 6.283),
+      finalColor.r * sin(uMCHueShift * 6.283) + finalColor.g * cos(uMCHueShift * 6.283),
+      finalColor.b
+    );
+    finalColor = mix(finalColor, shifted, 0.7);
+  }
+  
+  // 应用法阵级别亮度
+  finalColor *= uMCBrightness;
+  
+  // 应用法阵级别透明度
+  float alpha = brightness * uOpacity * uMCOpacity;
   alpha = smoothstep(0.05, 0.8, alpha);
 
   gl_FragColor = vec4(finalColor, alpha);
@@ -514,7 +568,8 @@ export function createLineStrokeMesh(
     color: string,
     settings: Partial<SilkRingSettings>,
     symmetryMode: SymmetryMode,
-    symmetryDivisions: number
+    symmetryDivisions: number,
+    magicCircleSettings?: { opacity?: number; hueShift?: number; brightness?: number; pulseEnabled?: boolean; pulseSpeed?: number; pulseIntensity?: number }
 ): THREE.Group {
     const group = new THREE.Group();
 
@@ -522,6 +577,7 @@ export function createLineStrokeMesh(
 
     const colorObj = new THREE.Color(color);
     const lineWidth = (settings.thickness || 0.02) * 0.3;
+    const mcSettings = magicCircleSettings || {};
 
     // 为每个对称副本创建线条
     const allPaths: THREE.Vector3[][] = [];
@@ -585,7 +641,14 @@ export function createLineStrokeMesh(
                 uColor2: { value: new THREE.Vector3(1, 1, 1) },
                 uColor3: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
                 uColorMidPos: { value: 0.5 },
-                uProceduralIntensity: { value: 1.0 }
+                uProceduralIntensity: { value: 1.0 },
+                // 法阵级别参数
+                uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+                uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+                uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+                uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+                uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+                uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
             },
             transparent: true,
             depthWrite: false,
