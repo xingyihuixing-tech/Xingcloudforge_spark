@@ -306,6 +306,10 @@ export function createParticleStrokeMesh(
     // 采样间隔 = 路径点数 / 目标粒子数
     const sampleStep = Math.max(1, Math.floor(points.length / targetParticleCount));
 
+    // 计算每个采样点应生成的粒子数（确保可以超过采样点数）
+    const actualSampleCount = Math.ceil(points.length / sampleStep);
+    const particlesPerPoint = Math.max(1, Math.ceil(targetParticleCount / actualSampleCount));
+
     // 对每个采样点应用对称变换
     for (let i = 0; i < points.length; i += sampleStep) {
         const point = points[i];
@@ -316,28 +320,31 @@ export function createParticleStrokeMesh(
         );
 
         for (const sp of symmetricPoints) {
-            // 添加散布抖动 (笔触粗细控制xy方向)
-            const jitter = strokeThickness * 0.002; // 映射到画布单位
-            const jx = (Math.random() - 0.5) * jitter;
-            const jy = (Math.random() - 0.5) * jitter;
-            // 空间粗细：z方向散布
-            const jz = spatialThickness ? (Math.random() - 0.5) * zThickness * 0.002 : 0;
+            // 每个对称点生成多个粒子
+            for (let p = 0; p < particlesPerPoint; p++) {
+                // 添加散布抖动 (笔触粗细控制xy方向)
+                const jitter = strokeThickness * 0.002; // 映射到画布单位
+                const jx = (Math.random() - 0.5) * jitter;
+                const jy = (Math.random() - 0.5) * jitter;
+                // 空间粗细：z方向散布
+                const jz = spatialThickness ? (Math.random() - 0.5) * zThickness * 0.002 : 0;
 
-            const px = sp.x + jx;
-            const py = sp.y + jy;
-            particlePositions.push(px, py, jz);
+                const px = sp.x + jx;
+                const py = sp.y + jy;
+                particlePositions.push(px, py, jz);
 
-            // 计算径向距离用于渐变（归一化到0-1）
-            const radialDist = Math.sqrt(px * px + py * py) * 2; // 最大0.5变成1
-            particleRadialDists.push(Math.min(1, radialDist));
+                // 计算径向距离用于渐变（归一化到0-1）
+                const radialDist = Math.sqrt(px * px + py * py) * 2; // 最大0.5变成1
+                particleRadialDists.push(Math.min(1, radialDist));
 
-            // 粒子大小 = 基础大小 × 压感 × 随机变化
-            const sizeVariation = 0.7 + Math.random() * 0.6;
-            const pressureFactor = 0.5 + point.pressure * 0.5;
-            particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.05);
+                // 粒子大小 = 基础大小 × 压感 × 随机变化
+                const sizeVariation = 0.7 + Math.random() * 0.6;
+                const pressureFactor = 0.5 + point.pressure * 0.5;
+                particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.05);
 
-            particleColors.push(colorObj.r, colorObj.g, colorObj.b);
-            particleAlphas.push(0.7 + Math.random() * 0.3);
+                particleColors.push(colorObj.r, colorObj.g, colorObj.b);
+                particleAlphas.push(0.7 + Math.random() * 0.3);
+            }
         }
     }
 

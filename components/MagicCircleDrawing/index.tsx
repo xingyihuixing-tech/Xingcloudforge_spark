@@ -779,9 +779,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={1}
-                                    max={50}
-                                    step={1}
+                                    min={50}
+                                    max={300}
+                                    step={10}
                                     value={particleSettings.particleSize || 2}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleSize: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
@@ -795,9 +795,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={1}
-                                    max={30}
-                                    step={1}
+                                    min={30}
+                                    max={200}
+                                    step={10}
                                     value={particleSettings.particleDensity || 3}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleDensity: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
@@ -811,9 +811,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={0.5}
-                                    max={4}
-                                    step={0.1}
+                                    min={1}
+                                    max={10}
+                                    step={0.5}
                                     value={particleSettings.brightness || 2}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, brightness: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
