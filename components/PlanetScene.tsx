@@ -1,5 +1,5 @@
 /**
- * input: App.tsx 传入的星球 settings + nebulaSettings + 手势/图像等数据；依赖 shaders 与三维后处理
+ * input: App.tsx 传入的星球 settings + nebulaSettings + 自定义法阵 customMagicCircles（含 updatedAt 用于触发重建）+ 手势/图像等数据；依赖 shaders 与三维后处理
  * output: 渲染 Planet 场景；互通模式（Interop）下接管星云实例渲染与相关 uniforms 同步
  * pos: 互通模式渲染的权威入口，负责“星球 + 星云叠加”整体画面与特效即时生效
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
@@ -39,7 +39,6 @@ import {
   NebulaBlendMode,
   SilkRingSettings
 } from '../types';
-import OldNebulaScene from '../OldNebulaScene';
 import { ProcessedData } from '../services/imageProcessing';
 import { createDefaultEnergyBody } from '../constants';
 import { nebulaCanvasVertexShader, nebulaCanvasFragmentShader } from '../shaders/nebulaCanvasShaders';
@@ -7265,7 +7264,18 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
 
   // ����毺��牐�雿梶㮾�喳��啁� hash key嚗��鈭𥕦��啣��㚚�閬��撱箏�雿蓥�嚗?
   // ����牐�雿枏��袁ey
-  const generateGeometryKey = (planets: typeof settings.planets, soloCoreId: string | null | undefined) => {
+  const generateGeometryKey = (
+    planets: typeof settings.planets,
+    soloCoreId: string | null | undefined,
+    customCirclesData?: CustomMagicCircle[]
+  ) => {
+    const customCircleUpdatedAtMap = new Map<string, number>();
+    if (customCirclesData) {
+      customCirclesData.forEach((c) => {
+        customCircleUpdatedAtMap.set(c.id, c.updatedAt || 0);
+      });
+    }
+
     // ��鉄�典��批���㺭
     const globalKey = `solo:${soloCoreId || 'none'}`;
 
@@ -7326,9 +7336,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
         `${g.id}:${g.enabled}:${g.count}:${g.size}:${g.color}:${g.brightness}`
       ).join('|');
       // 法阵key - 加入 customCircleId 和参数确保变化触发重渲染
-      const magicCircleKey = `mc:${p.magicCircles?.enabled ?? false}|` + (p.magicCircles?.circles || []).map(c =>
-        `${c.id}:${c.enabled}:${c.texture}:${c.customCircleId || ''}:${c.radius}:${c.opacity}:${c.hueShift}:${c.brightness}:${c.pulseEnabled}:${c.pulseSpeed}:${c.pulseIntensity}`
-      ).join('|');
+      const magicCircleKey = `mc:${p.magicCircles?.enabled ?? false}|` + (p.magicCircles?.circles || []).map(c => {
+        const customId = c.customCircleId || '';
+        const customUpdatedAt = customId ? (customCircleUpdatedAtMap.get(customId) || 0) : 0;
+        return `${c.id}:${c.enabled}:${c.texture}:${customId}:${customUpdatedAt}:${c.radius}:${c.opacity}:${c.hueShift}:${c.brightness}:${c.pulseEnabled}:${c.pulseSpeed}:${c.pulseIntensity}`;
+      }).join('|');
       // �賡�雿枏��?- �芸��急��𤑳㮾�喳��堆��牐�雿梶����嚗峕甅撘誯�朞� uniforms �峕郊
       // �𤘪���㺭嚗䮝olyhedronType, radius, subdivisionLevel, spherize, renderMode
       // 憿嗥�撘��?敶Ｙ𠶖���憯喳��喋��oronoi �滨蔭隡𡁜蔣�?mesh �𥕦遣
@@ -7360,12 +7372,13 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
     return `${globalKey}@${planetsKey}`;
   };
 
-  const geometryKey = generateGeometryKey(settings.planets, settings.soloCoreId);
+  const geometryKey = generateGeometryKey(settings.planets, settings.soloCoreId, customMagicCircles);
   const lastGeometryKeyRef = useRef<string>('');
 
   // �寞旿霈曄蔭�𥕦遣/�湔鰵�毺�
   useEffect(() => {
     if (!sceneRef.current || !sceneReady) return;
+    if (drawingModeActive) return;
 
     const scene = sceneRef.current;
     // �湔𦻖雿輻鍂 settings 蝖桐��瑕����啣�潘���𡠺 soloCoreId嚗?
@@ -7484,7 +7497,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
         }
       });
     }
-  }, [geometryKey, settings, sceneReady]);
+  }, [geometryKey, settings, sceneReady, drawingModeActive]);
 
   // 绘图模式时隐藏整个星球场景（问题1修复）
   useEffect(() => {

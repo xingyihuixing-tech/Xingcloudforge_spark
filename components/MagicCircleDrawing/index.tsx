@@ -1,6 +1,6 @@
 /**
- * input: drawingModeActive, customMagicCircles from App.tsx, particle/silk brush pressureMode
- * output: Drawing overlay UI with 3D canvas, brush tools (arc-length density + pressure mode), symmetry controls, layer panel
+ * input: drawingModeActive, customMagicCircles from App.tsx, particle/silk brush pressureMode（粒子：无/书法/亮度；丝环：无/书法/亮度）
+ * output: Drawing overlay UI with 3D canvas, brush tools (arc-length density + pressure mode；粒子密度范围100-800), symmetry controls, layer panel
  * pos: Main React component for custom magic circle drawing system
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  */
@@ -37,7 +37,7 @@ import { UndoIcon, RedoIcon, BrushIcon } from './Icons';
 // ==================== 默认画笔设置 ====================
 
 const defaultParticleSettings: Partial<ParticleRingSettings> = {
-    particleDensity: 80,      // 粒子密度 0.5-10
+    particleDensity: 300,      // 粒子密度 0.5-10
     brightness: 2.0,         // 亮度 0.5-4
     particleSize: 2,         // 粒子大小 0.5-5
     bandwidth: 15,           // 笔触粗细 (映射到散布) 1-50
@@ -318,15 +318,24 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         for (const layer of layersToRender) {
             for (const stroke of layer.strokes) {
                 let mesh: THREE.Object3D;
-                // 画布渲染使用默认参数（无法阵级别调节，脉冲关闭，粒子大小缩放）
-                const defaultMcSettings = {
+                // Edit模式：画布参数（粒子缩小，无脉冲）
+                // Preview模式：场景参数（粒子正常大小，启用脉冲/发光）
+                const mcSettings = viewMode === 'preview' ? {
+                    opacity: 1.0,
+                    hueShift: 0,
+                    brightness: 1.5,  // 场景亮度增强
+                    pulseEnabled: true,  // 启用脉冲
+                    pulseSpeed: 1.0,
+                    pulseIntensity: 0.3,
+                    particleSizeScale: 1.5  // 场景粒子大小
+                } : {
                     opacity: 1.0,
                     hueShift: 0,
                     brightness: 1.0,
                     pulseEnabled: false,
                     pulseSpeed: 1.0,
                     pulseIntensity: 0.3,
-                    particleSizeScale: 0.002  // 画布中粒子大幅缩小
+                    particleSizeScale: 0.002  // 画布粒子缩小
                 };
                 if (stroke.brushType === 'particle') {
                     mesh = createParticleStrokeMesh(
@@ -335,7 +344,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.particleRingSettings || {},
                         layer.symmetryMode,
                         layer.symmetryDivisions,
-                        defaultMcSettings
+                        mcSettings
                     );
                 } else {
                     mesh = createLineStrokeMesh(
@@ -344,13 +353,13 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.silkRingSettings || {},
                         layer.symmetryMode,
                         layer.symmetryDivisions,
-                        defaultMcSettings
+                        mcSettings
                     );
                 }
                 strokesGroup.add(mesh);
             }
         }
-    }, [isActive, currentCircle, soloLayerId]);
+    }, [isActive, currentCircle, soloLayerId, viewMode]);
 
     // 渲染器和画布 ref（创建在第一个 useEffect 中）
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -729,8 +738,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 style={{
                     position: 'absolute',
                     left: 20,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
+                    top: 20,
+                    bottom: 20,
                     width: 200,
                     background: 'linear-gradient(135deg, rgba(15,15,20,0.9) 0%, rgba(20,20,30,0.9) 100%)',
                     borderRadius: 12,
@@ -738,7 +747,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     pointerEvents: 'auto',
                     border: '1px solid rgba(255,255,255,0.08)',
                     backdropFilter: 'blur(20px)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    flexDirection: 'column'
                 }}
             >
                 <div style={{ color: 'var(--ui-primary)', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -770,15 +781,33 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 </div>
 
                 {/* 画笔参数 */}
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 16, maxHeight: 280, overflowY: 'auto' }}>
+                <div style={{ fontSize: 11, color: '#888', marginBottom: 16 }}>
                     {brushType === 'particle' ? (
                         <>
                             <div style={{ marginBottom: 12 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                     <span>压感模式</span>
-                                    <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.pressureMode === 'brightness' ? '亮度' : '书法'}</span>
+                                    <span style={{ color: 'var(--ui-primary)' }}>
+                                        {particleSettings.pressureMode === 'brightness' ? '亮度' : particleSettings.pressureMode === 'calligraphy' ? '书法' : '无'}
+                                    </span>
                                 </div>
                                 <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => setParticleSettings(prev => ({ ...prev, pressureMode: 'none' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
+                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
+                                            borderRadius: 6,
+                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        无
+                                    </button>
                                     <button
                                         onClick={() => setParticleSettings(prev => ({ ...prev, pressureMode: 'calligraphy' }))}
                                         style={{
@@ -834,14 +863,14 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>粒子密度</span>
-                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.particleDensity || 3).toFixed(1)}</span>
+                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 300).toFixed(0)}</span>
                                 </div>
                                 <input
                                     type="range"
-                                    min={30}
-                                    max={200}
+                                    min={100}
+                                    max={800}
                                     step={10}
-                                    value={particleSettings.particleDensity || 3}
+                                    value={particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 300}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleDensity: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />

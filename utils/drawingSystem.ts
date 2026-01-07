@@ -1,6 +1,6 @@
 /**
- * input: customMagicCircles data, drawing mode state from App.tsx, particle/silk brush pressureMode
- * output: 3D drawing canvas with orthographic camera, particle/silk ring stroke rendering (particle stroke uses arc-length density + pressure mapping)
+ * input: customMagicCircles data, drawing mode state from App.tsx, particle/silk brush pressureMode（粒子：无/书法/亮度；丝环：无/书法/亮度）
+ * output: 3D drawing canvas with orthographic camera, particle/silk ring stroke rendering (particle stroke uses arc-length density + pressure mapping; silk stroke forces depthTest=false + stable renderOrder to avoid transparent sorting flicker)
  * pos: Drawing system utilities for PlanetScene integration
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  */
@@ -317,7 +317,7 @@ export function createParticleStrokeMesh(
     const canvasDensityScale = 25;
     const symmetryCopies = symmetryMode === 'none' ? 1 : (symmetryMode === 'kaleidoscope' ? symmetryDivisions * 2 : symmetryDivisions);
     const maxTotalParticles = 60000;
-    const maxSpawnPerSample = pressureMode === 'brightness' ? 3 : 2;
+    const maxSpawnPerSample = pressureMode === 'brightness' ? 3 : (pressureMode === 'calligraphy' ? 2 : 1);
     const maxParticlesPerBaseSample = Math.max(1, Math.floor(maxTotalParticles / Math.max(1, symmetryCopies * maxSpawnPerSample)));
 
     const particleCountTarget = Math.max(1, Math.floor(particleDensity * totalLength * canvasDensityScale));
@@ -326,6 +326,7 @@ export function createParticleStrokeMesh(
     const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
     const pressureCurve = (p: number) => {
         const x = clamp01(p);
+        if (pressureMode === 'none') return 1;
         return pressureMode === 'brightness' ? Math.sqrt(x) : x * x;
     };
 
@@ -367,11 +368,13 @@ export function createParticleStrokeMesh(
 
         for (const sp of symmetricPoints) {
             const jitterBase = strokeThickness * 0.002;
-            const jitterScale = pressureMode === 'brightness'
-                ? (0.35 + 0.15 * pe)
-                : (0.25 + 0.95 * pe);
+            const jitterScale = pressureMode === 'none'
+                ? 0.55
+                : (pressureMode === 'brightness'
+                    ? (0.35 + 0.15 * pe)
+                    : (0.25 + 0.95 * pe));
 
-            const spawnExtraMax = pressureMode === 'brightness' ? 2 : 1;
+            const spawnExtraMax = pressureMode === 'brightness' ? 2 : (pressureMode === 'calligraphy' ? 1 : 0);
             const spawnCount = 1 + Math.floor(pe * spawnExtraMax);
 
             for (let s = 0; s < spawnCount; s++) {
@@ -392,17 +395,23 @@ export function createParticleStrokeMesh(
 
                 // 粒子大小 = 基础大小 × 压感 × 随机变化
                 const sizeVariation = 0.7 + Math.random() * 0.6;
-                const sizePressureScale = pressureMode === 'brightness'
-                    ? (0.85 + 0.45 * pe)
-                    : (0.55 + 0.95 * pe);
+                const sizePressureScale = pressureMode === 'none'
+                    ? 1.0
+                    : (pressureMode === 'brightness'
+                        ? (0.85 + 0.45 * pe)
+                        : (0.55 + 0.95 * pe));
                 particleSizes.push(particleSize * sizePressureScale * sizeVariation * 0.05);
 
-                const colorMult = pressureMode === 'brightness' ? (0.7 + 1.2 * pe) : (0.95 + 0.25 * pe);
+                const colorMult = pressureMode === 'none'
+                    ? 1.0
+                    : (pressureMode === 'brightness' ? (0.7 + 1.2 * pe) : (0.95 + 0.25 * pe));
                 particleColors.push(colorObj.r * colorMult, colorObj.g * colorMult, colorObj.b * colorMult);
 
-                const alphaPressure = pressureMode === 'brightness'
-                    ? (0.2 + 0.8 * pe)
-                    : (0.55 + 0.45 * pe);
+                const alphaPressure = pressureMode === 'none'
+                    ? 0.85
+                    : (pressureMode === 'brightness'
+                        ? (0.2 + 0.8 * pe)
+                        : (0.55 + 0.45 * pe));
                 particleAlphas.push(alphaPressure * (0.75 + Math.random() * 0.25));
             }
         }
@@ -849,6 +858,7 @@ export function createLineStrokeMesh(
     }
 
     // 为每条路径创建线条 - 使用真正的丝环着色器
+    let renderOrderCursor = 51;
     for (const path of allPaths) {
         if (path.length < 2) continue;
 
@@ -890,13 +900,14 @@ export function createLineStrokeMesh(
                     uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
                 },
                 transparent: true,
+                depthTest: false,
                 depthWrite: false,
                 blending: THREE.AdditiveBlending,
                 side: THREE.DoubleSide
             });
 
             const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = 51;
+            mesh.renderOrder = renderOrderCursor++;
             group.add(mesh);
             continue;
         }
@@ -997,13 +1008,14 @@ export function createLineStrokeMesh(
                     uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
                 },
                 transparent: true,
+                depthTest: false,
                 depthWrite: false,
                 blending: THREE.AdditiveBlending,
                 side: THREE.DoubleSide
             });
 
             const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = 51;
+            mesh.renderOrder = renderOrderCursor++;
             group.add(mesh);
         }
     }

@@ -3,7 +3,7 @@
  * 
  * input: HTTP请求 (GET获取配置, POST保存配置)
  * output: JSON响应 (配置数据或错误信息)
- * pos: 管理用户的粒子配置、场景设置等数据
+ * pos: 管理用户的粒子配置、场景设置、主题配置、模块预设以及自定义法阵（customMagicCircles）等数据
  * 
  * 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
@@ -71,6 +71,8 @@ interface UserConfig {
     xingSparkConfig?: Record<string, unknown>;
     // 模块预设（来自ControlPanel的14个预设类型）
     modulePresets?: Record<string, Array<Record<string, unknown>>>;
+    // 自定义法阵绘制数据（MagicCircleDrawing）
+    customMagicCircles?: Array<Record<string, unknown>>;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -141,6 +143,8 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
                 magicCircleTexturePresets: [],
                 // 模块预设默认空对象
                 modulePresets: {},
+                // 自定义法阵绘制默认空数组
+                customMagicCircles: [],
             }
         });
     }
@@ -182,6 +186,8 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         xingSparkConfig: config.xingSparkConfig ?? existingConfig?.xingSparkConfig,
         // 模块预设
         modulePresets: config.modulePresets ?? existingConfig?.modulePresets ?? {},
+        // 自定义法阵绘制
+        customMagicCircles: config.customMagicCircles ?? existingConfig?.customMagicCircles ?? [],
     };
 
     await redis!.set(`config:${userId}`, newConfig);

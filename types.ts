@@ -1,8 +1,8 @@
 /**
- * input: 全局类型定义（渲染/设置/数据结构）
- * output: 导出 TS 类型与枚举（AppSettings/NebulaInstance 等，包含自定义绘制压感模式类型）
- * pos: 全项目类型的权威来源，影响 UI -> 状态 -> 渲染 的参数流
- * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
+ * input: API response schemas, localStorage settings, Three.js scene config, custom magic circle drawing pressure (particle/silk)
+ * output: TypeScript types used across the app
+ * pos: Central type definitions
+ * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  */
 
 export enum DepthMode {
@@ -905,7 +905,7 @@ export interface AfterimageSystemSettings {
 }
 
 // 粒子环配置
-export type DrawingPressureMode = 'calligraphy' | 'brightness';
+export type DrawingPressureMode = 'none' | 'calligraphy' | 'brightness';
 
 export interface ParticleRingSettings {
   id: string;
