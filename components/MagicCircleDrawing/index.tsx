@@ -188,6 +188,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
         // 4. 渲染循环
+        let startTime = Date.now();
         const animate = () => {
             animationFrameRef.current = requestAnimationFrame(animate);
 
@@ -197,6 +198,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             // 更新 OrbitControls（如果存在）
             if (orbitControlsRef.current) {
                 orbitControlsRef.current.update();
+            }
+
+            // 更新中心点漩涡动画
+            if (refs.centerPoint && (refs.centerPoint.material as THREE.ShaderMaterial).uniforms) {
+                const elapsed = (Date.now() - startTime) / 1000;
+                (refs.centerPoint.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
             }
 
             renderer.render(refs.scene, refs.camera);
@@ -754,16 +761,16 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 style={{
                     position: 'absolute',
                     left: 20,
-                    top: 20,
+                    top: 70,
                     bottom: 20,
                     width: 180,
-                    background: 'linear-gradient(135deg, rgba(15,15,20,0.9) 0%, rgba(20,20,30,0.9) 100%)',
+                    background: 'rgba(15, 23, 42, 0.75)',
                     borderRadius: 12,
                     padding: 16,
                     pointerEvents: 'auto',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    backdropFilter: 'blur(20px)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    backdropFilter: 'blur(16px) saturate(180%)',
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.3), 0 0 20px rgba(113,176,255,0.08), 0 0 40px rgba(255,182,193,0.05)',
                     display: 'flex',
                     flexDirection: 'column'
                 }}

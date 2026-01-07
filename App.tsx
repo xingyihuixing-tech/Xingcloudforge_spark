@@ -1408,9 +1408,10 @@ const App: React.FC = () => {
       },
       presets: presetsForCloud as any[],
       xingSparkConfig: xingConfig as any,
-      modulePresets
+      modulePresets,
+      customMagicCircles: customMagicCircles as any[]  // 添加自定义法阵同步
     });
-  }, [currentUser, hasHydratedFromCloud, nebulaPresets, settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, saveCloudConfig]);
+  }, [currentUser, hasHydratedFromCloud, nebulaPresets, settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, customMagicCircles, saveCloudConfig]);
 
   // 如果用户未登录，显示登录界面
   if (!currentUser) {
@@ -1562,20 +1563,22 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Floating Toggle for Sidebar */}
-        <button
-          onClick={() => setShowControls(!showControls)}
-          className={`absolute top-4 z-[200] w-7 h-14 rounded-lg transition-all duration-300 flex items-center justify-center ${showControls ? 'right-[324px]' : 'right-2'}`}
-          style={{
-            background: 'rgba(30,30,40,0.25)',
-            backdropFilter: 'blur(16px)',
-            WebkitBackdropFilter: 'blur(16px)',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.2)',
-            border: '1px solid rgba(255,255,255,0.25)'
-          }}
-        >
-          <span className="text-white text-base font-light">{showControls ? '›' : '‹'}</span>
-        </button>
+        {/* Floating Toggle for Sidebar - 绘图模式下隐藏 */}
+        {!drawingModeActive && (
+          <button
+            onClick={() => setShowControls(!showControls)}
+            className={`absolute top-4 z-[200] w-7 h-14 rounded-lg transition-all duration-300 flex items-center justify-center ${showControls ? 'right-[324px]' : 'right-2'}`}
+            style={{
+              background: 'rgba(30,30,40,0.25)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.2)',
+              border: '1px solid rgba(255,255,255,0.25)'
+            }}
+          >
+            <span className="text-white text-base font-light">{showControls ? '›' : '‹'}</span>
+          </button>
+        )}
 
         {/* AI Assistant Toggle Button - Redesigned Star (Relocated & Draggable) */}
         <div

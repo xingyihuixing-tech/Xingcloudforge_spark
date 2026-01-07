@@ -111,11 +111,11 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
         <div
             className="fixed right-0 top-0 bottom-0 w-64 flex flex-col z-[200]"
             style={{
-                background: 'linear-gradient(135deg, rgba(15,15,20,0.85) 0%, rgba(20,20,30,0.85) 100%)',
-                backdropFilter: 'blur(24px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(24px)',
+                background: 'rgba(15, 23, 42, 0.75)',
+                backdropFilter: 'blur(16px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(16px)',
                 borderLeft: '1px solid rgba(255,255,255,0.1)',
-                boxShadow: '-4px 0 24px rgba(0,0,0,0.3)',
+                boxShadow: '-4px 0 24px rgba(0,0,0,0.3), 0 0 20px rgba(113,176,255,0.08), 0 0 40px rgba(255,182,193,0.05)',
                 pointerEvents: 'auto'
             }}
         >

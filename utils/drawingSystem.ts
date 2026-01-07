@@ -87,13 +87,50 @@ export function createDrawingScene(): {
     const symmetryAxesGroup = new THREE.Group();
     canvasGroup.add(symmetryAxesGroup);
 
-    // 中心点
-    const centerGeometry = new THREE.CircleGeometry(0.015, 32);
-    const centerMaterial = new THREE.MeshBasicMaterial({
-        color: 0xffaa00,
+    // 中心点 - 漩涡式流动渐变色
+    const centerGeometry = new THREE.CircleGeometry(0.008, 32);
+    const centerMaterial = new THREE.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 }
+        },
+        vertexShader: `
+            varying vec2 vUv;
+            void main() {
+                vUv = uv;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+        `,
+        fragmentShader: `
+            uniform float uTime;
+            varying vec2 vUv;
+            
+            void main() {
+                vec2 center = vUv - 0.5;
+                float angle = atan(center.y, center.x) + uTime * 2.0;
+                float dist = length(center);
+                
+                // 漩涡渐变色 (蓝-粉-青)
+                vec3 color1 = vec3(0.44, 0.69, 1.0);   // #71b0ff
+                vec3 color2 = vec3(1.0, 0.71, 0.76);  // #FFB6C1
+                vec3 color3 = vec3(0.17, 0.96, 0.65); // #2bf6a5
+                
+                float t = fract(angle / 6.28318 + dist * 3.0);
+                vec3 color;
+                if (t < 0.33) {
+                    color = mix(color1, color2, t * 3.0);
+                } else if (t < 0.66) {
+                    color = mix(color2, color3, (t - 0.33) * 3.0);
+                } else {
+                    color = mix(color3, color1, (t - 0.66) * 3.0);
+                }
+                
+                float alpha = 1.0 - smoothstep(0.3, 0.5, dist * 2.0);
+                gl_FragColor = vec4(color, alpha * 0.9);
+            }
+        `,
         transparent: true,
-        opacity: 0.8,
-        depthTest: false
+        depthTest: false,
+        side: THREE.DoubleSide
     });
     const centerPoint = new THREE.Mesh(centerGeometry, centerMaterial);
     centerPoint.position.set(0, 0, 0.001);
@@ -594,18 +631,16 @@ void main() {
   if (dist > 0.5) discard;
   
   // 核心亮度 (中心更亮)
-  float core = 1.0 - smoothstep(0.0, 0.15, dist);
+  float core = 1.0 - smoothstep(0.0, 0.12, dist);
   
-  // 光晕衰减 (软边缘)
-  float glow = 1.0 - smoothstep(0.0, 0.5, dist);
-  glow = pow(glow, 1.0 / uGlowIntensity);
+  // 光晕衰减 (线性衰减，不使用pow放大)
+  float glow = 1.0 - smoothstep(0.0, 0.4, dist);
   
-  // 外层光晕 (更柔和的边缘)
-  float outerGlow = 1.0 - smoothstep(0.3, 0.5, dist);
-  outerGlow = pow(outerGlow, 0.5);
+  // 外层光晕 (更紧凑)
+  float outerGlow = 1.0 - smoothstep(0.25, 0.4, dist);
   
-  // 合成亮度
-  float brightness = core * uCoreBrightness + glow * uEmissive + outerGlow * 0.5;
+  // 合成亮度 (降低系数)
+  float brightness = core * uCoreBrightness + glow * uEmissive * 0.6 + outerGlow * 0.3;
   
   // 应用染色功能
   vec3 dyedColor = getDyeColor(vColor, vRadialDist);
