@@ -11388,7 +11388,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       ringPoints.renderOrder = 20;  // 确保正确渲染顺序
       ringGroup.add(ringPoints);
 
-      // ===== 点缀粒子 =====
+      // ===== 点缀粒子 (InstancedMesh - 躺在光环平面上) =====
       if (ring.ornament?.enabled && ring.ornament.count > 0) {
         const orn = ring.ornament;
         const ornamentData = generateOrnamentParticles(
@@ -11404,28 +11404,33 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
           orn.orbitPhaseRandomness || 0.8
         );
 
-        const ornGeom = new THREE.BufferGeometry();
-        ornGeom.setAttribute('position', new THREE.BufferAttribute(ornamentData.positions, 3));
-        ornGeom.setAttribute('aSize', new THREE.BufferAttribute(ornamentData.sizes, 1));
-        ornGeom.setAttribute('aPhase', new THREE.BufferAttribute(ornamentData.phases, 1));
-        ornGeom.setAttribute('aRandom', new THREE.BufferAttribute(ornamentData.randomSeeds, 1));
+        // 使用 InstancedMesh + PlaneGeometry，让每个贴图躺在光环平面上
+        const planeGeom = new THREE.PlaneGeometry(1, 1);
+        // 旋转平面使其默认躺在 XZ 平面上（Y 轴为法线）
+        planeGeom.rotateX(-Math.PI / 2);
 
-        // 计算径向距离 (用于Shader中的空间渐变)
-        const radialDists = new Float32Array(orn.count);
-        for (let i = 0; i < orn.count; i++) {
+        // 创建 per-instance attributes
+        const instanceCount = orn.count;
+        const instanceSizes = new THREE.InstancedBufferAttribute(ornamentData.sizes, 1);
+        const instancePhases = new THREE.InstancedBufferAttribute(ornamentData.phases, 1);
+        const instanceRandoms = new THREE.InstancedBufferAttribute(ornamentData.randomSeeds, 1);
+        const radialDists = new Float32Array(instanceCount);
+        const speedRandoms = new Float32Array(instanceCount);
+        for (let i = 0; i < instanceCount; i++) {
           const x = ornamentData.positions[i * 3];
           const z = ornamentData.positions[i * 3 + 2];
           radialDists[i] = Math.sqrt(x * x + z * z);
-        }
-        ornGeom.setAttribute('aRadialDist', new THREE.BufferAttribute(radialDists, 1));
-
-        // Add aSpeedRandom attribute
-        const particleCount = ornamentData.randomSeeds.length;
-        const speedRandoms = new Float32Array(particleCount);
-        for (let i = 0; i < particleCount; i++) {
           speedRandoms[i] = Math.random();
         }
-        ornGeom.setAttribute('aSpeedRandom', new THREE.BufferAttribute(speedRandoms, 1));
+        const instanceRadialDists = new THREE.InstancedBufferAttribute(radialDists, 1);
+        const instanceSpeedRandoms = new THREE.InstancedBufferAttribute(speedRandoms, 1);
+
+        // 将 instanced attributes 添加到几何体
+        planeGeom.setAttribute('aInstanceSize', instanceSizes);
+        planeGeom.setAttribute('aInstancePhase', instancePhases);
+        planeGeom.setAttribute('aInstanceRandom', instanceRandoms);
+        planeGeom.setAttribute('aInstanceRadialDist', instanceRadialDists);
+        planeGeom.setAttribute('aInstanceSpeedRandom', instanceSpeedRandoms);
 
         // 计算点缀颜色
         let ornColor = new THREE.Vector3(1, 1, 1);
@@ -11463,67 +11468,73 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
 
         const ornMat = new THREE.ShaderMaterial({
           vertexShader: `
-            attribute float aSize;
-            attribute float aPhase;
-            attribute float aRandom;
-            attribute float aRadialDist;
-            attribute float aSpeedRandom; // [0-1]
+            // ===== InstancedMesh 点缀渲染 Vertex Shader =====
+            // Per-instance attributes (通过 THREE.InstancedBufferAttribute 传入)
+            attribute float aInstanceSize;
+            attribute float aInstancePhase;
+            attribute float aInstanceRandom;
+            attribute float aInstanceRadialDist;
+            attribute float aInstanceSpeedRandom;
+            
+            // Varyings
+            varying vec2 vUv;
             varying float vPhase;
             varying float vRandom;
             varying float vRadialDist;
-            varying vec3 vPosition;
+            varying vec3 vWorldPosition;
+            
+            // Uniforms
             uniform float uTime;
             uniform float uBaseSize;
             uniform float uPulseEnabled;
             uniform float uPulseSpeed;
             uniform float uPulseIntensity;
             uniform float uPulseSync;
-            uniform float uSpeedRandomness; // Strength of random speed [0-1]
-            // We need base speed? Actually we only add OFFSET to angle.
-            // But we don't know the base speed here (it's CPU side).
-            // However, user wants "Random Speed Offset".
-            // Since we cannot easily access true orbit speed here (it varies by ring),
-            // we will simulate speed variation by adding a time-based offset to angle.
-            // angle += uTime * (aSpeedRandom - 0.5) * uSpeedRandomness * CONSTANT
+            uniform float uSpeedRandomness;
             
             #define PI 3.14159265359
 
-void main() {
-  vPhase = aPhase;
-  vRandom = aRandom;
-  vRadialDist = aRadialDist;
-  
-  // Custom Rotation for Random Speed
-  vec3 pos = position;
-  if (uSpeedRandomness > 0.01) {
-     float angle = atan(pos.z, pos.x);
-     float r = length(pos.xz);
-     // Add random speed offset. Scale factor 0.5 ensures reasonable speed range.
-     // aSpeedRandom is 0..1. (aSpeedRandom - 0.5) is -0.5..0.5.
-     // uTime increases.
-     float speedOffset = (aSpeedRandom - 0.5) * uSpeedRandomness * 0.5;
-     angle += uTime * speedOffset; 
-     
-     pos.x = r * cos(angle);
-     pos.z = r * sin(angle);
-  }
-
-  vPosition = pos;
+            void main() {
+              vUv = uv;
+              vPhase = aInstancePhase;
+              vRandom = aInstanceRandom;
+              vRadialDist = aInstanceRadialDist;
               
-  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-
-  // 脉冲效果
-  float pulse = 1.0;
-  if (uPulseEnabled > 0.5) {
-    float phaseOffset = uPulseSync > 0.5 ? 0.0 : aPhase;
-    pulse = 1.0 + sin(uTime * uPulseSpeed + phaseOffset) * uPulseIntensity;
-  }
+              // 获取实例位置（从instanceMatrix的平移分量）
+              vec3 instancePos = vec3(instanceMatrix[3][0], instanceMatrix[3][1], instanceMatrix[3][2]);
               
-  float size = uBaseSize * aSize * pulse;
-  gl_PointSize = size * (300.0 / -mvPosition.z);
-  gl_Position = projectionMatrix * mvPosition;
-}
-`,
+              // 速度随机偏移
+              vec3 pos = instancePos;
+              if (uSpeedRandomness > 0.01) {
+                float angle = atan(pos.z, pos.x);
+                float r = length(pos.xz);
+                float speedOffset = (aInstanceSpeedRandom - 0.5) * uSpeedRandomness * 0.5;
+                angle += uTime * speedOffset;
+                pos.x = r * cos(angle);
+                pos.z = r * sin(angle);
+              }
+              
+              vWorldPosition = pos;
+              
+              // 脉冲效果
+              float pulse = 1.0;
+              if (uPulseEnabled > 0.5) {
+                float phaseOffset = uPulseSync > 0.5 ? 0.0 : aInstancePhase;
+                pulse = 1.0 + sin(uTime * uPulseSpeed + phaseOffset) * uPulseIntensity;
+              }
+              
+              // 计算最终大小
+              float finalSize = uBaseSize * aInstanceSize * pulse;
+              
+              // 缩放顶点位置（平面在局部空间是单位大小的）
+              vec3 scaledVertex = position * finalSize;
+              
+              // 最终位置 = 实例位置 + 缩放后的顶点
+              vec3 finalPos = pos + scaledVertex;
+              
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(finalPos, 1.0);
+            }
+          `,
           fragmentShader: `
             uniform vec3 uColor;
             uniform vec3 uColor1;
@@ -11545,10 +11556,12 @@ void main() {
             uniform float uProceduralAxis; // 0=Radial, 1=Angle, 2=Vertical(Y), 3=Random
             uniform float uGradientStrength; // 渐变强度 (Naturalness)
             uniform float uSpeedRandomness; // Not used in Frag but declared in Uniforms list
+            // InstancedMesh 模式：使用 vUv 替代 gl_PointCoord
+            varying vec2 vUv;
             varying float vPhase;
             varying float vRandom;
             varying float vRadialDist;
-            varying vec3 vPosition;
+            varying vec3 vWorldPosition;
 
 #define PI 3.14159265359
 
@@ -11705,9 +11718,13 @@ float prismShape(vec2 uv) {
           }
 
 void main() {
-          vec2 uv = gl_PointCoord * 2.0 - 1.0;
+          // 使用 vUv (0-1 范围) 替代 gl_PointCoord
+          vec2 uv = vUv * 2.0 - 1.0;
           float r = length(uv);
           float alpha = 0.0;
+          
+          // 丢弃超出圆形范围的像素（解决正方形轮廓问题）
+          if(r > 1.0) discard;
 
           // 新的样式映射：0=star, 1=snowflake, 2=heart, 3=crescent, 4=crossGlow
           // 5=sakura, 6=sun, 7=sun2, 8=plum, 9=lily, 10=lotus, 11=prism, 12=xingspark贴图
@@ -11751,7 +11768,8 @@ void main() {
             // xingspark - 贴图模式 (12)
             // 使用贴图采样（如果有），否则使用星形
             if(uUseTexture > 0.5) {
-              vec2 texUV = gl_PointCoord;
+              // 使用 vUv 替代 gl_PointCoord 进行贴图采样
+              vec2 texUV = vUv;
               vec4 texColor = texture2D(uTexture, texUV);
               alpha = texColor.a;
               // 丢弃几乎透明的像素，避免正方形边框
@@ -11800,10 +11818,10 @@ void main() {
        float halfWidth = uBandwidth * 0.5;
        spatial = (vRadialDist - (uRingRadius - halfWidth)) / uBandwidth;
     } else if (uProceduralAxis < 1.5) { // 角度
-       float angle = atan(vPosition.z, vPosition.x);
+       float angle = atan(vWorldPosition.z, vWorldPosition.x);
        spatial = (angle + PI) / (2.0 * PI);
     } else if (uProceduralAxis < 2.5) { // 垂直
-       spatial = vPosition.y * 0.1 + 0.5;
+       spatial = vWorldPosition.y * 0.1 + 0.5;
     } else { // 随机
        spatial = vRandom;
     }
@@ -11976,10 +11994,26 @@ void main() {
           depthWrite: false
         });
 
-        const ornPoints = new THREE.Points(ornGeom, ornMat);
-        ornPoints.renderOrder = 25;  // 点缀在主粒子之上
-        ornPoints.userData = { isOrnament: true, orbitSpeedMultiplier: orn.orbitSpeedMultiplier ?? 1.0 };
-        ringGroup.add(ornPoints);
+        // 创建 InstancedMesh（替代 THREE.Points）
+        const instancedOrnament = new THREE.InstancedMesh(planeGeom, ornMat, instanceCount);
+        instancedOrnament.frustumCulled = false;
+
+        // 设置每个实例的变换矩阵
+        const tempMatrix = new THREE.Matrix4();
+        for (let i = 0; i < instanceCount; i++) {
+          const x = ornamentData.positions[i * 3];
+          const y = ornamentData.positions[i * 3 + 1];
+          const z = ornamentData.positions[i * 3 + 2];
+
+          // 只设置位置，缩放在 shader 中处理
+          tempMatrix.makeTranslation(x, y, z);
+          instancedOrnament.setMatrixAt(i, tempMatrix);
+        }
+        instancedOrnament.instanceMatrix.needsUpdate = true;
+
+        instancedOrnament.renderOrder = 25;  // 点缀在主粒子之上
+        instancedOrnament.userData = { isOrnament: true, orbitSpeedMultiplier: orn.orbitSpeedMultiplier ?? 1.0 };
+        ringGroup.add(instancedOrnament);
       }
 
       // 应用倾斜 - 使用新的TiltSettings
