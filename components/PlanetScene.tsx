@@ -9292,6 +9292,19 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
 
             // 更新自定义绘制法阵的 uniforms（使染色、亮度、脉冲等效果生效）
             if (circleData.mesh instanceof THREE.Group && circleData.mesh.userData?.isCustomDrawn) {
+              // 解析渐变色
+              const parseColor = (hex: string) => {
+                const c = (hex || '#ffffff').replace('#', '');
+                return new THREE.Vector3(
+                  parseInt(c.substring(0, 2), 16) / 255,
+                  parseInt(c.substring(2, 4), 16) / 255,
+                  parseInt(c.substring(4, 6), 16) / 255
+                );
+              };
+              const gc = settings.gradientColor;
+              const colorModeMap: { [key: string]: number } = { 'none': 0, 'single': 4, 'twoColor': 1, 'threeColor': 2, 'procedural': 3 };
+              const colorMode = gc?.enabled ? (colorModeMap[gc.mode] || 0) : 0;
+
               circleData.mesh.traverse((child: THREE.Object3D) => {
                 if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
                   const mat = (child as any).material as THREE.ShaderMaterial;
@@ -9299,7 +9312,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
                     // 更新时间
                     if (mat.uniforms.uTime) mat.uniforms.uTime.value = time;
 
-                    // 更新法阵级别参数（染色、亮度、透明度）
+                    // 更新法阵级别参数（透明度、亮度、色相偏移）
                     if (mat.uniforms.uMCOpacity) mat.uniforms.uMCOpacity.value = settings.opacity;
                     if (mat.uniforms.uMCHueShift) mat.uniforms.uMCHueShift.value = settings.hueShift / 360.0;
                     if (mat.uniforms.uMCBrightness) mat.uniforms.uMCBrightness.value = settings.brightness;
@@ -9313,6 +9326,18 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
                     if (mat.uniforms.uMCPulseEnabled) mat.uniforms.uMCPulseEnabled.value = settings.pulseEnabled ? 1.0 : 0.0;
                     if (mat.uniforms.uMCPulseSpeed) mat.uniforms.uMCPulseSpeed.value = settings.pulseSpeed;
                     if (mat.uniforms.uMCPulseIntensity) mat.uniforms.uMCPulseIntensity.value = settings.pulseIntensity;
+
+                    // 更新染色功能参数
+                    if (mat.uniforms.uBaseHue) mat.uniforms.uBaseHue.value = settings.baseHue ?? 200;
+                    if (mat.uniforms.uBaseSaturation) mat.uniforms.uBaseSaturation.value = settings.baseSaturation ?? 1.0;
+                    if (mat.uniforms.uSaturationBoost) mat.uniforms.uSaturationBoost.value = settings.saturationBoost ?? 1.0;
+                    if (mat.uniforms.uColorMode) mat.uniforms.uColorMode.value = colorMode;
+                    if (mat.uniforms.uColorMidPos) mat.uniforms.uColorMidPos.value = gc?.colorMidPosition ?? 0.5;
+                    if (mat.uniforms.uProceduralIntensity) mat.uniforms.uProceduralIntensity.value = gc?.proceduralIntensity ?? 1.0;
+                    // 更新渐变颜色
+                    if (gc?.colors?.[0] && mat.uniforms.uColor1) mat.uniforms.uColor1.value = parseColor(gc.colors[0]);
+                    if (gc?.colors?.[1] && mat.uniforms.uColor2) mat.uniforms.uColor2.value = parseColor(gc.colors[1]);
+                    if (gc?.colors?.[2] && mat.uniforms.uColor3) mat.uniforms.uColor3.value = parseColor(gc.colors[2]);
                   }
                 }
               });
