@@ -65,20 +65,13 @@ export function createDrawingScene(): {
     const scene = new THREE.Scene();
     scene.background = null; // 透明背景
 
-    // 使用与场景相同的相机距离和缩放比例
-    // 场景中：法阵缩放 settings.radius (约150)，相机距离约400-500
-    // 画布中：笔画归一化坐标 [-0.5, 0.5]，需要相机距离使 gl_PointSize 计算结果与场景一致
-    // 关键公式：gl_PointSize = size * 300 / -mvPosition.z
-    // 场景：距离约500，gl_PointSize ≈ size * 0.6
-    // 画布：设置相机距离为 500 / 150 ≈ 3.33，使效果匹配（因为画布笔画未缩放）
-    const CANVAS_SCALE = 150;  // 与场景中法阵默认radius一致
-    const SCENE_CAMERA_DISTANCE = 500;  // 场景中典型观察距离
-
+    // 创建透视相机
+    // 计算相机距离：使画布区域（宽度1）正好填满视口
+    // tan(fov/2) = (canvasSize/2) / distance => distance = 0.5 / tan(37.5°) ≈ 0.65
     const fov = 75;
     const aspect = 1; // 正方形画布
     const camera = new THREE.PerspectiveCamera(fov, aspect, 0.1, 1000);
-    // 相机距离：模拟场景中相机距离与缩放的比例
-    const distance = SCENE_CAMERA_DISTANCE / CANVAS_SCALE;
+    const distance = 0.5 / Math.tan(THREE.MathUtils.degToRad(fov / 2));
     camera.position.set(0, 0, distance);
     camera.lookAt(0, 0, 0);
 
