@@ -109,7 +109,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
 
     return (
         <div
-            className="fixed right-0 top-0 bottom-0 w-80 flex flex-col z-[200]"
+            className="fixed right-0 top-0 bottom-0 w-64 flex flex-col z-[200]"
             style={{
                 background: 'linear-gradient(135deg, rgba(15,15,20,0.85) 0%, rgba(20,20,30,0.85) 100%)',
                 backdropFilter: 'blur(24px) saturate(180%)',

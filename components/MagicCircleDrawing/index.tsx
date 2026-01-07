@@ -32,7 +32,7 @@ import {
     applySymmetryTransform
 } from '../../utils/drawingSystem';
 import { DrawingControlPanel } from './DrawingControlPanel';
-import { UndoIcon, RedoIcon, BrushIcon } from './Icons';
+import { UndoIcon, RedoIcon, BrushIcon, ClearIcon } from './Icons';
 
 // ==================== 默认画笔设置 ====================
 
@@ -318,24 +318,15 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         for (const layer of layersToRender) {
             for (const stroke of layer.strokes) {
                 let mesh: THREE.Object3D;
-                // Edit模式：画布参数（粒子缩小，无脉冲）
-                // Preview模式：场景参数（粒子正常大小，启用脉冲/发光）
-                const mcSettings = viewMode === 'preview' ? {
-                    opacity: 1.0,
-                    hueShift: 0,
-                    brightness: 1.5,  // 场景亮度增强
-                    pulseEnabled: true,  // 启用脉冲
-                    pulseSpeed: 1.0,
-                    pulseIntensity: 0.3,
-                    particleSizeScale: 1.5  // 场景粒子大小
-                } : {
+                // 画布渲染使用默认参数（无法阵级别调节，脉冲关闭，粒子大小缩放）
+                const defaultMcSettings = {
                     opacity: 1.0,
                     hueShift: 0,
                     brightness: 1.0,
                     pulseEnabled: false,
                     pulseSpeed: 1.0,
                     pulseIntensity: 0.3,
-                    particleSizeScale: 0.002  // 画布粒子缩小
+                    particleSizeScale: 0.002  // 画布中粒子大幅缩小
                 };
                 if (stroke.brushType === 'particle') {
                     mesh = createParticleStrokeMesh(
@@ -344,7 +335,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.particleRingSettings || {},
                         layer.symmetryMode,
                         layer.symmetryDivisions,
-                        mcSettings
+                        defaultMcSettings
                     );
                 } else {
                     mesh = createLineStrokeMesh(
@@ -353,13 +344,13 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.silkRingSettings || {},
                         layer.symmetryMode,
                         layer.symmetryDivisions,
-                        mcSettings
+                        defaultMcSettings
                     );
                 }
                 strokesGroup.add(mesh);
             }
         }
-    }, [isActive, currentCircle, soloLayerId, viewMode]);
+    }, [isActive, currentCircle, soloLayerId]);
 
     // 渲染器和画布 ref（创建在第一个 useEffect 中）
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -388,7 +379,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        const canvasSize = Math.min(rect.width, rect.height) * 0.8;
+        // 统一使用70%计算画布尺寸（与DOM中min(70vh,70vw)匹配）
+        const canvasSize = Math.min(rect.width, rect.height) * 0.70;
         const offsetX = (rect.width - canvasSize) / 2;
         const offsetY = (rect.height - canvasSize) / 2;
 
@@ -424,7 +416,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        const canvasSize = Math.min(rect.width, rect.height) * 0.8;
+        // 统一使用70%计算画布尺寸
+        const canvasSize = Math.min(rect.width, rect.height) * 0.70;
         const offsetX = (rect.width - canvasSize) / 2;
         const offsetY = (rect.height - canvasSize) / 2;
 
@@ -598,6 +591,29 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         setUndoStack(prev => [...prev, strokeToRedo]);
     }, [currentCircle, currentLayerId, redoStack, customMagicCircles, onUpdateCircles]);
 
+    // 清空当前图层所有笔画
+    const handleClear = useCallback(() => {
+        if (!currentCircle || !currentLayerId) return;
+
+        const currentLayerStrokes = currentLayer?.strokes || [];
+        if (currentLayerStrokes.length === 0) return;
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: c.layers.map(l => {
+                    if (l.id !== currentLayerId) return l;
+                    return { ...l, strokes: [] };
+                })
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+        setUndoStack([]);  // 清空撤销栈
+        setRedoStack([]);  // 清空重做栈
+    }, [currentCircle, currentLayer, currentLayerId, customMagicCircles, onUpdateCircles]);
+
     // 新建图层
     const handleNewLayer = useCallback(() => {
         if (!currentCircle) return;
@@ -740,7 +756,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     left: 20,
                     top: 20,
                     bottom: 20,
-                    width: 200,
+                    width: 180,
                     background: 'linear-gradient(135deg, rgba(15,15,20,0.9) 0%, rgba(20,20,30,0.9) 100%)',
                     borderRadius: 12,
                     padding: 16,
@@ -1119,8 +1135,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     left: '50%',
                     top: '50%',
                     transform: 'translate(-50%, -50%)',
-                    width: 'min(65vh, 65vw)',
-                    height: 'min(65vh, 65vw)',
+                    width: 'min(70vh, 70vw)',
+                    height: 'min(70vh, 70vw)',
                     pointerEvents: 'auto',
                     cursor: 'crosshair',
                     touchAction: 'none'
@@ -1131,9 +1147,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             <div
                 style={{
                     position: 'absolute',
-                    // 画布左边缘 = 50% - min(32.5vh, 32.5vw)，按钮在边框之上
-                    left: 'calc(50% - min(32.5vh, 32.5vw))',
-                    top: 'calc(50% - min(32.5vh, 32.5vw) - 36px)',
+                    // 画布左边缘 = 50% - min(35vh, 35vw)，按钮在边框之上
+                    left: 'calc(50% - min(35vh, 35vw))',
+                    top: 'calc(50% - min(35vh, 35vw) - 36px)',
                     display: 'flex',
                     flexDirection: 'row',
                     gap: 4,
@@ -1174,16 +1190,16 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 </button>
             </div>
 
-            {/* 画布内右上角：撤销/重做 */}
+            {/* 画布上方右侧：撤销/重做/清空 */}
             <div
                 style={{
                     position: 'absolute',
-                    // 画布右边缘 = 50% + min(32.5vh, 32.5vw)，按钮在画布内部距离边缘12px
-                    left: 'calc(50% + min(32.5vh, 32.5vw) - 72px)',
-                    top: 'calc(50% - min(32.5vh, 32.5vw) + 12px)',
+                    // 画布右边缘 = 50% + min(35vh, 35vw)，按钮在画布上方
+                    left: 'calc(50% + min(35vh, 35vw) - 110px)',
+                    top: 'calc(50% - min(35vh, 35vw) - 36px)',
                     display: 'flex',
                     flexDirection: 'row',
-                    gap: 6,
+                    gap: 4,
                     pointerEvents: 'auto'
                 }}
             >
@@ -1194,13 +1210,14 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         width: 28,
                         height: 28,
                         borderRadius: 6,
-                        background: undoStack.length > 0 ? 'rgba(255,255,255,0.08)' : 'rgba(50,50,60,0.2)',
-                        border: 'none',
+                        background: undoStack.length > 0 ? 'rgba(50, 50, 60, 0.6)' : 'rgba(50,50,60,0.3)',
+                        border: undoStack.length > 0 ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.05)',
+                        backdropFilter: 'blur(10px)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: undoStack.length > 0 ? 'pointer' : 'not-allowed',
-                        transition: 'background 0.2s'
+                        transition: 'all 0.2s'
                     }}
                     title="撤销"
                 >
@@ -1213,17 +1230,38 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         width: 28,
                         height: 28,
                         borderRadius: 6,
-                        background: redoStack.length > 0 ? 'rgba(255,255,255,0.08)' : 'rgba(50,50,60,0.2)',
-                        border: 'none',
+                        background: redoStack.length > 0 ? 'rgba(50, 50, 60, 0.6)' : 'rgba(50,50,60,0.3)',
+                        border: redoStack.length > 0 ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.05)',
+                        backdropFilter: 'blur(10px)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         cursor: redoStack.length > 0 ? 'pointer' : 'not-allowed',
-                        transition: 'background 0.2s'
+                        transition: 'all 0.2s'
                     }}
                     title="重做"
                 >
                     <RedoIcon size={14} style={{ color: redoStack.length > 0 ? 'rgba(255,255,255,0.7)' : '#444' }} />
+                </button>
+                <button
+                    onClick={handleClear}
+                    disabled={!currentLayer || (currentLayer.strokes?.length || 0) === 0}
+                    style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 6,
+                        background: (currentLayer?.strokes?.length || 0) > 0 ? 'rgba(80, 50, 50, 0.6)' : 'rgba(50,50,60,0.3)',
+                        border: (currentLayer?.strokes?.length || 0) > 0 ? '1px solid rgba(255,100,100,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                        backdropFilter: 'blur(10px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: (currentLayer?.strokes?.length || 0) > 0 ? 'pointer' : 'not-allowed',
+                        transition: 'all 0.2s'
+                    }}
+                    title="清空当前图层"
+                >
+                    <ClearIcon size={14} style={{ color: (currentLayer?.strokes?.length || 0) > 0 ? 'rgba(255,150,150,0.8)' : '#444' }} />
                 </button>
             </div>
 
