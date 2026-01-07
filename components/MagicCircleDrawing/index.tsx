@@ -1,6 +1,6 @@
 /**
- * input: drawingModeActive, customMagicCircles from App.tsx, renderer from PlanetScene
- * output: Drawing overlay UI with 3D canvas, brush tools, symmetry controls, layer panel
+ * input: drawingModeActive, customMagicCircles from App.tsx, particle/silk brush pressureMode
+ * output: Drawing overlay UI with 3D canvas, brush tools (arc-length density + pressure mode), symmetry controls, layer panel
  * pos: Main React component for custom magic circle drawing system
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  */
@@ -37,10 +37,11 @@ import { UndoIcon, RedoIcon, BrushIcon } from './Icons';
 // ==================== 默认画笔设置 ====================
 
 const defaultParticleSettings: Partial<ParticleRingSettings> = {
-    particleDensity: 3,      // 粒子密度 0.5-10
+    particleDensity: 80,      // 粒子密度 0.5-10
     brightness: 2.0,         // 亮度 0.5-4
     particleSize: 2,         // 粒子大小 0.5-5
-    bandwidth: 15            // 笔触粗细 (映射到散布) 1-50
+    bandwidth: 15,           // 笔触粗细 (映射到散布) 1-50
+    pressureMode: 'calligraphy'
 };
 
 const defaultSilkSettings: Partial<SilkRingSettings> = {
@@ -51,7 +52,8 @@ const defaultSilkSettings: Partial<SilkRingSettings> = {
     sparkleEnabled: false,   // 闪点开关
     sparkleThreshold: 0.95,  // 闪点阈值 0.8-0.99
     flowSpeed: 1.0,          // 流动速度 0-3
-    strandDensity: 30        // 丝线密度
+    strandDensity: 30,       // 丝线密度
+    pressureMode: 'none'
 };
 
 // ==================== Props 接口 ====================
@@ -771,6 +773,47 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 <div style={{ fontSize: 11, color: '#888', marginBottom: 16, maxHeight: 280, overflowY: 'auto' }}>
                     {brushType === 'particle' ? (
                         <>
+                            <div style={{ marginBottom: 12 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span>压感模式</span>
+                                    <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.pressureMode === 'brightness' ? '亮度' : '书法'}</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => setParticleSettings(prev => ({ ...prev, pressureMode: 'calligraphy' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
+                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
+                                            borderRadius: 6,
+                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        书法
+                                    </button>
+                                    <button
+                                        onClick={() => setParticleSettings(prev => ({ ...prev, pressureMode: 'brightness' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
+                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
+                                            borderRadius: 6,
+                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        亮度
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* 粒子大小 */}
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
@@ -871,6 +914,65 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         </>
                     ) : (
                         <>
+                            <div style={{ marginBottom: 12 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span>压感模式</span>
+                                    <span style={{ color: 'var(--ui-secondary)' }}>
+                                        {silkSettings.pressureMode === 'calligraphy' ? '书法' : silkSettings.pressureMode === 'brightness' ? '亮度' : '无'}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => setSilkSettings(prev => ({ ...prev, pressureMode: 'none' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: (silkSettings.pressureMode ?? 'none') === 'none' ? 'rgba(var(--ui-secondary-rgb, 0,255,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
+                                            border: (silkSettings.pressureMode ?? 'none') === 'none' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.08)',
+                                            borderRadius: 6,
+                                            color: (silkSettings.pressureMode ?? 'none') === 'none' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        无
+                                    </button>
+                                    <button
+                                        onClick={() => setSilkSettings(prev => ({ ...prev, pressureMode: 'calligraphy' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: (silkSettings.pressureMode ?? 'none') === 'calligraphy' ? 'rgba(var(--ui-secondary-rgb, 0,255,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
+                                            border: (silkSettings.pressureMode ?? 'none') === 'calligraphy' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.08)',
+                                            borderRadius: 6,
+                                            color: (silkSettings.pressureMode ?? 'none') === 'calligraphy' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        书法
+                                    </button>
+                                    <button
+                                        onClick={() => setSilkSettings(prev => ({ ...prev, pressureMode: 'brightness' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: (silkSettings.pressureMode ?? 'none') === 'brightness' ? 'rgba(var(--ui-secondary-rgb, 0,255,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
+                                            border: (silkSettings.pressureMode ?? 'none') === 'brightness' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.08)',
+                                            borderRadius: 6,
+                                            color: (silkSettings.pressureMode ?? 'none') === 'brightness' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        亮度
+                                    </button>
+                                </div>
+                            </div>
+
                             {/* 线环粗细 */}
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>

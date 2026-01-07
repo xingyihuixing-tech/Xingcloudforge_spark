@@ -1,6 +1,6 @@
 /**
  * input: 全局类型定义（渲染/设置/数据结构）
- * output: 导出 TS 类型与枚举（AppSettings/NebulaInstance 等）
+ * output: 导出 TS 类型与枚举（AppSettings/NebulaInstance 等，包含自定义绘制压感模式类型）
  * pos: 全项目类型的权威来源，影响 UI -> 状态 -> 渲染 的参数流
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  */
@@ -905,6 +905,8 @@ export interface AfterimageSystemSettings {
 }
 
 // 粒子环配置
+export type DrawingPressureMode = 'calligraphy' | 'brightness';
+
 export interface ParticleRingSettings {
   id: string;
   name: string;
@@ -929,6 +931,7 @@ export interface ParticleRingSettings {
   silkEffect?: SilkEffectSettings;       // 丝绸效果（仅在特定渲染模式下有效）
   ornament?: OrnamentSettings;           // 点缀装饰效果
   galaxy?: GalaxySettings;               // 银河系螺旋臂效果
+  pressureMode?: DrawingPressureMode;    // 自定义法阵绘制专用：压感映射模式
   // 空间粗细（自定义法阵绘制专用）
   spatialThickness?: boolean;            // 启用空间粗细（z方向散布）
   zThickness?: number;                   // z方向散布范围（默认与bandwidth一致）
@@ -1365,6 +1368,8 @@ export type SilkWaveType =
   | 'pulse'      // 脉冲波 - 周期爆发
   | 'organic';   // 有机波 - 多层噪声叠加
 
+export type SilkPressureMode = 'none' | DrawingPressureMode;
+
 export interface SilkRingSettings {
   id: string;
   name: string;
@@ -1376,6 +1381,8 @@ export interface SilkRingSettings {
   thickness: number;          // 线环粗细 0.01-0.2
   tubeSegments: number;       // 管道分段数 50-200
   radialSegments: number;     // 径向分段数 3-8
+
+  pressureMode?: SilkPressureMode;  // 自定义法阵绘制专用：压感映射模式
 
   // 形态变化
   waveType: SilkWaveType;     // 波动类型
