@@ -260,9 +260,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             // 启用画布指针事件
             canvas.style.pointerEvents = 'auto';
 
-            // 隐藏辅助元素（边框、中心点、对称轴）
+            // 隐藏辅助元素（中心点、对称轴）- 边框已用CSS实现
             if (refs.centerPoint) refs.centerPoint.visible = false;
-            if (refs.border) refs.border.visible = false;
             if (refs.symmetryAxesGroup) refs.symmetryAxesGroup.visible = false;
         } else {
             // 销毁 OrbitControls
@@ -281,7 +280,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
             // 显示辅助元素
             if (refs.centerPoint) refs.centerPoint.visible = true;
-            if (refs.border) refs.border.visible = true;
             if (refs.symmetryAxesGroup) refs.symmetryAxesGroup.visible = true;
         }
 
@@ -386,14 +384,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        // 统一使用70%计算画布尺寸（与DOM中min(70vh,70vw)匹配）
-        const canvasSize = Math.min(rect.width, rect.height) * 0.70;
-        const offsetX = (rect.width - canvasSize) / 2;
-        const offsetY = (rect.height - canvasSize) / 2;
+        // 容器现在就是画布尺寸（100%填充wrapper），直接使用
+        const canvasSize = Math.min(rect.width, rect.height);
 
         const canvasRect = {
-            left: rect.left + offsetX,
-            top: rect.top + offsetY,
+            left: rect.left,
+            top: rect.top,
             width: canvasSize,
             height: canvasSize
         };
@@ -423,14 +419,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (!container) return;
 
         const rect = container.getBoundingClientRect();
-        // 统一使用70%计算画布尺寸
-        const canvasSize = Math.min(rect.width, rect.height) * 0.70;
-        const offsetX = (rect.width - canvasSize) / 2;
-        const offsetY = (rect.height - canvasSize) / 2;
+        // 容器现在就是画布尺寸，直接使用
+        const canvasSize = Math.min(rect.width, rect.height);
 
         const canvasRect = {
-            left: rect.left + offsetX,
-            top: rect.top + offsetY,
+            left: rect.left,
+            top: rect.top,
             width: canvasSize,
             height: canvasSize
         };
@@ -756,23 +750,21 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 pointerEvents: 'none'
             }}
         >
-            {/* 左侧画笔工具面板 */}
+            {/* 左侧画笔工具面板 - 极高透明玻璃样式 */}
             <div
+                className="drawing-panel-glass"
                 style={{
                     position: 'absolute',
                     left: 20,
                     top: 70,
                     bottom: 20,
                     width: 180,
-                    background: 'rgba(15, 23, 42, 0.75)',
-                    borderRadius: 12,
+                    borderRadius: 16,
                     padding: 16,
                     pointerEvents: 'auto',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    backdropFilter: 'blur(16px) saturate(180%)',
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.3), 0 0 20px rgba(113,176,255,0.08), 0 0 40px rgba(255,182,193,0.05)',
                     display: 'flex',
-                    flexDirection: 'column'
+                    flexDirection: 'column',
+                    overflowY: 'auto'
                 }}
             >
                 <div style={{ color: 'var(--ui-primary)', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -786,16 +778,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         <button
                             key={type}
                             onClick={() => setBrushType(type)}
+                            className={brushType === type ? 'drawing-btn-active' : 'drawing-btn-ghost'}
                             style={{
                                 flex: 1,
                                 padding: '8px 0',
-                                background: brushType === type ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
-                                border: brushType === type ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
-                                borderRadius: 6,
-                                color: brushType === type ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
                                 fontSize: 12,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
+                                cursor: 'pointer'
                             }}
                         >
                             {type === 'particle' ? '粒子' : '丝环'}
@@ -1130,13 +1118,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
             </div>
 
-            {/* 中央画布区域 */}
+            {/* 中央画布区域 - 带CSS渐变边框 */}
             <div
-                ref={canvasContainerRef}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerLeave={handlePointerUp}
+                className="drawing-canvas-wrapper"
                 style={{
                     position: 'absolute',
                     left: '50%',
@@ -1144,11 +1128,30 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     transform: 'translate(-50%, -50%)',
                     width: 'min(70vh, 70vw)',
                     height: 'min(70vh, 70vw)',
-                    pointerEvents: 'auto',
-                    cursor: 'crosshair',
-                    touchAction: 'none'
                 }}
-            />
+            >
+                {/* 4边渐变边框 */}
+                <div className="drawing-border-top" />
+                <div className="drawing-border-bottom" />
+                <div className="drawing-border-left" />
+                <div className="drawing-border-right" />
+
+                {/* Three.js画布容器 */}
+                <div
+                    ref={canvasContainerRef}
+                    onPointerDown={handlePointerDown}
+                    onPointerMove={handlePointerMove}
+                    onPointerUp={handlePointerUp}
+                    onPointerLeave={handlePointerUp}
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        pointerEvents: 'auto',
+                        cursor: 'crosshair',
+                        touchAction: 'none'
+                    }}
+                />
+            </div>
 
             {/* 画布左上角：Edit/Preview 模式切换按钮 */}
             <div

@@ -46,7 +46,7 @@ export interface DrawingSystemRefs {
     strokesGroup: THREE.Group | null;
     symmetryAxesGroup: THREE.Group | null;
     centerPoint: THREE.Mesh | null;
-    border: THREE.LineLoop | null;
+    // border已移除，改用CSS渐变边框
     currentStrokeMesh: THREE.Object3D | null;  // Points, Group, or Line
 }
 
@@ -59,7 +59,6 @@ export function createDrawingScene(): {
     strokesGroup: THREE.Group;
     symmetryAxesGroup: THREE.Group;
     centerPoint: THREE.Mesh;
-    border: THREE.LineLoop;
 } {
     // 创建独立场景
     const scene = new THREE.Scene();
@@ -137,23 +136,7 @@ export function createDrawingScene(): {
     centerPoint.renderOrder = 100;
     canvasGroup.add(centerPoint);
 
-    // 画布边框
-    const borderPoints = [
-        new THREE.Vector3(-0.5, -0.5, 0),
-        new THREE.Vector3(0.5, -0.5, 0),
-        new THREE.Vector3(0.5, 0.5, 0),
-        new THREE.Vector3(-0.5, 0.5, 0)
-    ];
-    const borderGeometry = new THREE.BufferGeometry().setFromPoints(borderPoints);
-    const borderMaterial = new THREE.LineBasicMaterial({
-        color: 0xffaa00,
-        transparent: true,
-        opacity: 0.5,
-        depthTest: false
-    });
-    const border = new THREE.LineLoop(borderGeometry, borderMaterial);
-    border.renderOrder = 99;
-    canvasGroup.add(border);
+    // 边框已改用CSS渐变边框实现，此处不再创建Three.js边框
 
     return {
         scene,
@@ -161,8 +144,7 @@ export function createDrawingScene(): {
         canvasGroup,
         strokesGroup,
         symmetryAxesGroup,
-        centerPoint,
-        border
+        centerPoint
     };
 }
 
@@ -1094,12 +1076,7 @@ export function disposeDrawingResources(refs: DrawingSystemRefs): void {
         }
     }
 
-    if (refs.border) {
-        refs.border.geometry?.dispose();
-        if (refs.border.material instanceof THREE.Material) {
-            refs.border.material.dispose();
-        }
-    }
+    // border已移除，用CSS实现
 }
 
 // ==================== 渲染笔画到 Group ====================

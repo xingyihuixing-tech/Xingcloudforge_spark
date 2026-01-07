@@ -840,3 +840,115 @@ canvas {
     filter: drop-shadow(0 0 16px var(--xing-c1)) drop-shadow(0 0 32px var(--xing-c2)) brightness(1.5);
   }
 }
+
+/* ===== 画布UI样式（仿AI面板） ===== */
+
+/* 画布容器 */
+.drawing-canvas-wrapper {
+  position: relative;
+  border-radius: 16px;
+  overflow: visible;
+}
+
+/* 4边渐变边框 + 呼吸动画 */
+.drawing-border-top,
+.drawing-border-bottom,
+.drawing-border-left,
+.drawing-border-right {
+  position: absolute;
+  pointer-events: none;
+  animation: breathe 3.5s ease-in-out infinite;
+  z-index: 10;
+}
+
+.drawing-border-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--ui-primary) 20%, #f472b6 50%, var(--ui-secondary) 80%, transparent 100%);
+}
+
+.drawing-border-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent 0%, var(--ui-secondary) 20%, #f472b6 50%, var(--ui-primary) 80%, transparent 100%);
+}
+
+.drawing-border-left {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--ui-primary) 0%, rgba(244, 114, 182, 0.5) 50%, transparent 100%);
+}
+
+.drawing-border-right {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(244, 114, 182, 0.5) 50%, var(--ui-primary) 100%);
+}
+
+/* 画笔面板玻璃容器 - 极高透明度 */
+.drawing-panel-glass {
+  background: rgba(15, 23, 42, 0.03) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 透明按钮（未选中） */
+.drawing-btn-ghost {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s ease;
+  border-radius: 8px;
+}
+
+.drawing-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* 选中按钮 - 主交互色 + 边框发光 */
+.drawing-btn-active {
+  background: transparent;
+  border: 1px solid var(--ui-primary);
+  color: var(--ui-primary);
+  box-shadow: 0 0 8px var(--ui-primary), 0 0 16px rgba(var(--ui-secondary-rgb), 0.3);
+  transition: all 0.2s ease;
+  border-radius: 8px;
+}
+
+.drawing-btn-active:hover {
+  box-shadow: 0 0 12px var(--ui-primary), 0 0 24px rgba(var(--ui-secondary-rgb), 0.4);
+}
+
+/* 滑块区域容器 - 无背景 */
+.drawing-slider-group {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+/* 标签文字 */
+.drawing-label {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* 标题文字 - 主交互色 */
+.drawing-title {
+  color: var(--ui-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
