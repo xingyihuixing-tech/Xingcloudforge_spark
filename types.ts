@@ -929,6 +929,9 @@ export interface ParticleRingSettings {
   silkEffect?: SilkEffectSettings;       // 丝绸效果（仅在特定渲染模式下有效）
   ornament?: OrnamentSettings;           // 点缀装饰效果
   galaxy?: GalaxySettings;               // 银河系螺旋臂效果
+  // 空间粗细（自定义法阵绘制专用）
+  spatialThickness?: boolean;            // 启用空间粗细（z方向散布）
+  zThickness?: number;                   // z方向散布范围（默认与bandwidth一致）
 }
 
 // 丝绸效果配置

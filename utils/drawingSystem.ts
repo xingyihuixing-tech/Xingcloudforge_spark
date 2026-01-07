@@ -284,13 +284,27 @@ export function createParticleStrokeMesh(
     const particleRadialDists: number[] = [];  // 添加径向距离用于渐变
 
     // 从设置中获取参数
-    const particleSize = settings.particleSize ?? 2;        // 粒子大小 0.5-5
-    const particleDensity = settings.particleDensity ?? 3;  // 粒子密度 0.5-10
+    const particleSize = settings.particleSize ?? 2;        // 粒子大小 1-50
+    const particleDensity = settings.particleDensity ?? 3;  // 粒子密度 1-30
     const strokeThickness = settings.bandwidth ?? 15;       // 笔触粗细 (散布范围) 1-50
+    const spatialThickness = settings.spatialThickness ?? false;  // 空间粗细开关
+    const zThickness = settings.zThickness ?? strokeThickness;    // z方向范围
     const colorObj = new THREE.Color(color);
 
-    // 根据密度计算采样间隔 - 密度越高，采样点越多
-    const sampleStep = Math.max(1, Math.floor(points.length / (Math.ceil(points.length * particleDensity / 5))));
+    // 计算路径总长度（归一化坐标）
+    let pathLength = 0;
+    for (let i = 1; i < points.length; i++) {
+        const dx = points[i].x - points[i - 1].x;
+        const dy = points[i].y - points[i - 1].y;
+        pathLength += Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // 基于路径长度计算粒子总数：密度 = 每单位路径长度的粒子数
+    // pathLength范围约0-1，密度1-30，希望密度30时路径filling满
+    const targetParticleCount = Math.max(1, Math.ceil(pathLength * particleDensity * 100));
+
+    // 采样间隔 = 路径点数 / 目标粒子数
+    const sampleStep = Math.max(1, Math.floor(points.length / targetParticleCount));
 
     // 对每个采样点应用对称变换
     for (let i = 0; i < points.length; i += sampleStep) {
@@ -301,34 +315,32 @@ export function createParticleStrokeMesh(
             symmetryDivisions
         );
 
-        // 每个采样点生成多个粒子（根据密度）
-        const particlesPerPoint = Math.ceil(particleDensity);
-
         for (const sp of symmetricPoints) {
-            for (let p = 0; p < particlesPerPoint; p++) {
-                // 添加散布抖动 (笔触粗细控制)
-                const jitter = strokeThickness * 0.002; // 映射到画布单位
-                const jx = (Math.random() - 0.5) * jitter;
-                const jy = (Math.random() - 0.5) * jitter;
+            // 添加散布抖动 (笔触粗细控制xy方向)
+            const jitter = strokeThickness * 0.002; // 映射到画布单位
+            const jx = (Math.random() - 0.5) * jitter;
+            const jy = (Math.random() - 0.5) * jitter;
+            // 空间粗细：z方向散布
+            const jz = spatialThickness ? (Math.random() - 0.5) * zThickness * 0.002 : 0;
 
-                const px = sp.x + jx;
-                const py = sp.y + jy;
-                particlePositions.push(px, py, 0);
+            const px = sp.x + jx;
+            const py = sp.y + jy;
+            particlePositions.push(px, py, jz);
 
-                // 计算径向距离用于渐变（归一化到0-1）
-                const radialDist = Math.sqrt(px * px + py * py) * 2; // 最大0.5变成1
-                particleRadialDists.push(Math.min(1, radialDist));
+            // 计算径向距离用于渐变（归一化到0-1）
+            const radialDist = Math.sqrt(px * px + py * py) * 2; // 最大0.5变成1
+            particleRadialDists.push(Math.min(1, radialDist));
 
-                // 粒子大小 = 基础大小 × 压感 × 随机变化（增大系数使粒子更明显）
-                const sizeVariation = 0.7 + Math.random() * 0.6;
-                const pressureFactor = 0.5 + point.pressure * 0.5;
-                particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.05);
+            // 粒子大小 = 基础大小 × 压感 × 随机变化
+            const sizeVariation = 0.7 + Math.random() * 0.6;
+            const pressureFactor = 0.5 + point.pressure * 0.5;
+            particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.05);
 
-                particleColors.push(colorObj.r, colorObj.g, colorObj.b);
-                particleAlphas.push(0.7 + Math.random() * 0.3);
-            }
+            particleColors.push(colorObj.r, colorObj.g, colorObj.b);
+            particleAlphas.push(0.7 + Math.random() * 0.3);
         }
     }
+
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(particlePositions, 3));

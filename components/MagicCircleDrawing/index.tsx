@@ -466,13 +466,15 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (currentStrokeRef.current.length < 2) return;
 
         // 创建新预览
+        const previewMcSettings = { particleSizeScale: 0.002 };  // 画布粒子缩放
         if (brushType === 'particle') {
             refs.currentStrokeMesh = createParticleStrokeMesh(
                 currentStrokeRef.current,
                 brushColor,
                 particleSettings,
                 symmetryMode,
-                symmetryDivisions
+                symmetryDivisions,
+                previewMcSettings
             );
         } else {
             refs.currentStrokeMesh = createLineStrokeMesh(
@@ -819,9 +821,24 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             </div>
                             {/* 笔触粗细 */}
                             <div style={{ marginBottom: 10 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                                     <span>笔触粗细</span>
-                                    <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.bandwidth || 15}</span>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.bandwidth || 15}</span>
+                                        <label style={{ display: 'flex', alignItems: 'center', fontSize: 11, cursor: 'pointer' }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={particleSettings.spatialThickness || false}
+                                                onChange={(e) => setParticleSettings(prev => ({
+                                                    ...prev,
+                                                    spatialThickness: e.target.checked,
+                                                    zThickness: e.target.checked ? (prev.zThickness ?? prev.bandwidth ?? 15) : prev.zThickness
+                                                }))}
+                                                style={{ marginRight: 4, cursor: 'pointer' }}
+                                            />
+                                            空间粗细
+                                        </label>
+                                    </div>
                                 </div>
                                 <input
                                     type="range"
@@ -833,6 +850,24 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                     style={{ width: '100%' }}
                                 />
                             </div>
+                            {/* Z方向范围（仅空间粗细开启时显示） */}
+                            {particleSettings.spatialThickness && (
+                                <div style={{ marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                        <span>Z方向范围</span>
+                                        <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.zThickness ?? particleSettings.bandwidth ?? 15}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min={1}
+                                        max={50}
+                                        step={1}
+                                        value={particleSettings.zThickness ?? particleSettings.bandwidth ?? 15}
+                                        onChange={(e) => setParticleSettings(prev => ({ ...prev, zThickness: Number(e.target.value) }))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+                            )}
                         </>
                     ) : (
                         <>
