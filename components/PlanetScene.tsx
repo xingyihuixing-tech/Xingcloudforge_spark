@@ -12889,14 +12889,15 @@ void main() {
           layer.strokes.forEach((stroke: MagicCircleStroke) => {
             if (!stroke.points || stroke.points.length < 2) return;
             let strokeMesh: THREE.Object3D;
-            // 法阵级别参数（透明度、色相、亮度、脉冲）
+            // 法阵级别参数（透明度、色相、亮度、脉冲、粒子缩放）
             const mcSettings = {
               opacity: settings.opacity,
               hueShift: settings.hueShift,
               brightness: settings.brightness,
               pulseEnabled: settings.pulseEnabled,
               pulseSpeed: settings.pulseSpeed,
-              pulseIntensity: settings.pulseIntensity
+              pulseIntensity: settings.pulseIntensity,
+              particleSizeScale: 1.5  // 场景中粒子略微变大
             };
             if (stroke.brushType === 'particle') {
               strokeMesh = createParticleStrokeMesh(stroke.points, stroke.color, stroke.particleRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);

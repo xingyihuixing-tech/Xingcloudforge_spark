@@ -272,6 +272,8 @@ export function createParticleStrokeMesh(
         color3?: THREE.Vector3;
         colorMidPos?: number;
         proceduralIntensity?: number;
+        // 粒子大小缩放因子
+        particleSizeScale?: number;
     }
 ): THREE.Points {
     // 沿路径采样粒子位置
@@ -359,7 +361,9 @@ export function createParticleStrokeMesh(
             uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
             uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
             uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-            uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+            uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 },
+            // 粒子大小缩放因子（画布0.002，场景1.5）
+            uParticleSizeScale: { value: mcSettings.particleSizeScale ?? 1.0 }
         },
         vertexShader: `
 precision highp float;
@@ -378,6 +382,7 @@ uniform float uTime;
 uniform float uPulseEnabled;
 uniform float uPulseSpeed;
 uniform float uPulseIntensity;
+uniform float uParticleSizeScale;
 
 void main() {
   vColor = color;
@@ -392,7 +397,7 @@ void main() {
   }
   
   vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-  gl_PointSize = size * pulse * (300.0 / -mvPosition.z);
+  gl_PointSize = size * pulse * uParticleSizeScale * (300.0 / -mvPosition.z);
   gl_Position = projectionMatrix * mvPosition;
 }
         `,

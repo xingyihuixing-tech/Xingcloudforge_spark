@@ -316,14 +316,15 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         for (const layer of layersToRender) {
             for (const stroke of layer.strokes) {
                 let mesh: THREE.Object3D;
-                // 画布渲染使用默认参数（无法阵级别调节，脉冲关闭）
+                // 画布渲染使用默认参数（无法阵级别调节，脉冲关闭，粒子大小缩放）
                 const defaultMcSettings = {
                     opacity: 1.0,
                     hueShift: 0,
                     brightness: 1.0,
                     pulseEnabled: false,
                     pulseSpeed: 1.0,
-                    pulseIntensity: 0.3
+                    pulseIntensity: 0.3,
+                    particleSizeScale: 0.002  // 画布中粒子大幅缩小
                 };
                 if (stroke.brushType === 'particle') {
                     mesh = createParticleStrokeMesh(
@@ -776,9 +777,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={0.5}
-                                    max={5}
-                                    step={0.1}
+                                    min={1}
+                                    max={50}
+                                    step={1}
                                     value={particleSettings.particleSize || 2}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleSize: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
@@ -792,9 +793,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={0.5}
-                                    max={10}
-                                    step={0.5}
+                                    min={1}
+                                    max={30}
+                                    step={1}
                                     value={particleSettings.particleDensity || 3}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleDensity: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
