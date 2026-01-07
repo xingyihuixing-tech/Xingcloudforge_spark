@@ -276,78 +276,105 @@ export function createParticleStrokeMesh(
         particleSizeScale?: number;
     }
 ): THREE.Points {
-    // 沿路径采样粒子位置
+    // 沿路径均匀插值生成粒子（参考粒子环实现）
     const particlePositions: number[] = [];
     const particleSizes: number[] = [];
     const particleColors: number[] = [];
     const particleAlphas: number[] = [];
-    const particleRadialDists: number[] = [];  // 添加径向距离用于渐变
+    const particleRadialDists: number[] = [];
 
     // 从设置中获取参数
-    const particleSize = settings.particleSize ?? 2;        // 粒子大小 1-50
-    const particleDensity = settings.particleDensity ?? 3;  // 粒子密度 1-30
-    const strokeThickness = settings.bandwidth ?? 15;       // 笔触粗细 (散布范围) 1-50
-    const spatialThickness = settings.spatialThickness ?? false;  // 空间粗细开关
-    const zThickness = settings.zThickness ?? strokeThickness;    // z方向范围
+    const particleSize = settings.particleSize ?? 2;
+    const particleDensity = settings.particleDensity ?? 30;
+    const strokeThickness = settings.bandwidth ?? 15;
+    const spatialThickness = settings.spatialThickness ?? false;
+    const zThickness = settings.zThickness ?? strokeThickness;
     const colorObj = new THREE.Color(color);
 
-    // 计算路径总长度（归一化坐标）
-    let pathLength = 0;
+    // Step 1: 计算路径累积长度数组
+    const segmentLengths: number[] = [0];
+    let totalLength = 0;
     for (let i = 1; i < points.length; i++) {
         const dx = points[i].x - points[i - 1].x;
         const dy = points[i].y - points[i - 1].y;
-        pathLength += Math.sqrt(dx * dx + dy * dy);
+        totalLength += Math.sqrt(dx * dx + dy * dy);
+        segmentLengths.push(totalLength);
     }
 
-    // 基于路径长度计算粒子总数：密度 = 每单位路径长度的粒子数
-    // pathLength范围约0-1，密度1-30，希望密度30时路径filling满
-    const targetParticleCount = Math.max(1, Math.ceil(pathLength * particleDensity * 100));
+    if (totalLength < 0.001) {
+        // 路径太短，直接返回空几何体
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3));
+        geometry.setAttribute('size', new THREE.Float32BufferAttribute([], 1));
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute([], 3));
+        geometry.setAttribute('alpha', new THREE.Float32BufferAttribute([], 1));
+        geometry.setAttribute('aRadialDist', new THREE.Float32BufferAttribute([], 1));
+        return new THREE.Points(geometry);
+    }
 
-    // 采样间隔 = 路径点数 / 目标粒子数
-    const sampleStep = Math.max(1, Math.floor(points.length / targetParticleCount));
+    // Step 2: 计算粒子总数 = 密度 × 路径长度（参考粒子环 count = density * perimeter）
+    const particleCount = Math.max(1, Math.floor(particleDensity * totalLength));
 
-    // 计算每个采样点应生成的粒子数（确保可以超过采样点数）
-    const actualSampleCount = Math.ceil(points.length / sampleStep);
-    const particlesPerPoint = Math.max(1, Math.ceil(targetParticleCount / actualSampleCount));
+    // Step 3: 沿路径均匀插值生成粒子位置
+    for (let i = 0; i < particleCount; i++) {
+        // 沿路径的目标距离（均匀分布）
+        const targetDist = (i / particleCount) * totalLength;
 
-    // 对每个采样点应用对称变换
-    for (let i = 0; i < points.length; i += sampleStep) {
-        const point = points[i];
+        // 二分查找找到目标距离所在的线段
+        let segIndex = 0;
+        for (let j = 1; j < segmentLengths.length; j++) {
+            if (segmentLengths[j] >= targetDist) {
+                segIndex = j - 1;
+                break;
+            }
+            segIndex = j - 1;
+        }
+
+        // 在线段内插值
+        const segStart = segmentLengths[segIndex];
+        const segEnd = segmentLengths[segIndex + 1] || totalLength;
+        const segLen = segEnd - segStart;
+        const t = segLen > 0.0001 ? (targetDist - segStart) / segLen : 0;
+
+        const p0 = points[segIndex];
+        const p1 = points[Math.min(segIndex + 1, points.length - 1)];
+
+        // 插值位置
+        const baseX = p0.x + (p1.x - p0.x) * t;
+        const baseY = p0.y + (p1.y - p0.y) * t;
+        const pressure = p0.pressure + (p1.pressure - p0.pressure) * t;
+
+        // 转换到画布坐标系并应用对称变换
         const symmetricPoints = applySymmetryTransform(
-            { x: point.x - 0.5, y: 0.5 - point.y }, // 转换到画布坐标系
+            { x: baseX - 0.5, y: 0.5 - baseY },
             symmetryMode,
             symmetryDivisions
         );
 
         for (const sp of symmetricPoints) {
-            // 每个对称点生成多个粒子
-            for (let p = 0; p < particlesPerPoint; p++) {
-                // 添加散布抖动 (笔触粗细控制xy方向)
-                const jitter = strokeThickness * 0.002; // 映射到画布单位
-                const jx = (Math.random() - 0.5) * jitter;
-                const jy = (Math.random() - 0.5) * jitter;
-                // 空间粗细：z方向散布
-                const jz = spatialThickness ? (Math.random() - 0.5) * zThickness * 0.002 : 0;
+            // 添加散布抖动（笔触粗细控制xy方向）
+            const jitter = strokeThickness * 0.002;
+            const jx = (Math.random() - 0.5) * jitter;
+            const jy = (Math.random() - 0.5) * jitter;
+            const jz = spatialThickness ? (Math.random() - 0.5) * zThickness * 0.002 : 0;
 
-                const px = sp.x + jx;
-                const py = sp.y + jy;
-                particlePositions.push(px, py, jz);
+            const px = sp.x + jx;
+            const py = sp.y + jy;
+            particlePositions.push(px, py, jz);
 
-                // 计算径向距离用于渐变（归一化到0-1）
-                const radialDist = Math.sqrt(px * px + py * py) * 2; // 最大0.5变成1
-                particleRadialDists.push(Math.min(1, radialDist));
+            // 径向距离用于渐变
+            const radialDist = Math.sqrt(px * px + py * py) * 2;
+            particleRadialDists.push(Math.min(1, radialDist));
 
-                // 粒子大小 = 基础大小 × 压感 × 随机变化
-                const sizeVariation = 0.7 + Math.random() * 0.6;
-                const pressureFactor = 0.5 + point.pressure * 0.5;
-                particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.05);
+            // 粒子大小 = 基础大小 × 压感 × 随机变化
+            const sizeVariation = 0.7 + Math.random() * 0.6;
+            const pressureFactor = 0.5 + pressure * 0.5;
+            particleSizes.push(particleSize * pressureFactor * sizeVariation * 0.05);
 
-                particleColors.push(colorObj.r, colorObj.g, colorObj.b);
-                particleAlphas.push(0.7 + Math.random() * 0.3);
-            }
+            particleColors.push(colorObj.r, colorObj.g, colorObj.b);
+            particleAlphas.push(0.7 + Math.random() * 0.3);
         }
     }
-
 
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(particlePositions, 3));
@@ -361,9 +388,9 @@ export function createParticleStrokeMesh(
     const material = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
-            uGlowIntensity: { value: settings.brightness ?? 3.5 },
-            uEmissive: { value: 4.0 },
-            uCoreBrightness: { value: 5.0 },
+            uGlowIntensity: { value: settings.brightness ?? 2.0 },
+            uEmissive: { value: 1.5 },
+            uCoreBrightness: { value: 2.0 },
             uPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
             uPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
             uPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
