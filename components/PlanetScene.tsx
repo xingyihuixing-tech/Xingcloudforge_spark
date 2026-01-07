@@ -9290,13 +9290,29 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
               }
             }
 
-            // 更新自定义绘制法阵的 uTime（使脉冲和流动效果生效）
+            // 更新自定义绘制法阵的 uniforms（使染色、亮度、脉冲等效果生效）
             if (circleData.mesh instanceof THREE.Group && circleData.mesh.userData?.isCustomDrawn) {
               circleData.mesh.traverse((child: THREE.Object3D) => {
                 if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
                   const mat = (child as any).material as THREE.ShaderMaterial;
-                  if (mat?.uniforms?.uTime) {
-                    mat.uniforms.uTime.value = time;
+                  if (mat?.uniforms) {
+                    // 更新时间
+                    if (mat.uniforms.uTime) mat.uniforms.uTime.value = time;
+
+                    // 更新法阵级别参数（染色、亮度、透明度）
+                    if (mat.uniforms.uMCOpacity) mat.uniforms.uMCOpacity.value = settings.opacity;
+                    if (mat.uniforms.uMCHueShift) mat.uniforms.uMCHueShift.value = settings.hueShift / 360.0;
+                    if (mat.uniforms.uMCBrightness) mat.uniforms.uMCBrightness.value = settings.brightness;
+
+                    // 更新脉冲参数（粒子笔画使用 uPulse* 命名）
+                    if (mat.uniforms.uPulseEnabled) mat.uniforms.uPulseEnabled.value = settings.pulseEnabled ? 1.0 : 0.0;
+                    if (mat.uniforms.uPulseSpeed) mat.uniforms.uPulseSpeed.value = settings.pulseSpeed;
+                    if (mat.uniforms.uPulseIntensity) mat.uniforms.uPulseIntensity.value = settings.pulseIntensity;
+
+                    // 更新脉冲参数（丝环笔画使用 uMCPulse* 命名）
+                    if (mat.uniforms.uMCPulseEnabled) mat.uniforms.uMCPulseEnabled.value = settings.pulseEnabled ? 1.0 : 0.0;
+                    if (mat.uniforms.uMCPulseSpeed) mat.uniforms.uMCPulseSpeed.value = settings.pulseSpeed;
+                    if (mat.uniforms.uMCPulseIntensity) mat.uniforms.uMCPulseIntensity.value = settings.pulseIntensity;
                   }
                 }
               });
