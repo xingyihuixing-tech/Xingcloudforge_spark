@@ -1031,8 +1031,8 @@ export function createLightsaberStrokeMesh(
     // 压感模式
     const pressureMode = settings.pressureMode || 'none';
 
-    // 应用对称
-    const basePath = smoothedPoints.map(p => ({ x: p.x - 0.5, y: p.y - 0.5, pressure: p.pressure }));
+    // 应用对称（注意Y轴翻转，与粒子画笔一致）
+    const basePath = smoothedPoints.map(p => ({ x: p.x - 0.5, y: 0.5 - p.y, pressure: p.pressure }));
     const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions);
 
     const baseRenderOrder = 53;
@@ -1171,7 +1171,7 @@ export function createLightsaberStrokeMesh(
             continue;
         }
 
-        // 压感模式：分段处理
+        // 压感模式：使用连续可变半径管道（与非压感模式类似，但半径随压力变化）
         const cumulative: number[] = [0];
         let totalLen = 0;
         for (let i = 1; i < path.length; i++) {
@@ -1182,15 +1182,10 @@ export function createLightsaberStrokeMesh(
         }
         if (totalLen < 0.0005) continue;
 
-        const maxSegmentsTotal = 200;
-        const maxSegmentsPerPath = Math.max(1, Math.floor(maxSegmentsTotal / Math.max(1, allPaths.length)));
-        const targetSpacing = 0.025;
-        const segCountByLen = Math.max(1, Math.floor(totalLen / targetSpacing));
-        const segCount = Math.min(maxSegmentsPerPath, segCountByLen);
-
         const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
         const pressureCurve = (p: number) => Math.pow(clamp01(p), 1.5);
 
+        // 采样函数
         const sampleAt = (dist: number) => {
             let lo = 0, hi = cumulative.length - 1;
             while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cumulative[m] > dist) hi = m - 1; else lo = m; }
@@ -1198,58 +1193,133 @@ export function createLightsaberStrokeMesh(
             if (i >= path.length - 1) return path[path.length - 1];
             const segLen = cumulative[i + 1] - cumulative[i];
             const t = segLen > 0 ? (dist - cumulative[i]) / segLen : 0;
-            return { x: path[i].x + (path[i + 1].x - path[i].x) * t, y: path[i].y + (path[i + 1].y - path[i].y) * t, pressure: path[i].pressure + (path[i + 1].pressure - path[i].pressure) * t };
+            return {
+                x: path[i].x + (path[i + 1].x - path[i].x) * t,
+                y: path[i].y + (path[i + 1].y - path[i].y) * t,
+                pressure: path[i].pressure + (path[i + 1].pressure - path[i].pressure) * t
+            };
         };
 
-        const baseIntensity = settings.glowIntensity ?? 1.5;
+        // 计算压感下每个位置的半径
+        const getRadiusAtDistWithPressure = (dist: number): number => {
+            const sample = sampleAt(dist);
+            const pe = pressureCurve(sample.pressure);
 
-        for (let i = 0; i < segCount; i++) {
-            const a = sampleAt((i / segCount) * totalLen);
-            const b = sampleAt(((i + 1) / segCount) * totalLen);
-            const midPressure = clamp01((a.pressure + b.pressure) * 0.5);
-            const peSeg = pressureCurve(midPressure);
+            // 端点渐变
+            const t = dist / totalLen;
+            let taperFactor = 1.0;
+            if (t < taperLength) {
+                taperFactor = t / taperLength;
+            } else if (t > 1 - taperLength) {
+                taperFactor = (1 - t) / taperLength;
+            }
+            taperFactor = Math.pow(taperFactor, 0.5);
 
-            const radiusScale = pressureMode === 'calligraphy' ? (0.4 + 2.0 * peSeg) : 1.0;
-            const radius = baseLineWidth * radiusScale;
+            // 压感影响
+            const radiusScale = pressureMode === 'calligraphy' ? (0.3 + 1.7 * pe) : 1.0;
 
-            const curve = new THREE.LineCurve3(new THREE.Vector3(a.x, a.y, 0), new THREE.Vector3(b.x, b.y, 0));
-            const tubeGeometry = new THREE.TubeGeometry(curve, 2, radius, 6, false);
+            return baseLineWidth * radiusScale * Math.max(0.1, taperFactor);
+        };
 
-            const intensityScale = pressureMode === 'brightness' ? (0.6 + 0.8 * peSeg) : 1.0;
+        // 创建连续的曲线点
+        const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, 0));
+        const curve = new THREE.CatmullRomCurve3(curvePoints);
+        const tubularSegments = Math.max(16, path.length * 3);
+        const radialSegments = 8;
 
-            const material = new THREE.ShaderMaterial({
-                vertexShader: lightsaberVertexShader,
-                fragmentShader: lightsaberFragmentShader,
-                uniforms: {
-                    uTime: { value: 0 },
-                    uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
-                    uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
-                    uCoreWidth: { value: settings.coreWidth ?? 0.4 },
-                    uGlowIntensity: { value: baseIntensity * intensityScale },
-                    uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
-                    uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
-                    uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
-                    uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
-                    // 法阵级别参数
-                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
-                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
-                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
-                },
-                transparent: true,
-                depthTest: false,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending,
-                side: THREE.DoubleSide
-            });
+        // 创建可变半径的管道几何体
+        const frames = curve.computeFrenetFrames(tubularSegments, false);
+        const vertices: number[] = [];
+        const normals: number[] = [];
+        const uvs: number[] = [];
+        const indices: number[] = [];
 
-            const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = pathRenderOrder;
-            lightsaberMaterials.push(material);
-            group.add(mesh);
+        for (let i = 0; i <= tubularSegments; i++) {
+            const t = i / tubularSegments;
+            const P = curve.getPointAt(t);
+            const N = frames.normals[i];
+            const B = frames.binormals[i];
+
+            // 计算当前位置的半径（考虑压感和端点渐变）
+            const currentDist = t * totalLen;
+            const currentRadius = getRadiusAtDistWithPressure(currentDist);
+
+            for (let j = 0; j <= radialSegments; j++) {
+                const v = j / radialSegments * Math.PI * 2;
+                const sin = Math.sin(v);
+                const cos = Math.cos(v);
+
+                const normal = new THREE.Vector3(
+                    cos * N.x + sin * B.x,
+                    cos * N.y + sin * B.y,
+                    cos * N.z + sin * B.z
+                ).normalize();
+
+                vertices.push(
+                    P.x + currentRadius * normal.x,
+                    P.y + currentRadius * normal.y,
+                    P.z + currentRadius * normal.z
+                );
+                normals.push(normal.x, normal.y, normal.z);
+                uvs.push(i / tubularSegments, j / radialSegments);
+            }
         }
+
+        // 生成索引
+        for (let i = 0; i < tubularSegments; i++) {
+            for (let j = 0; j < radialSegments; j++) {
+                const a = i * (radialSegments + 1) + j;
+                const b = (i + 1) * (radialSegments + 1) + j;
+                const c = (i + 1) * (radialSegments + 1) + (j + 1);
+                const d = i * (radialSegments + 1) + (j + 1);
+                indices.push(a, b, d, b, c, d);
+            }
+        }
+
+        const tubeGeometry = new THREE.BufferGeometry();
+        tubeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        tubeGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        tubeGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        tubeGeometry.setIndex(indices);
+
+        // 压感亮度模式：计算平均压力用于整体亮度调整
+        let avgPressure = 0;
+        for (const p of path) avgPressure += p.pressure;
+        avgPressure /= path.length;
+        const intensityScale = pressureMode === 'brightness' ? (0.6 + 0.8 * pressureCurve(avgPressure)) : 1.0;
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: lightsaberVertexShader,
+            fragmentShader: lightsaberFragmentShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
+                uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
+                uCoreWidth: { value: settings.coreWidth ?? 0.4 },
+                uGlowIntensity: { value: (settings.glowIntensity ?? 1.5) * intensityScale },
+                uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
+                uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
+                uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
+                uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
+                // 法阵级别参数
+                uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+                uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+                uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+                uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+                uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+                uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
+            },
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide
+        });
+
+        const mesh = new THREE.Mesh(tubeGeometry, material);
+        mesh.renderOrder = pathRenderOrder;
+        lightsaberMaterials.push(material);
+        group.add(mesh);
     }
 
     // 存储材质引用用于动画更新

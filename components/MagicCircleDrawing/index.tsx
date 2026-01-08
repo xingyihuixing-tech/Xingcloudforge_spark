@@ -75,11 +75,12 @@ const defaultLightsaberSettings: Partial<LightsaberSettings> = {
     glowColor: '#00aaff',    // 光晕颜色
     glowIntensity: 1.5,      // 光晕强度 0.5-3
     glowFalloff: 2.0,        // 光晕衰减 1-5
-    thickness: 0.03,         // 线条粗细 0.01-0.1
+    thickness: 0.03,         // 线条粗细 0.001-0.1
     pulseEnabled: false,     // 脉冲开关
     pulseSpeed: 1.0,         // 脉冲速度 0.5-3
-    pulseIntensity: 0.2,     // 脉冲强度 0-0.5
-    pressureMode: 'none'
+    pulseIntensity: 0.2,     // 脈冲强度 0-0.5
+    pressureMode: 'none',
+    smoothness: 0.5          // 笔迹平滑 0-1
 };
 
 // ==================== Props 接口 ====================
@@ -1544,7 +1545,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={10}
+                                    min={1}
                                     max={100}
                                     step={1}
                                     value={(lightsaberSettings.thickness || 0.03) * 1000}
@@ -1597,6 +1598,22 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                     step={0.2}
                                     value={lightsaberSettings.glowFalloff || 2.0}
                                     onChange={(e) => setLightsaberSettings(prev => ({ ...prev, glowFalloff: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 笔迹平滑 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>笔迹平滑</span>
+                                    <span style={{ color: '#ffffff' }}>{((lightsaberSettings.smoothness ?? 0.5) * 100).toFixed(0)}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
+                                    step={5}
+                                    value={(lightsaberSettings.smoothness ?? 0.5) * 100}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, smoothness: Number(e.target.value) / 100 }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>
