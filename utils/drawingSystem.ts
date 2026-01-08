@@ -1,9 +1,9 @@
 /**
- * input: customMagicCircles data, drawing mode state from App.tsx, particle/silk brush pressureMode（粒子：无/书法/亮度；丝环：无/书法/亮度）
- * output: 3D drawing canvas with orthographic camera, particle/silk ring stroke rendering (particle stroke uses arc-length density + pressure mapping; silk stroke forces depthTest=false + stable renderOrder to avoid transparent sorting flicker)
+ * input: customMagicCircles data, drawing mode state from App.tsx, particle/silk/lightsaber brush pressureMode
+ * output: 3D drawing canvas with orthographic camera, particle/silk/lightsaber stroke rendering
  * pos: Drawing system utilities for PlanetScene integration
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
- * 2026-01-08: 粒子密度缩放因子从25提高到80并移除上限；粒子光晕smoothstep范围收紧(0.4→0.22)并降低uEmissive(1.5→0.9)/uCoreBrightness(2.0→1.4)；丝环能量脉冲系数从1.5降为0.8，uBloomBoost从0.3降为0.12
+ * 2026-01-08: 新增光剑(lightsaber)画笔类型，包含lightsaberVertexShader/lightsaberFragmentShader、createLightsaberStrokeMesh函数、AdditiveBlending混合模式
  */
 
 import * as THREE from 'three';
@@ -15,7 +15,8 @@ import {
     DrawingBrushType,
     SymmetryMode,
     ParticleRingSettings,
-    SilkRingSettings
+    SilkRingSettings,
+    LightsaberSettings
 } from '../types';
 
 // ==================== 常量 ====================
@@ -824,6 +825,317 @@ void main() {
 }
 `;
 
+// ==================== 光剑着色器 ====================
+
+const lightsaberVertexShader = `
+precision highp float;
+
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+uniform float uTime;
+uniform float uPulseEnabled;
+uniform float uPulseSpeed;
+uniform float uPulseIntensity;
+
+void main() {
+  vUv = uv;
+  vNormal = normalize(normalMatrix * normal);
+  
+  vec3 pos = position;
+  
+  // 脉冲呼吸效果 (微幅缩放)
+  if (uPulseEnabled > 0.5) {
+    float pulse = 1.0 + sin(uTime * uPulseSpeed * 3.14159) * uPulseIntensity * 0.3;
+    pos *= pulse;
+  }
+  
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  vViewPosition = -mvPosition.xyz;
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+const lightsaberFragmentShader = `
+precision highp float;
+
+uniform float uTime;
+uniform vec3 uCoreColor;      // 核心颜色
+uniform vec3 uGlowColor;      // 光晕颜色
+uniform float uCoreWidth;     // 核心宽度 (0-1)
+uniform float uGlowIntensity; // 光晕强度
+uniform float uGlowFalloff;   // 光晕衰减
+uniform float uPulseEnabled;
+uniform float uPulseSpeed;
+uniform float uPulseIntensity;
+
+// 法阵级别参数
+uniform float uMCOpacity;
+uniform float uMCHueShift;
+uniform float uMCBrightness;
+uniform float uMCPulseEnabled;
+uniform float uMCPulseSpeed;
+uniform float uMCPulseIntensity;
+
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vViewPosition;
+
+void main() {
+  // 计算到管道中心的距离 (vUv.y: 0=边缘, 0.5=顶部, 1=另一边缘)
+  float distFromCenter = abs(vUv.y - 0.5) * 2.0; // 0=中心, 1=边缘
+  
+  // 核心区域 (硬边白光)
+  float coreAlpha = 1.0 - smoothstep(uCoreWidth * 0.5, uCoreWidth * 0.5 + 0.08, distFromCenter);
+  
+  // 光晕区域 (渐变发光)
+  float glowAlpha = pow(1.0 - distFromCenter, uGlowFalloff) * uGlowIntensity;
+  
+  // 笔画级别脉冲效果
+  float pulse = 1.0;
+  if (uPulseEnabled > 0.5) {
+    pulse = 1.0 + sin(uTime * uPulseSpeed * 3.14159) * uPulseIntensity;
+  }
+  
+  // 沿路径的流动感 (细微)
+  float flow = 1.0 + sin(vUv.x * 15.0 + uTime * 3.0) * 0.08;
+  
+  // 混合核心和光晕
+  vec3 coreContrib = uCoreColor * coreAlpha * 1.5; // 核心更亮
+  vec3 glowContrib = uGlowColor * glowAlpha * (1.0 - coreAlpha * 0.5);
+  
+  vec3 finalColor = (coreContrib + glowContrib) * pulse * flow;
+  
+  // 应用法阵级别脉冲
+  if (uMCPulseEnabled > 0.5) {
+    float mcPulse = 1.0 + sin(uTime * uMCPulseSpeed) * uMCPulseIntensity;
+    finalColor *= mcPulse;
+  }
+  
+  // 应用法阵级别色相偏移 (简化处理)
+  if (uMCHueShift > 0.001 || uMCHueShift < -0.001) {
+    vec3 shifted = vec3(
+      finalColor.r * cos(uMCHueShift * 6.283) - finalColor.g * sin(uMCHueShift * 6.283),
+      finalColor.r * sin(uMCHueShift * 6.283) + finalColor.g * cos(uMCHueShift * 6.283),
+      finalColor.b
+    );
+    finalColor = mix(finalColor, shifted, 0.7);
+  }
+  
+  // 应用法阵级别亮度
+  finalColor *= uMCBrightness;
+  
+  float alpha = max(coreAlpha, glowAlpha * 0.85) * uMCOpacity;
+  alpha = smoothstep(0.02, 0.9, alpha);
+
+  gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+
+// ==================== 创建光剑画笔笔画 ====================
+
+export function createLightsaberStrokeMesh(
+    points: StrokePoint[],
+    color: string,
+    settings: Partial<LightsaberSettings>,
+    symmetryMode: SymmetryMode,
+    symmetryDivisions: number,
+    magicCircleSettings?: {
+        opacity?: number;
+        hueShift?: number;
+        brightness?: number;
+        pulseEnabled?: boolean;
+        pulseSpeed?: number;
+        pulseIntensity?: number;
+    }
+): THREE.Group {
+    const group = new THREE.Group();
+    if (points.length < 2) return group;
+
+    const lightsaberMaterials: THREE.ShaderMaterial[] = [];
+    const baseLineWidth = (settings.thickness || 0.03) * 0.5;
+    const mcSettings = magicCircleSettings || {};
+
+    // 解析颜色
+    const glowColorObj = new THREE.Color(settings.glowColor || color);
+    const coreColorObj = new THREE.Color(settings.coreColor || '#ffffff');
+
+    // 压感模式
+    const pressureMode = settings.pressureMode || 'none';
+
+    // 应用对称
+    const basePath = points.map(p => ({ x: p.x - 0.5, y: p.y - 0.5, pressure: p.pressure }));
+    const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions);
+
+    const baseRenderOrder = 53;
+    for (let pathIndex = 0; pathIndex < allPaths.length; pathIndex++) {
+        const path = allPaths[pathIndex];
+        const pathRenderOrder = baseRenderOrder + pathIndex;
+        if (path.length < 2) continue;
+
+        if (pressureMode === 'none') {
+            const curve = new THREE.CatmullRomCurve3(path.map(p => new THREE.Vector3(p.x, p.y, 0)));
+            const tubeGeometry = new THREE.TubeGeometry(curve, Math.max(16, path.length * 3), baseLineWidth, 8, false);
+
+            const material = new THREE.ShaderMaterial({
+                vertexShader: lightsaberVertexShader,
+                fragmentShader: lightsaberFragmentShader,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
+                    uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
+                    uCoreWidth: { value: settings.coreWidth ?? 0.4 },
+                    uGlowIntensity: { value: settings.glowIntensity ?? 1.5 },
+                    uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
+                    uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
+                    uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
+                    uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
+                    // 法阵级别参数
+                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
+                },
+                transparent: true,
+                depthTest: false,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide
+            });
+
+            const mesh = new THREE.Mesh(tubeGeometry, material);
+            mesh.renderOrder = pathRenderOrder;
+            lightsaberMaterials.push(material);
+            group.add(mesh);
+            continue;
+        }
+
+        // 压感模式：分段处理
+        const cumulative: number[] = [0];
+        let totalLen = 0;
+        for (let i = 1; i < path.length; i++) {
+            const dx = path[i].x - path[i - 1].x;
+            const dy = path[i].y - path[i - 1].y;
+            totalLen += Math.sqrt(dx * dx + dy * dy);
+            cumulative.push(totalLen);
+        }
+        if (totalLen < 0.0005) continue;
+
+        const maxSegmentsTotal = 200;
+        const maxSegmentsPerPath = Math.max(1, Math.floor(maxSegmentsTotal / Math.max(1, allPaths.length)));
+        const targetSpacing = 0.025;
+        const segCountByLen = Math.max(1, Math.floor(totalLen / targetSpacing));
+        const segCount = Math.min(maxSegmentsPerPath, segCountByLen);
+
+        const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+        const pressureCurve = (p: number) => Math.pow(clamp01(p), 1.5);
+
+        const sampleAt = (dist: number) => {
+            let lo = 0, hi = cumulative.length - 1;
+            while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cumulative[m] > dist) hi = m - 1; else lo = m; }
+            const i = lo;
+            if (i >= path.length - 1) return path[path.length - 1];
+            const segLen = cumulative[i + 1] - cumulative[i];
+            const t = segLen > 0 ? (dist - cumulative[i]) / segLen : 0;
+            return { x: path[i].x + (path[i + 1].x - path[i].x) * t, y: path[i].y + (path[i + 1].y - path[i].y) * t, pressure: path[i].pressure + (path[i + 1].pressure - path[i].pressure) * t };
+        };
+
+        const baseIntensity = settings.glowIntensity ?? 1.5;
+
+        for (let i = 0; i < segCount; i++) {
+            const a = sampleAt((i / segCount) * totalLen);
+            const b = sampleAt(((i + 1) / segCount) * totalLen);
+            const midPressure = clamp01((a.pressure + b.pressure) * 0.5);
+            const peSeg = pressureCurve(midPressure);
+
+            const radiusScale = pressureMode === 'calligraphy' ? (0.4 + 2.0 * peSeg) : 1.0;
+            const radius = baseLineWidth * radiusScale;
+
+            const curve = new THREE.LineCurve3(new THREE.Vector3(a.x, a.y, 0), new THREE.Vector3(b.x, b.y, 0));
+            const tubeGeometry = new THREE.TubeGeometry(curve, 2, radius, 6, false);
+
+            const intensityScale = pressureMode === 'brightness' ? (0.6 + 0.8 * peSeg) : 1.0;
+
+            const material = new THREE.ShaderMaterial({
+                vertexShader: lightsaberVertexShader,
+                fragmentShader: lightsaberFragmentShader,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
+                    uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
+                    uCoreWidth: { value: settings.coreWidth ?? 0.4 },
+                    uGlowIntensity: { value: baseIntensity * intensityScale },
+                    uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
+                    uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
+                    uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
+                    uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
+                    // 法阵级别参数
+                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
+                },
+                transparent: true,
+                depthTest: false,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide
+            });
+
+            const mesh = new THREE.Mesh(tubeGeometry, material);
+            mesh.renderOrder = pathRenderOrder;
+            lightsaberMaterials.push(material);
+            group.add(mesh);
+        }
+    }
+
+    // 存储材质引用用于动画更新
+    (group as any).__lightsaberMaterials = lightsaberMaterials;
+
+    return group;
+}
+
+// 对称路径生成辅助函数
+function applySymmetryToPath(
+    basePath: { x: number; y: number; pressure: number }[],
+    symmetryMode: SymmetryMode,
+    divisions: number
+): { x: number; y: number; pressure: number }[][] {
+    if (symmetryMode === 'none') return [basePath];
+
+    const allPaths: { x: number; y: number; pressure: number }[][] = [];
+
+    for (let div = 0; div < divisions; div++) {
+        const angle = (div / divisions) * Math.PI * 2;
+        const cos = Math.cos(angle);
+        const sin = Math.sin(angle);
+
+        const rotatedPath = basePath.map(p => ({
+            x: p.x * cos - p.y * sin,
+            y: p.x * sin + p.y * cos,
+            pressure: p.pressure
+        }));
+        allPaths.push(rotatedPath);
+
+        // Kaleidoscope模式添加镜像
+        if (symmetryMode === 'kaleidoscope') {
+            const mirroredPath = basePath.map(p => ({
+                x: -(p.x * cos - p.y * sin),
+                y: p.x * sin + p.y * cos,
+                pressure: p.pressure
+            }));
+            allPaths.push(mirroredPath);
+        }
+    }
+
+    return allPaths;
+}
+
 // ==================== 创建线环画笔笔画 (复用丝环着色器) ====================
 
 export function createLineStrokeMesh(
@@ -1170,6 +1482,14 @@ export function renderStrokesToGroup(
                 stroke.points,
                 stroke.color,
                 stroke.particleRingSettings || {},
+                layer.symmetryMode,
+                layer.symmetryDivisions
+            );
+        } else if (stroke.brushType === 'lightsaber') {
+            strokeMesh = createLightsaberStrokeMesh(
+                stroke.points,
+                stroke.color,
+                stroke.lightsaberSettings || {},
                 layer.symmetryMode,
                 layer.symmetryDivisions
             );

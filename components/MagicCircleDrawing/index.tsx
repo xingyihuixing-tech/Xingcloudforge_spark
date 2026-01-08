@@ -1,9 +1,9 @@
 /**
- * input: drawingModeActive, customMagicCircles from App.tsx, particle/silk brush pressureMode（粒子：无/书法/亮度；丝环：无/书法/亮度）
- * output: Drawing overlay UI with 3D canvas, brush tools (arc-length density + pressure mode；粒子密度范围100-800), symmetry controls, layer panel
+ * input: drawingModeActive, customMagicCircles from App.tsx, particle/silk/lightsaber brush pressureMode
+ * output: Drawing overlay UI with 3D canvas, brush tools (particle/silk/lightsaber), symmetry controls, layer panel
  * pos: Main React component for custom magic circle drawing system
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
- * 2026-01-08: 丝环画笔新增参数：波形类型(正弦/三角/无)、波动频率/幅度、流动速度(0-20)、丝线密度、透明度、泛光；与光环系统线环保持一致
+ * 2026-01-08: 新增光剑(lightsaber)画笔类型，支持核心/光晕双色、核心宽度、光晕强度/衰减、脉冲效果、压感模式
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -18,6 +18,7 @@ import {
     SymmetryMode,
     ParticleRingSettings,
     SilkRingSettings,
+    LightsaberSettings,
     BrushPreset
 } from '../../types';
 import {
@@ -26,6 +27,7 @@ import {
     screenToCanvas,
     createParticleStrokeMesh,
     createLineStrokeMesh,
+    createLightsaberStrokeMesh,
     renderStrokesToGroup,
     createNewCircle,
     createNewLayer,
@@ -64,6 +66,19 @@ const defaultSilkSettings: Partial<SilkRingSettings> = {
     waveType: 'off',         // 波形类型: off/sine/triangle
     wobbleFrequency: 10,     // 波动频率 1-80
     wobbleAmplitude: 0.5,    // 波动幅度 0.1-3
+    pressureMode: 'none'
+};
+
+const defaultLightsaberSettings: Partial<LightsaberSettings> = {
+    coreWidth: 0.4,          // 核心宽度 0.2-0.8
+    coreColor: '#ffffff',    // 核心颜色
+    glowColor: '#00aaff',    // 光晕颜色
+    glowIntensity: 1.5,      // 光晕强度 0.5-3
+    glowFalloff: 2.0,        // 光晕衰减 1-5
+    thickness: 0.03,         // 线条粗细 0.01-0.1
+    pulseEnabled: false,     // 脉冲开关
+    pulseSpeed: 1.0,         // 脉冲速度 0.5-3
+    pulseIntensity: 0.2,     // 脉冲强度 0-0.5
     pressureMode: 'none'
 };
 
@@ -122,6 +137,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     const [brushType, setBrushType] = useState<DrawingBrushType>('particle');
     const [particleSettings, setParticleSettings] = useState<Partial<ParticleRingSettings>>(defaultParticleSettings);
     const [silkSettings, setSilkSettings] = useState<Partial<SilkRingSettings>>(defaultSilkSettings);
+    const [lightsaberSettings, setLightsaberSettings] = useState<Partial<LightsaberSettings>>(defaultLightsaberSettings);
     const [brushColor, setBrushColor] = useState('#ffaa00');
 
     // 对称设置 (从当前图层读取)
@@ -178,10 +194,11 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             brushType,
             particleSettings: brushType === 'particle' ? { ...particleSettings } : undefined,
             silkSettings: brushType === 'lineRing' ? { ...silkSettings } : undefined,
+            lightsaberSettings: brushType === 'lightsaber' ? { ...lightsaberSettings } : undefined,
             color: brushColor
         };
         savePresetsToStorage([...brushPresets, newPreset]);
-    }, [brushType, particleSettings, silkSettings, brushColor, brushPresets, savePresetsToStorage]);
+    }, [brushType, particleSettings, silkSettings, lightsaberSettings, brushColor, brushPresets, savePresetsToStorage]);
 
     // 更新预设（将当前参数保存到已选中的预设）
     const handleUpdatePreset = useCallback((presetId: string) => {
@@ -191,13 +208,14 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushType,
                 particleSettings: brushType === 'particle' ? { ...particleSettings } : undefined,
                 silkSettings: brushType === 'lineRing' ? { ...silkSettings } : undefined,
+                lightsaberSettings: brushType === 'lightsaber' ? { ...lightsaberSettings } : undefined,
                 color: brushColor,
                 updatedAt: Date.now()
             } : p
         );
         savePresetsToStorage(updatedPresets);
         setSelectedPresetId(null);  // 保存后取消选中
-    }, [brushType, particleSettings, silkSettings, brushColor, brushPresets, savePresetsToStorage]);
+    }, [brushType, particleSettings, silkSettings, lightsaberSettings, brushColor, brushPresets, savePresetsToStorage]);
 
     // 重命名预设
     const handleRenamePreset = useCallback((presetId: string, newName: string) => {
@@ -215,6 +233,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         setBrushType(preset.brushType);
         if (preset.particleSettings) setParticleSettings(preset.particleSettings);
         if (preset.silkSettings) setSilkSettings(preset.silkSettings);
+        if (preset.lightsaberSettings) setLightsaberSettings(preset.lightsaberSettings);
         setBrushColor(preset.color);
     }, []);
 
@@ -597,6 +616,14 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 symmetryDivisions,
                 previewMcSettings
             );
+        } else if (brushType === 'lightsaber') {
+            refs.currentStrokeMesh = createLightsaberStrokeMesh(
+                currentStrokeRef.current,
+                brushColor,
+                lightsaberSettings,
+                symmetryMode,
+                symmetryDivisions
+            );
         } else {
             refs.currentStrokeMesh = createLineStrokeMesh(
                 currentStrokeRef.current,
@@ -608,7 +635,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         }
 
         refs.strokesGroup.add(refs.currentStrokeMesh);
-    }, [brushType, brushColor, particleSettings, silkSettings, symmetryMode, symmetryDivisions]);
+    }, [brushType, brushColor, particleSettings, silkSettings, lightsaberSettings, symmetryMode, symmetryDivisions]);
 
     // 处理指针抬起
     const handlePointerUp = useCallback(() => {
@@ -623,6 +650,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushType,
                 particleRingSettings: brushType === 'particle' ? { ...particleSettings } : undefined,
                 silkRingSettings: brushType === 'lineRing' ? { ...silkSettings } : undefined,
+                lightsaberSettings: brushType === 'lightsaber' ? { ...lightsaberSettings } : undefined,
                 color: brushColor,
                 points: [...points]
             };
@@ -656,7 +684,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             refs.strokesGroup.remove(refs.currentStrokeMesh);
             refs.currentStrokeMesh = null;
         }
-    }, [isDrawing, currentCircle, currentLayerId, brushType, particleSettings, silkSettings, brushColor, customMagicCircles, onUpdateCircles]);
+    }, [isDrawing, currentCircle, currentLayerId, brushType, particleSettings, silkSettings, lightsaberSettings, brushColor, customMagicCircles, onUpdateCircles]);
 
     // 撤销
     const handleUndo = useCallback(() => {
@@ -972,7 +1000,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                             ) : (
                                                 <>
                                                     <span style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preset.name}</span>
-                                                    <span style={{ fontSize: 9, color: '#666', flexShrink: 0 }}>{preset.brushType === 'particle' ? '粒子' : '丝环'}</span>
+                                                    <span style={{ fontSize: 9, color: '#666', flexShrink: 0 }}>{preset.brushType === 'particle' ? '粒子' : preset.brushType === 'lightsaber' ? '光剑' : '丝环'}</span>
                                                 </>
                                             )}
                                         </div>
@@ -991,20 +1019,20 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 </div>
 
                 {/* 画笔类型 - 固定 */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexShrink: 0 }}>
-                    {(['particle', 'lineRing'] as DrawingBrushType[]).map(type => (
+                <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexShrink: 0 }}>
+                    {(['particle', 'lineRing', 'lightsaber'] as DrawingBrushType[]).map(type => (
                         <button
                             key={type}
                             onClick={() => setBrushType(type)}
                             className={brushType === type ? 'drawing-btn-active' : 'drawing-btn-ghost'}
                             style={{
                                 flex: 1,
-                                padding: '8px 0',
-                                fontSize: 12,
+                                padding: '6px 0',
+                                fontSize: 11,
                                 cursor: 'pointer'
                             }}
                         >
-                            {type === 'particle' ? '粒子' : '丝环'}
+                            {type === 'particle' ? '粒子' : type === 'lightsaber' ? '光剑' : '丝环'}
                         </button>
                     ))}
                 </div>
@@ -1436,6 +1464,209 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         </div>
                                     </>
                                 )}
+                            </div>
+                        </>
+                    )}
+                    {brushType === 'lightsaber' && (
+                        <>
+                            {/* 压感模式 */}
+                            <div style={{ marginBottom: 12 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span>压感模式</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => setLightsaberSettings(prev => ({ ...prev, pressureMode: 'none' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '5px 0',
+                                            background: 'transparent',
+                                            border: `1px solid ${lightsaberSettings.pressureMode === 'none' ? 'var(--ui-primary)' : 'var(--ui-secondary)'}`,
+                                            color: lightsaberSettings.pressureMode === 'none' ? 'var(--ui-primary)' : '#666',
+                                            fontSize: 10,
+                                            borderRadius: 4,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        无
+                                    </button>
+                                    <button
+                                        onClick={() => setLightsaberSettings(prev => ({ ...prev, pressureMode: 'calligraphy' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '5px 0',
+                                            background: 'transparent',
+                                            border: `1px solid ${lightsaberSettings.pressureMode === 'calligraphy' ? 'var(--ui-primary)' : 'var(--ui-secondary)'}`,
+                                            color: lightsaberSettings.pressureMode === 'calligraphy' ? 'var(--ui-primary)' : '#666',
+                                            fontSize: 10,
+                                            borderRadius: 4,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        书法
+                                    </button>
+                                    <button
+                                        onClick={() => setLightsaberSettings(prev => ({ ...prev, pressureMode: 'brightness' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '5px 0',
+                                            background: 'transparent',
+                                            border: `1px solid ${lightsaberSettings.pressureMode === 'brightness' ? 'var(--ui-primary)' : 'var(--ui-secondary)'}`,
+                                            color: lightsaberSettings.pressureMode === 'brightness' ? 'var(--ui-primary)' : '#666',
+                                            fontSize: 10,
+                                            borderRadius: 4,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        亮度
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* 线条粗细 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>线条粗细</span>
+                                    <span style={{ color: '#ffffff' }}>{((lightsaberSettings.thickness || 0.03) * 1000).toFixed(0)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={10}
+                                    max={100}
+                                    step={1}
+                                    value={(lightsaberSettings.thickness || 0.03) * 1000}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, thickness: Number(e.target.value) / 1000 }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 核心宽度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>核心宽度</span>
+                                    <span style={{ color: '#ffffff' }}>{(lightsaberSettings.coreWidth || 0.4).toFixed(2)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.2}
+                                    max={0.8}
+                                    step={0.05}
+                                    value={lightsaberSettings.coreWidth || 0.4}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, coreWidth: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 光晕强度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>光晕强度</span>
+                                    <span style={{ color: '#ffffff' }}>{(lightsaberSettings.glowIntensity || 1.5).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.5}
+                                    max={3}
+                                    step={0.1}
+                                    value={lightsaberSettings.glowIntensity || 1.5}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, glowIntensity: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 光晕衰减 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>光晕衰减</span>
+                                    <span style={{ color: '#ffffff' }}>{(lightsaberSettings.glowFalloff || 2.0).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={5}
+                                    step={0.2}
+                                    value={lightsaberSettings.glowFalloff || 2.0}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, glowFalloff: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 脉冲效果 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+                                    <span>脉冲效果</span>
+                                    <input
+                                        type="checkbox"
+                                        checked={lightsaberSettings.pulseEnabled || false}
+                                        onChange={(e) => setLightsaberSettings(prev => ({ ...prev, pulseEnabled: e.target.checked }))}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                </div>
+                                {lightsaberSettings.pulseEnabled && (
+                                    <>
+                                        <div style={{ marginBottom: 6 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                                <span style={{ fontSize: 10 }}>脉冲速度</span>
+                                                <span style={{ color: '#ffffff' }}>{(lightsaberSettings.pulseSpeed || 1).toFixed(1)}</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={0.5}
+                                                max={3}
+                                                step={0.1}
+                                                value={lightsaberSettings.pulseSpeed || 1}
+                                                onChange={(e) => setLightsaberSettings(prev => ({ ...prev, pulseSpeed: Number(e.target.value) }))}
+                                                style={{ width: '100%' }}
+                                            />
+                                        </div>
+                                        <div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                                <span style={{ fontSize: 10 }}>脉冲强度</span>
+                                                <span style={{ color: '#ffffff' }}>{(lightsaberSettings.pulseIntensity || 0.2).toFixed(2)}</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={0}
+                                                max={0.5}
+                                                step={0.02}
+                                                value={lightsaberSettings.pulseIntensity || 0.2}
+                                                onChange={(e) => setLightsaberSettings(prev => ({ ...prev, pulseIntensity: Number(e.target.value) }))}
+                                                style={{ width: '100%' }}
+                                            />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                            {/* 双色选择 */}
+                            <div style={{
+                                marginTop: 12,
+                                padding: '8px 10px',
+                                borderRadius: 8,
+                                background: 'rgba(255,255,255,0.03)',
+                                border: '1px solid rgba(255,255,255,0.1)'
+                            }}>
+                                <div style={{ fontSize: 11, color: 'var(--ui-secondary)', marginBottom: 8 }}>
+                                    光剑颜色
+                                </div>
+                                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: 10 }}>核心</span>
+                                        <input
+                                            type="color"
+                                            value={lightsaberSettings.coreColor || '#ffffff'}
+                                            onChange={(e) => setLightsaberSettings(prev => ({ ...prev, coreColor: e.target.value }))}
+                                            style={{ width: 28, height: 20, border: 'none', cursor: 'pointer', borderRadius: 3 }}
+                                        />
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <span style={{ fontSize: 10 }}>光晕</span>
+                                        <input
+                                            type="color"
+                                            value={lightsaberSettings.glowColor || '#00aaff'}
+                                            onChange={(e) => setLightsaberSettings(prev => ({ ...prev, glowColor: e.target.value }))}
+                                            style={{ width: 28, height: 20, border: 'none', cursor: 'pointer', borderRadius: 3 }}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         </>
                     )}

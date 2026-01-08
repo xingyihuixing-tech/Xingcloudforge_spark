@@ -1418,6 +1418,31 @@ export interface SilkRingSettings {
   radiusSpread: number;       // 半径偏移范围 0-80
 }
 
+// 光剑墨迹设置（自定义法阵绘制专用）
+export type LightsaberPressureMode = 'none' | DrawingPressureMode;
+
+export interface LightsaberSettings {
+  // 核心参数
+  coreWidth: number;         // 核心宽度占比 0.2-0.8
+  coreColor: string;         // 核心颜色（通常白色 #ffffff）
+
+  // 光晕参数
+  glowColor: string;         // 主光晕颜色（蓝/绿/红/紫）
+  glowIntensity: number;     // 光晕强度 0.5-3
+  glowFalloff: number;       // 光晕衰减 1-5（值越大边缘越硬）
+
+  // 几何参数
+  thickness: number;         // 总粗细 0.01-0.1
+
+  // 动态效果
+  pulseEnabled: boolean;     // 脉冲开关
+  pulseSpeed: number;        // 脉冲速度 0.5-3
+  pulseIntensity: number;    // 脉冲强度 0-0.5
+
+  // 压感模式
+  pressureMode: LightsaberPressureMode;
+}
+
 // 光环系统配置
 export interface RingSystemSettings {
   enabled?: boolean;                  // 光环系统总开关
@@ -1901,7 +1926,7 @@ export interface MaterialPreset {
 export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope';
 
 // 画笔类型
-export type DrawingBrushType = 'particle' | 'lineRing';
+export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber';
 
 // 采样点 (支持压感)
 export interface StrokePoint {
@@ -1918,6 +1943,7 @@ export interface MagicCircleStroke {
   // 完全复用现有类型（部分字段可选，允许按需配置）
   particleRingSettings?: Partial<ParticleRingSettings>;
   silkRingSettings?: Partial<SilkRingSettings>;
+  lightsaberSettings?: Partial<LightsaberSettings>;
   color: string;  // 主色调（覆盖 settings 中的 color）
   points: StrokePoint[];
 }
@@ -1954,6 +1980,7 @@ export interface DrawingModeState {
   // 直接复用现有设置类型
   particleRingSettings: Partial<ParticleRingSettings>;
   silkRingSettings: Partial<SilkRingSettings>;
+  lightsaberSettings: Partial<LightsaberSettings>;
   currentColor: string;
   undoStack: MagicCircleStroke[];
   redoStack: MagicCircleStroke[];
@@ -1967,5 +1994,6 @@ export interface BrushPreset {
   brushType: DrawingBrushType;
   particleSettings?: Partial<ParticleRingSettings>;
   silkSettings?: Partial<SilkRingSettings>;
+  lightsaberSettings?: Partial<LightsaberSettings>;
   color: string;
 }
