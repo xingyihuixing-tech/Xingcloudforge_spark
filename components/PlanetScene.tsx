@@ -11753,29 +11753,18 @@ void main() {
             if(uUseTexture > 0.5) {
               vec2 texUV = gl_PointCoord;
               vec4 texColor = texture2D(uTexture, texUV);
-              alpha = texColor.a;
               
-              // === 修复正方形轮廓（只处理角落，不裁剪整体形状）===
-              // 1. 提高透明度阈值，丢弃边缘半透明像素
-              if(alpha < 0.1) discard;
+              // === 参考流萤的亮度提取逻辑 ===
+              // 使用贴图亮度(brightness)来决定透明度
+              // 黑底白形状贴图：黑色区域亮度≈0自然透明，亮色区域才显示
+              float texBrightness = max(texColor.r, max(texColor.g, texColor.b));
               
-              // 2. 只在正方形四角区域衰减（不影响中心贴图形状）
-              vec2 centeredUV = abs(gl_PointCoord - 0.5) * 2.0; // [0, 1] 从中心到边缘
-              // 计算到正方形边缘的距离（角落区域值更大）
-              float cornerDist = max(centeredUV.x, centeredUV.y);
-              // 只有超出内切圆的角落区域才衰减
-              float distFromCenter = length(centeredUV);
-              // 角落检测：当距中心距离 > 正方形边缘距离时，说明在角落
-              float cornerFactor = smoothstep(0.95, 1.3, distFromCenter);
-              // 角落区域透明度衰减
-              alpha *= (1.0 - cornerFactor * 0.8);
+              // alpha = 亮度 × 原始alpha（如果有透明通道的话也考虑）
+              float texAlpha = texColor.a > 0.01 ? texColor.a : 1.0;
+              alpha = texBrightness * texAlpha;
               
-              // 3. 对低透明度区域进行软化
-              float edgeFade = smoothstep(0.0, 0.1, alpha);
-              alpha *= edgeFade;
-              
-              // 最终透明度检查
-              if(alpha < 0.03) discard;
+              // 丢弃暗色区域
+              if(alpha < 0.05) discard;
             } else {
               alpha = starShape(uv);
             }
