@@ -873,21 +873,125 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     position: 'absolute',
                     left: 20,
                     top: 100,
-                    width: 180,
+                    width: 210,
+                    maxHeight: 'calc(100vh - 140px)',
                     borderRadius: 16,
                     padding: 16,
                     pointerEvents: 'auto',
                     display: 'flex',
-                    flexDirection: 'column'
+                    flexDirection: 'column',
+                    overflow: 'hidden'
                 }}
             >
-                <div style={{ color: 'var(--ui-primary)', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ color: 'var(--ui-primary)', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                     <BrushIcon size={16} style={{ color: 'var(--ui-primary)' }} />
                     <span>画笔工具</span>
                 </div>
 
-                {/* 画笔类型 */}
-                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                {/* 墨迹预设 - 固定在顶部 */}
+                <div style={{ marginBottom: 12, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, color: '#ffffff' }}>墨迹预设</span>
+                        <button
+                            onClick={handleCreatePreset}
+                            style={{
+                                width: 24,
+                                height: 24,
+                                background: 'transparent',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                borderRadius: 4,
+                                color: '#ffffff',
+                                fontSize: 16,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                            title="新建预设"
+                        >
+                            +
+                        </button>
+                    </div>
+                    <div style={{
+                        maxHeight: 100,
+                        overflowY: 'auto',
+                        background: 'rgba(0,0,0,0.2)',
+                        borderRadius: 6,
+                        border: '1px solid rgba(255,255,255,0.1)'
+                    }} className="custom-scrollbar">
+                        {brushPresets.length === 0 ? (
+                            <div style={{ padding: 10, fontSize: 11, color: '#666', textAlign: 'center' }}>
+                                暂无预设
+                            </div>
+                        ) : (
+                            brushPresets.map(preset => {
+                                const isSelected = selectedPresetId === preset.id;
+                                const isEditing = editingPresetId === preset.id;
+                                return (
+                                    <div
+                                        key={preset.id}
+                                        onClick={() => {
+                                            if (isEditing) return;
+                                            if (isSelected) {
+                                                handleUpdatePreset(preset.id);
+                                            } else {
+                                                handleApplyPreset(preset);
+                                                setSelectedPresetId(preset.id);
+                                            }
+                                        }}
+                                        onDoubleClick={() => {
+                                            if (!isEditing) {
+                                                setEditingPresetId(preset.id);
+                                                setEditingPresetName(preset.name);
+                                            }
+                                        }}
+                                        style={{
+                                            padding: '6px 8px',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            gap: 6,
+                                            cursor: 'pointer',
+                                            background: isSelected ? 'rgba(var(--ui-primary-rgb), 0.15)' : 'transparent',
+                                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                            transition: 'background 0.15s'
+                                        }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={editingPresetName}
+                                                    onChange={(e) => setEditingPresetName(e.target.value)}
+                                                    onBlur={() => handleRenamePreset(preset.id, editingPresetName)}
+                                                    onKeyDown={(e) => { if (e.key === 'Enter') handleRenamePreset(preset.id, editingPresetName); if (e.key === 'Escape') { setEditingPresetId(null); setEditingPresetName(''); } }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    autoFocus
+                                                    style={{ flex: 1, fontSize: 11, background: 'rgba(0,0,0,0.3)', border: '1px solid var(--ui-primary)', borderRadius: 3, color: '#fff', padding: '2px 4px', outline: 'none' }}
+                                                />
+                                            ) : (
+                                                <>
+                                                    <span style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preset.name}</span>
+                                                    <span style={{ fontSize: 9, color: '#666', flexShrink: 0 }}>{preset.brushType === 'particle' ? '粒子' : '丝环'}</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeletePreset(preset.id); if (selectedPresetId === preset.id) setSelectedPresetId(null); }}
+                                            style={{ width: 18, height: 18, background: 'transparent', border: '1px solid rgba(239,68,68,0.5)', borderRadius: 3, color: '#ef4444', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                                            title="删除预设"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                {/* 画笔类型 - 固定 */}
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexShrink: 0 }}>
                     {(['particle', 'lineRing'] as DrawingBrushType[]).map(type => (
                         <button
                             key={type}
@@ -905,8 +1009,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     ))}
                 </div>
 
-                {/* 画笔参数 */}
-                <div style={{ fontSize: 11, color: '#ffffff', marginBottom: 16 }}>
+                {/* 画笔参数 - 可滚动区域 */}
+                <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', fontSize: 11, color: '#ffffff' }} className="custom-scrollbar">
                     {brushType === 'particle' ? (
                         <>
                             <div style={{ marginBottom: 12 }}>
@@ -1335,162 +1439,16 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             </div>
                         </>
                     )}
-                </div>
-
-                {/* 颜色选择 */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <span style={{ fontSize: 12, color: '#ffffff' }}>颜色</span>
-                    <input
-                        type="color"
-                        value={brushColor}
-                        onChange={(e) => setBrushColor(e.target.value)}
-                        style={{ width: 40, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }}
-                    />
-                    <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace' }}>{brushColor}</span>
-                </div>
-
-                {/* 墨迹预设 */}
-                <div style={{ marginTop: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <span style={{ fontSize: 12, color: '#ffffff' }}>墨迹预设</span>
-                        <button
-                            onClick={handleCreatePreset}
-                            style={{
-                                width: 24,
-                                height: 24,
-                                background: 'transparent',
-                                border: '1px solid rgba(255,255,255,0.3)',
-                                borderRadius: 4,
-                                color: '#ffffff',
-                                fontSize: 16,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center'
-                            }}
-                            title="新建预设"
-                        >
-                            +
-                        </button>
-                    </div>
-
-                    {/* 预设列表 */}
-                    <div style={{
-                        maxHeight: 120,
-                        overflowY: 'auto',
-                        background: 'rgba(0,0,0,0.2)',
-                        borderRadius: 6,
-                        border: '1px solid rgba(255,255,255,0.1)'
-                    }}>
-                        {brushPresets.length === 0 ? (
-                            <div style={{ padding: 12, fontSize: 11, color: '#666', textAlign: 'center' }}>
-                                暂无预设
-                            </div>
-                        ) : (
-                            brushPresets.map(preset => {
-                                const isSelected = selectedPresetId === preset.id;
-                                const isEditing = editingPresetId === preset.id;
-                                return (
-                                    <div
-                                        key={preset.id}
-                                        onClick={() => {
-                                            if (isEditing) return;
-                                            if (isSelected) {
-                                                // 已选中状态下再次点击 → 保存当前参数到此预设
-                                                handleUpdatePreset(preset.id);
-                                            } else {
-                                                // 未选中 → 选中并应用预设
-                                                setSelectedPresetId(preset.id);
-                                                handleApplyPreset(preset);
-                                            }
-                                        }}
-                                        onDoubleClick={(e) => {
-                                            e.stopPropagation();
-                                            setEditingPresetId(preset.id);
-                                            setEditingPresetName(preset.name);
-                                        }}
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between',
-                                            padding: '6px 10px',
-                                            cursor: 'pointer',
-                                            borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                            border: isSelected ? '1px solid var(--ui-primary)' : '1px solid transparent',
-                                            boxShadow: isSelected ? '0 0 8px var(--ui-primary)' : 'none',
-                                            borderRadius: isSelected ? 4 : 0,
-                                            margin: isSelected ? '2px 0' : 0,
-                                            transition: 'all 0.15s'
-                                        }}
-                                    >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                                            <div style={{
-                                                width: 10,
-                                                height: 10,
-                                                borderRadius: '50%',
-                                                background: preset.color,
-                                                flexShrink: 0
-                                            }} />
-                                            {isEditing ? (
-                                                <input
-                                                    type="text"
-                                                    value={editingPresetName}
-                                                    onChange={(e) => setEditingPresetName(e.target.value)}
-                                                    onBlur={() => handleRenamePreset(preset.id, editingPresetName)}
-                                                    onKeyDown={(e) => {
-                                                        if (e.key === 'Enter') handleRenamePreset(preset.id, editingPresetName);
-                                                        if (e.key === 'Escape') { setEditingPresetId(null); setEditingPresetName(''); }
-                                                    }}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    autoFocus
-                                                    style={{
-                                                        flex: 1,
-                                                        fontSize: 11,
-                                                        background: 'rgba(0,0,0,0.5)',
-                                                        border: '1px solid var(--ui-primary)',
-                                                        borderRadius: 3,
-                                                        color: '#fff',
-                                                        padding: '2px 4px',
-                                                        outline: 'none'
-                                                    }}
-                                                />
-                                            ) : (
-                                                <>
-                                                    <span style={{ fontSize: 11, color: '#fff' }}>{preset.name}</span>
-                                                    <span style={{ fontSize: 9, color: '#666' }}>
-                                                        {preset.brushType === 'particle' ? '粒子' : '丝环'}
-                                                    </span>
-                                                </>
-                                            )}
-                                        </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleDeletePreset(preset.id);
-                                                if (selectedPresetId === preset.id) setSelectedPresetId(null);
-                                            }}
-                                            style={{
-                                                width: 20,
-                                                height: 20,
-                                                background: 'transparent',
-                                                border: '1px solid rgba(239,68,68,0.5)',
-                                                borderRadius: 4,
-                                                color: '#ef4444',
-                                                fontSize: 12,
-                                                cursor: 'pointer',
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'center',
-                                                flexShrink: 0
-                                            }}
-                                            title="删除预设"
-                                        >
-                                            ×
-                                        </button>
-                                    </div>
-                                );
-                            })
-                        )}
+                    {/* 颜色选择 - 在滚动区域内 */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                        <span style={{ fontSize: 12, color: '#ffffff' }}>颜色</span>
+                        <input
+                            type="color"
+                            value={brushColor}
+                            onChange={(e) => setBrushColor(e.target.value)}
+                            style={{ width: 40, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }}
+                        />
+                        <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace' }}>{brushColor}</span>
                     </div>
                 </div>
 
