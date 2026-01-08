@@ -90,7 +90,9 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
         { mode: 'starburst', label: '星芒' },
         { mode: 'prism', label: '棱镜' },
         { mode: 'vortex', label: '漩涡' },
-        { mode: 'bloom', label: '绽放' }
+        { mode: 'bloom', label: '绽放' },
+        { mode: 'sphere', label: '球面' },
+        { mode: 'orbital', label: '轨道环' }
     ];
 
     // 对称分割数选项

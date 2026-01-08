@@ -401,6 +401,62 @@ export function applySymmetryTransform(
                 z: zOffset
             });
         }
+    } else if (mode === 'sphere') {
+        // 球面模式：2D映射到3D球体表面
+        // y -> 纬度 (-PI/2 到 PI/2)
+        // x -> 经度 (-PI 到 PI)
+        const R = 0.5; // 球体半径
+
+        // 经纬度映射
+        const lat = dy * Math.PI; // -0.5~0.5 -> -PI/2~PI/2
+        const lon = dx * Math.PI * 2; // -0.5~0.5 -> -PI~PI
+
+        // 球坐标转笛卡尔坐标 (基础点)
+        const bx = R * Math.cos(lat) * Math.sin(lon);
+        const by = R * Math.sin(lat);
+        const bz = R * Math.cos(lat) * Math.cos(lon);
+
+        for (let i = 0; i < divisions; i++) {
+            const rotAngle = angleStep * i;
+            const cos = Math.cos(rotAngle);
+            const sin = Math.sin(rotAngle);
+
+            // 绕Y轴旋转复制
+            results.push({
+                x: bx * cos + bz * sin,
+                y: by,
+                z: -bx * sin + bz * cos
+            });
+        }
+    } else if (mode === 'orbital') {
+        // 轨道环模式：多轴旋转形成的原子轨道效果
+        // 将平面笔迹视为一个倾斜的轨道平面，然后旋转复制
+        const tiltAngle = Math.PI / 3; // 轨道倾角 60度
+        const cosTilt = Math.cos(tiltAngle);
+        const sinTilt = Math.sin(tiltAngle);
+
+        // 先将点变换到倾斜平面上 (绕X轴旋转)
+        // 初始 z = 0
+        const p1x = dx;
+        const p1y = dy * cosTilt;
+        const p1z = dy * sinTilt;
+
+        for (let i = 0; i < divisions; i++) {
+            const rotAngle = (i / divisions) * Math.PI; // 轨道只需转180度即可覆盖球体（如果是完整环），但为了均匀分布这里用半周分布
+            // 或者用 2 * PI 分布？ 如果画的是非闭合线，用 2PI 更好。如果是闭合圆，PI和2PI重叠？
+            // 采用 2*PI 分布更通用，让用户自己决定画什么
+            const orbitAngle = (i / divisions) * Math.PI * 2;
+
+            const cos = Math.cos(orbitAngle);
+            const sin = Math.sin(orbitAngle);
+
+            // 绕Y轴旋转整个轨道平面
+            results.push({
+                x: p1x * cos + p1z * sin, // 注意这里是混合 x 和 z (绕Y轴)
+                y: p1y,
+                z: -p1x * sin + p1z * cos
+            });
+        }
     }
 
     return results;
@@ -1686,7 +1742,64 @@ function applySymmetryToPath(
             });
             allPaths.push(bloomPath);
         }
+    } else if (symmetryMode === 'sphere') {
+        // 球面模式：2D映射到3D球体表面
+        const R = 0.5;
+        for (let div = 0; div < divisions; div++) {
+            const rotAngle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(rotAngle);
+            const sin = Math.sin(rotAngle);
+
+            const spherePath = basePath.map(p => {
+                // 坐标映射
+                const lat = p.y * Math.PI;
+                const lon = p.x * Math.PI * 2;
+
+                // 基础球坐标
+                const bx = R * Math.cos(lat) * Math.sin(lon);
+                const by = R * Math.sin(lat);
+                const bz = R * Math.cos(lat) * Math.cos(lon);
+
+                // 绕Y轴旋转复制
+                return {
+                    x: bx * cos + bz * sin,
+                    y: by,
+                    z: -bx * sin + bz * cos,
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(spherePath);
+        }
+    } else if (symmetryMode === 'orbital') {
+        // 轨道环模式：多轴旋转形成的原子轨道效果
+        const tiltAngle = Math.PI / 3;
+        const cosTilt = Math.cos(tiltAngle);
+        const sinTilt = Math.sin(tiltAngle);
+
+        for (let div = 0; div < divisions; div++) {
+            const orbitAngle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(orbitAngle);
+            const sin = Math.sin(orbitAngle);
+
+            const orbitalPath = basePath.map(p => {
+                // 先变换到倾斜平面
+                const p1x = p.x;
+                const p1y = p.y * cosTilt;
+                const p1z = p.y * sinTilt;
+
+                // 再绕Y轴旋转
+                return {
+                    x: p1x * cos + p1z * sin,
+                    y: p1y,
+                    z: -p1x * sin + p1z * cos,
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(orbitalPath);
+        }
     }
+
+
 
     return allPaths;
 }
