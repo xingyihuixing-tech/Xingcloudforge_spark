@@ -457,6 +457,64 @@ export function applySymmetryTransform(
                 z: -p1x * sin + p1z * cos
             });
         }
+    } else if (mode === 'folding') {
+        // 多边形折叠模式：将画布视为平铺的六边形网格
+        // 这里简化为：将点映射到中心多边形内，然后进行普通的径向对称
+        // 效果：画出去的线会从另一边"折"回来
+
+        // 1. 简单的环形折叠 (Torus topology on radius)
+        const foldRadius = 0.3;
+        let r = radius;
+        // 如果点超出了范围，让它折叠回来
+        if (r > foldRadius) {
+            // 镜像折叠
+            const folds = Math.floor(r / foldRadius);
+            r = r % foldRadius;
+            if (folds % 2 === 1) {
+                r = foldRadius - r;
+            }
+        }
+
+        // 更新坐标
+        const foldedX = r * Math.cos(baseAngle);
+        const foldedY = r * Math.sin(baseAngle);
+
+        for (let i = 0; i < divisions; i++) {
+            const rotAngle = angleStep * i;
+            // 普通旋转复制
+            const x = foldedX * Math.cos(rotAngle) - foldedY * Math.sin(rotAngle);
+            const y = foldedX * Math.sin(rotAngle) + foldedY * Math.cos(rotAngle);
+            results.push({ x, y });
+        }
+
+    } else if (mode === 'liquid') {
+        // 湍流/液态模式：噪声扭曲
+        // 简单的伪随机噪声
+        const noiseValues = (x: number, y: number) => {
+            const freq = 10.0;
+            const t = 1.23; // 种子
+            return Math.sin(x * freq + t) * Math.cos(y * freq * 1.5 + t) +
+                Math.sin(x * freq * 2.3 + t) * Math.cos(y * freq * 2.3 + t) * 0.5;
+        };
+
+        const strength = 0.05; // 扭曲强度
+
+        // 对原始点进行扭曲
+        const nx = dx + noiseValues(dx, dy) * strength;
+        const ny = dy + noiseValues(dy + 10, dx - 10) * strength; // Offset for randomness
+
+        // 然后进行旋转复制
+        const nRadius = Math.sqrt(nx * nx + ny * ny);
+        const nAngle = Math.atan2(ny, nx);
+
+        for (let i = 0; i < divisions; i++) {
+            const rotAngle = angleStep * i;
+            const finalAngle = nAngle + rotAngle;
+            results.push({
+                x: nRadius * Math.cos(finalAngle),
+                y: nRadius * Math.sin(finalAngle)
+            });
+        }
     }
 
     return results;
@@ -1797,12 +1855,76 @@ function applySymmetryToPath(
             });
             allPaths.push(orbitalPath);
         }
+    } else if (symmetryMode === 'folding') {
+        const foldRadius = 0.3;
+        for (let div = 0; div < divisions; div++) {
+            const rotAngle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(rotAngle);
+            const sin = Math.sin(rotAngle);
+
+            const foldedPath = basePath.map(p => {
+                const dx = p.x;
+                const dy = p.y;
+                let r = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx);
+
+                if (r > foldRadius) {
+                    const folds = Math.floor(r / foldRadius);
+                    r = r % foldRadius;
+                    if (folds % 2 === 1) {
+                        r = foldRadius - r;
+                    }
+                }
+
+                const fx = r * Math.cos(angle);
+                const fy = r * Math.sin(angle);
+
+                return {
+                    x: fx * cos - fy * sin,
+                    y: fx * sin + fy * cos,
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(foldedPath);
+        }
+    } else if (symmetryMode === 'liquid') {
+        // 湍流/液态模式
+        const noiseValues = (x: number, y: number) => {
+            const freq = 10.0;
+            const t = 1.23;
+            return Math.sin(x * freq + t) * Math.cos(y * freq * 1.5 + t) +
+                Math.sin(x * freq * 2.3 + t) * Math.cos(y * freq * 2.3 + t) * 0.5;
+        };
+        const strength = 0.05;
+
+        for (let div = 0; div < divisions; div++) {
+            const rotAngle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(rotAngle);
+            const sin = Math.sin(rotAngle);
+
+            const liquidPath = basePath.map(p => {
+                const dx = p.x;
+                const dy = p.y;
+
+                const nx = dx + noiseValues(dx, dy) * strength;
+                const ny = dy + noiseValues(dy + 10, dx - 10) * strength;
+
+                // 旋转复制
+                return {
+                    x: nx * cos - ny * sin,
+                    y: nx * sin + ny * cos,
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(liquidPath);
+        }
     }
-
-
 
     return allPaths;
 }
+
+
+
 
 // ==================== 创建线环画笔笔画 (复用丝环着色器) ====================
 

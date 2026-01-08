@@ -1938,7 +1938,9 @@ export interface MaterialPreset {
 // - bloom: 绽放（层叠缩放旋转）
 // - sphere: 球面（2D映射到3D球体表面）
 // - orbital: 轨道环（多轴旋转形成的原子轨道效果）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism' | 'vortex' | 'bloom' | 'sphere' | 'orbital';
+// - folding: 多边形折叠（六边形空间折叠）
+// - liquid: 湍流/液态（噪声场扭曲）
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism' | 'vortex' | 'bloom' | 'sphere' | 'orbital' | 'folding' | 'liquid';
 
 // 画笔类型
 export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber';
