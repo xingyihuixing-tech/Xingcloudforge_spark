@@ -129,7 +129,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
 
             <div className="flex-1 overflow-y-auto p-3 space-y-4">
                 {/* ==================== 自定义法阵列表 ==================== */}
-                <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="drawing-panel-glass rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 text-gray-300">
                             <MagicCircleIcon size={14} />
@@ -153,7 +153,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 <div
                                     key={circle.id}
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-all ${isSelected
-                                        ? 'bg-purple-600/30 border border-purple-500/50'
+                                        ? 'drawing-circle-selected'
                                         : 'hover:bg-white/5 border border-transparent'
                                         }`}
                                 >
@@ -205,7 +205,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                 </div>
 
                 {/* ==================== 对称设置 ==================== */}
-                <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="drawing-panel-glass rounded-lg p-3">
                     <div className="flex items-center gap-2 text-gray-300 mb-2">
                         <SymmetryIcon size={14} />
                         <span className="text-xs font-medium">对称设置</span>
@@ -218,8 +218,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 key={mode}
                                 onClick={() => onUpdateSymmetry(mode, symmetryDivisions)}
                                 className={`flex-1 px-2 py-1.5 text-xs rounded transition-all ${symmetryMode === mode
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                                    ? 'drawing-symmetry-btn-active'
+                                    : 'drawing-symmetry-btn-inactive'
                                     }`}
                             >
                                 {label}
@@ -265,7 +265,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                 </div>
 
                 {/* ==================== 图层管理 ==================== */}
-                <div className="bg-gray-800/50 rounded-lg p-3">
+                <div className="drawing-panel-glass rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2 text-gray-300">
                             <LayerIcon size={14} />
@@ -290,7 +290,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                     key={layer.id}
                                     onClick={() => onSelectLayer(layer.id)}
                                     className={`flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-all ${isSelected
-                                        ? 'bg-blue-600/30 border border-blue-500/50'
+                                        ? 'drawing-layer-selected'
                                         : 'hover:bg-white/5 border border-transparent'
                                         }`}
                                 >

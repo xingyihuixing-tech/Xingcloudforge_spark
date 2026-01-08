@@ -1415,12 +1415,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             >
                 <button
                     onClick={() => setViewMode('edit')}
+                    className={viewMode === 'edit' ? 'drawing-mode-btn-active' : 'drawing-mode-btn-inactive'}
                     style={{
                         padding: '6px 12px',
-                        background: viewMode === 'edit' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.2)' : 'rgba(50, 50, 60, 0.6)',
-                        border: viewMode === 'edit' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '6px 0 0 6px',
-                        color: viewMode === 'edit' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.5)',
                         fontSize: 12,
                         fontWeight: viewMode === 'edit' ? 600 : 400,
                         cursor: 'pointer',
@@ -1431,12 +1429,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 </button>
                 <button
                     onClick={() => setViewMode('preview')}
+                    className={viewMode === 'preview' ? 'drawing-mode-btn-active' : 'drawing-mode-btn-inactive'}
                     style={{
                         padding: '6px 12px',
-                        background: viewMode === 'preview' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.2)' : 'rgba(50, 50, 60, 0.6)',
-                        border: viewMode === 'preview' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.1)',
                         borderRadius: '0 6px 6px 0',
-                        color: viewMode === 'preview' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.5)',
                         fontSize: 12,
                         fontWeight: viewMode === 'preview' ? 600 : 400,
                         cursor: 'pointer',
