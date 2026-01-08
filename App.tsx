@@ -776,7 +776,7 @@ const App: React.FC = () => {
   const [showAIPanel, setShowAIPanel] = useState(false); // AI 面板状态
 
   // 可拖拽AI星星按钮
-  const { starRef, handleDragStart: handleStarDragStart, isCustomPosition: isStarCustomPos } = useDraggableStar(xingConfig, setXingConfig);
+  const { starRef, handleDragStart: handleStarDragStart, isCustomPosition: isStarCustomPos, wasDragged } = useDraggableStar(xingConfig, setXingConfig);
   const [starBlinking, setStarBlinking] = useState(false); // AI星星闪烁状态
 
   const [fps, setFps] = useState(0);
@@ -1598,6 +1598,8 @@ const App: React.FC = () => {
             isNotifying={starBlinking}
             onClick={() => {
               if (handDataRef.current.isActive) return;
+              // 如果刚发生过拖动，不打开面板
+              if (wasDragged()) return;
               setShowAIPanel(true);
               setStarBlinking(false);
             }}

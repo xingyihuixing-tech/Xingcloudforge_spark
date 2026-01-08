@@ -53,7 +53,7 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
     }, [showControls, isCustomPos, getDefaultPosition]);
 
     const [isDragging, setIsDragging] = useState(false);
-    const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0 });
+    const dragStartRef = useRef({ x: 0, y: 0, posX: 0, posY: 0, currentX: 0, currentY: 0, hasMoved: false });
     const buttonRef = useRef<HTMLButtonElement>(null);
 
     // 保存位置到 localStorage
@@ -73,27 +73,45 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
             x: e.clientX,
             y: e.clientY,
             posX: position.x,
-            posY: position.y
+            posY: position.y,
+            currentX: position.x,
+            currentY: position.y,
+            hasMoved: false
         };
     }, [position, disabled]);
 
-    // 拖动中
+    // 拖动中 - 直接操作DOM而非setState，避免重渲染卡顿
     useEffect(() => {
         if (!isDragging) return;
 
         const handleMouseMove = (e: MouseEvent) => {
+            if (!buttonRef.current) return;
             const dx = e.clientX - dragStartRef.current.x;
             const dy = e.clientY - dragStartRef.current.y;
+
+            // 检测是否真的移动了
+            if (Math.abs(dx) + Math.abs(dy) > 5) {
+                dragStartRef.current.hasMoved = true;
+            }
 
             const newX = Math.max(0, Math.min(window.innerWidth - 60, dragStartRef.current.posX + dx));
             const newY = Math.max(0, Math.min(window.innerHeight - 60, dragStartRef.current.posY + dy));
 
-            setPosition({ x: newX, y: newY });
+            // 直接修改 DOM style，不触发 React 重渲染
+            buttonRef.current.style.left = `${newX}px`;
+            buttonRef.current.style.top = `${newY}px`;
+
+            // 记录最终位置用于 mouseup 时保存
+            dragStartRef.current.currentX = newX;
+            dragStartRef.current.currentY = newY;
         };
 
         const handleMouseUp = () => {
             setIsDragging(false);
-            savePosition(position);
+            // 仅在拖动结束时更新 state 和 localStorage
+            const finalPos = { x: dragStartRef.current.currentX, y: dragStartRef.current.currentY };
+            setPosition(finalPos);
+            savePosition(finalPos);
         };
 
         window.addEventListener('mousemove', handleMouseMove);
@@ -103,18 +121,16 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging, position, savePosition]);
+    }, [isDragging, savePosition]);
 
-    // 点击处理 - 只有短按才触发 onClick
+    // 点击处理 - 只有未拖动时才触发 onClick
     const handleClick = useCallback(() => {
         if (disabled) return;
-        // 如果拖动了，不触发点击
-        const dragDistance = Math.abs(position.x - dragStartRef.current.posX) +
-            Math.abs(position.y - dragStartRef.current.posY);
-        if (dragDistance < 5) {
+        // 如果发生了拖动，不触发点击
+        if (!dragStartRef.current.hasMoved) {
             onClick();
         }
-    }, [onClick, position, disabled]);
+    }, [onClick, disabled]);
 
     return (
         <button
@@ -123,8 +139,8 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
             onClick={handleClick}
             disabled={disabled}
             className={`group fixed z-40 flex items-center justify-center p-2 rounded-full transition-all ${isDragging
-                    ? 'scale-110 cursor-grabbing'
-                    : 'cursor-grab hover:scale-105 active:scale-95'
+                ? 'scale-110 cursor-grabbing'
+                : 'cursor-grab hover:scale-105 active:scale-95'
                 } ${disabled
                     ? 'opacity-50'
                     : ''

@@ -867,7 +867,7 @@ canvas {
   right: 0;
   height: 2px;
   background: linear-gradient(90deg, transparent 0%, var(--ui-primary) 20%, #f472b6 50%, var(--ui-secondary) 80%, transparent 100%);
-  box-shadow: 0 0 12px var(--ui-primary), 0 0 24px rgba(var(--ui-primary-rgb), 0.3);
+  box-shadow: 0 0 20px var(--ui-primary), 0 0 40px rgba(var(--ui-primary-rgb), 0.5);
 }
 
 .drawing-border-bottom {
@@ -876,7 +876,7 @@ canvas {
   right: 0;
   height: 2px;
   background: linear-gradient(90deg, transparent 0%, var(--ui-secondary) 20%, #f472b6 50%, var(--ui-primary) 80%, transparent 100%);
-  box-shadow: 0 0 12px var(--ui-secondary), 0 0 24px rgba(var(--ui-secondary-rgb), 0.3);
+  box-shadow: 0 0 20px var(--ui-secondary), 0 0 40px rgba(var(--ui-secondary-rgb), 0.5);
 }
 
 .drawing-border-left {
@@ -885,7 +885,7 @@ canvas {
   bottom: 0;
   width: 2px;
   background: linear-gradient(to bottom, var(--ui-primary) 0%, rgba(244, 114, 182, 0.5) 50%, transparent 100%);
-  box-shadow: 0 0 12px var(--ui-primary), 0 0 24px rgba(var(--ui-primary-rgb), 0.3);
+  box-shadow: 0 0 20px var(--ui-primary), 0 0 40px rgba(var(--ui-primary-rgb), 0.5);
 }
 
 .drawing-border-right {
@@ -894,7 +894,7 @@ canvas {
   bottom: 0;
   width: 2px;
   background: linear-gradient(to bottom, transparent 0%, rgba(244, 114, 182, 0.5) 50%, var(--ui-primary) 100%);
-  box-shadow: 0 0 12px var(--ui-primary), 0 0 24px rgba(var(--ui-primary-rgb), 0.3);
+  box-shadow: 0 0 20px var(--ui-primary), 0 0 40px rgba(var(--ui-primary-rgb), 0.5);
 }
 
 /* 画笔面板玻璃容器 - 极高透明度 */

@@ -12905,11 +12905,12 @@ void main() {
         const group = new THREE.Group();
         group.userData = { circleId: settings.id, isCustomDrawn: true };
         customCircle.layers.forEach((layer: MagicCircleLayer) => {
-          if (layer.visible === false || !layer.strokes) return;
+          // 注意：layer.visible 仅控制画布预览，场景中始终渲染所有图层
+          if (!layer.strokes) return;
           layer.strokes.forEach((stroke: MagicCircleStroke) => {
             if (!stroke.points || stroke.points.length < 2) return;
             let strokeMesh: THREE.Object3D;
-            // 法阵级别参数（透明度、色相、亮度、脉冲、粒子缩放）
+            // 法阵级别参数（透明度、色相、亮度、脉冲、粒子缩放）- 大幅降低光晕强度
             const mcSettings = {
               opacity: settings.opacity,
               hueShift: settings.hueShift,
@@ -12917,7 +12918,7 @@ void main() {
               pulseEnabled: settings.pulseEnabled,
               pulseSpeed: settings.pulseSpeed,
               pulseIntensity: settings.pulseIntensity,
-              particleSizeScale: 1.5  // 场景中粒子略微变大
+              particleSizeScale: 0.6  // 场景中粒子尺寸缩小，降低光晕强度
             };
             if (stroke.brushType === 'particle') {
               strokeMesh = createParticleStrokeMesh(stroke.points, stroke.color, stroke.particleRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);

@@ -17,6 +17,8 @@ export function useDraggableStar(
         initialLeft: 0,
         initialTop: 0
     });
+    // 追踪是否发生了有意义的拖动
+    const hasDraggedRef = useRef(false);
 
     // Local state to force render only when switching between "Custom Position" and "Default CSS Position"
     // If xingConfig.starPosition is null, we rely on CSS classes (top-24, etc.)
@@ -40,6 +42,9 @@ export function useDraggableStar(
         e.preventDefault();
         e.stopPropagation();
 
+        // 重置拖动标志
+        hasDraggedRef.current = false;
+
         const style = window.getComputedStyle(starRef.current);
         const left = parseInt(style.left || '0', 10);
         const top = parseInt(style.top || '0', 10);
@@ -62,6 +67,12 @@ export function useDraggableStar(
 
         const deltaX = e.clientX - dragRef.current.startX;
         const deltaY = e.clientY - dragRef.current.startY;
+
+        // 检测拖动距离超过阈值
+        const distance = Math.abs(deltaX) + Math.abs(deltaY);
+        if (distance > 5) {
+            hasDraggedRef.current = true;
+        }
 
         const newLeft = dragRef.current.initialLeft + deltaX;
         const newTop = dragRef.current.initialTop + deltaY;
@@ -93,11 +104,20 @@ export function useDraggableStar(
                 starPosition: { x: finalX, y: finalY }
             }));
         }
+
+        // 延迟重置 hasDragged，确保 click 事件能检测到
+        setTimeout(() => {
+            hasDraggedRef.current = false;
+        }, 100);
     }, [setXingConfig]);
+
+    // 返回 wasDragged 检测函数
+    const wasDragged = useCallback(() => hasDraggedRef.current, []);
 
     return {
         starRef,
         handleDragStart,
-        isCustomPosition
+        isCustomPosition,
+        wasDragged  // 新增：检查是否刚发生过拖动
     };
 }

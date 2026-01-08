@@ -616,8 +616,8 @@ void main() {
   // 外层光晕 (更紧凑)
   float outerGlow = 1.0 - smoothstep(0.18, 0.28, dist);
   
-  // 合成亮度 (降低系数)
-  float brightness = core * uCoreBrightness + glow * uEmissive * 0.35 + outerGlow * 0.15;
+  // 合成亮度 (大幅降低光晕系数，避免场景中法阵过亮)
+  float brightness = core * uCoreBrightness + glow * uEmissive * 0.12 + outerGlow * 0.04;
   
   // 应用染色功能
   vec3 dyedColor = getDyeColor(vColor, vRadialDist);

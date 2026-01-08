@@ -1534,7 +1534,8 @@ const MagicCircleControl: React.FC<{
   customMagicCircles?: import('../types').CustomMagicCircle[];
   onEnterDrawingMode?: () => void;
   onUpdateCustomCircles?: (circles: import('../types').CustomMagicCircle[]) => void;
-}> = ({ planet, updatePlanet, getButtonStyle, customMagicCircles = [], onEnterDrawingMode, onUpdateCustomCircles }) => {
+  onSelectCircle?: (circleId: string) => void;  // 双击进入绘图模式编辑特定法阵
+}> = ({ planet, updatePlanet, getButtonStyle, customMagicCircles = [], onEnterDrawingMode, onUpdateCustomCircles, onSelectCircle }) => {
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const soloCircleId = planet.magicCircles?.soloId || null;
 
@@ -1689,12 +1690,17 @@ const MagicCircleControl: React.FC<{
                           customCircleId: cc.id,
                           texture: ''
                         })}
+                        onDoubleClick={() => {
+                          // 双击进入绘图模式编辑该法阵
+                          if (onSelectCircle) onSelectCircle(cc.id);
+                        }}
                         className="w-full text-left px-2 py-1 text-xs rounded transition-all truncate"
                         style={{
                           border: isSelected ? '1px solid var(--ui-primary)' : '1px solid transparent',
                           background: 'transparent',
                           color: isSelected ? 'var(--ui-primary)' : '#ccc'
                         }}
+                        title="双击进入绘图模式编辑"
                       >
                         {cc.name}
                       </button>
@@ -9668,6 +9674,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                       customMagicCircles={customMagicCircles}
                       onEnterDrawingMode={onEnterDrawingMode}
                       onUpdateCustomCircles={onUpdateCircles}
+                      onSelectCircle={onSelectCircle}
                     />
                   );
                 })()}
