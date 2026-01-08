@@ -3,6 +3,7 @@ import { XingSparkConfig } from '../components/XingSparkSettings';
 
 /**
  * Hook for Draggable Star Logic (Direct DOM Manipulation)
+ * 支持鼠标和触摸拖动
  */
 export function useDraggableStar(
     xingConfig: XingSparkConfig,
@@ -36,11 +37,9 @@ export function useDraggableStar(
         }
     }, [xingConfig.starPosition]);
 
-    const handleDragStart = useCallback((e: React.MouseEvent) => {
+    // 通用拖动开始逻辑
+    const startDrag = useCallback((clientX: number, clientY: number) => {
         if (!starRef.current) return;
-
-        e.preventDefault();
-        e.stopPropagation();
 
         // 重置拖动标志
         hasDraggedRef.current = false;
@@ -51,22 +50,40 @@ export function useDraggableStar(
 
         dragRef.current = {
             isDragging: true,
-            startX: e.clientX,
-            startY: e.clientY,
+            startX: clientX,
+            startY: clientY,
             initialLeft: left,
             initialTop: top
         };
 
-        document.addEventListener('mousemove', handleDragMove);
-        document.addEventListener('mouseup', handleDragEnd);
         starRef.current.style.cursor = 'grabbing';
     }, []);
 
-    const handleDragMove = useCallback((e: MouseEvent) => {
+    // 鼠标拖动开始
+    const handleDragStart = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startDrag(e.clientX, e.clientY);
+
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+    }, [startDrag]);
+
+    // 触摸拖动开始
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        const touch = e.touches[0];
+        startDrag(touch.clientX, touch.clientY);
+
+        document.addEventListener('touchmove', handleTouchMove, { passive: false });
+        document.addEventListener('touchend', handleTouchEnd);
+    }, [startDrag]);
+
+    // 通用移动逻辑
+    const moveElement = useCallback((clientX: number, clientY: number) => {
         if (!dragRef.current.isDragging || !starRef.current) return;
 
-        const deltaX = e.clientX - dragRef.current.startX;
-        const deltaY = e.clientY - dragRef.current.startY;
+        const deltaX = clientX - dragRef.current.startX;
+        const deltaY = clientY - dragRef.current.startY;
 
         // 检测拖动距离超过阈值
         const distance = Math.abs(deltaX) + Math.abs(deltaY);
@@ -83,12 +100,20 @@ export function useDraggableStar(
         starRef.current.style.right = 'auto';
     }, []);
 
-    const handleDragEnd = useCallback(() => {
+    const handleDragMove = useCallback((e: MouseEvent) => {
+        moveElement(e.clientX, e.clientY);
+    }, [moveElement]);
+
+    const handleTouchMove = useCallback((e: TouchEvent) => {
+        e.preventDefault(); // 防止页面滚动
+        moveElement(e.touches[0].clientX, e.touches[0].clientY);
+    }, [moveElement]);
+
+    // 通用结束逻辑
+    const endDrag = useCallback(() => {
         if (!dragRef.current.isDragging) return;
 
         dragRef.current.isDragging = false;
-        document.removeEventListener('mousemove', handleDragMove);
-        document.removeEventListener('mouseup', handleDragEnd);
 
         if (starRef.current) {
             starRef.current.style.cursor = 'grab';
@@ -111,12 +136,25 @@ export function useDraggableStar(
         }, 100);
     }, [setXingConfig]);
 
+    const handleDragEnd = useCallback(() => {
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mouseup', handleDragEnd);
+        endDrag();
+    }, [handleDragMove, endDrag]);
+
+    const handleTouchEnd = useCallback(() => {
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+        endDrag();
+    }, [handleTouchMove, endDrag]);
+
     // 返回 wasDragged 检测函数
     const wasDragged = useCallback(() => hasDraggedRef.current, []);
 
     return {
         starRef,
         handleDragStart,
+        handleTouchStart,  // 新增触摸开始
         isCustomPosition,
         wasDragged  // 新增：检查是否刚发生过拖动
     };

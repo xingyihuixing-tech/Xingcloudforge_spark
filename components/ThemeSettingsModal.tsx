@@ -699,7 +699,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
 
             {/* 删除确认弹窗 */}
             {deleteConfirm && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60" onClick={() => !isDeleting && setDeleteConfirm(null)}>
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 pointer-events-auto" onClick={() => !isDeleting && setDeleteConfirm(null)}>
                     <div
                         className="w-80 rounded-xl overflow-hidden"
                         style={{
@@ -738,7 +738,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
 
             {/* 保存确认弹窗 */}
             {saveConfirm && (
-                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60" onClick={() => setSaveConfirm(null)}>
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 pointer-events-auto" onClick={() => setSaveConfirm(null)}>
                     <div
                         className="w-80 rounded-xl overflow-hidden"
                         style={{

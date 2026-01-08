@@ -64,7 +64,7 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
         } catch (e) { /* ignore */ }
     }, []);
 
-    // 开始拖动
+    // 开始拖动 (鼠标)
     const handleMouseDown = useCallback((e: React.MouseEvent) => {
         if (disabled) return;
         e.preventDefault();
@@ -80,14 +80,30 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
         };
     }, [position, disabled]);
 
+    // 开始拖动 (触摸)
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        if (disabled) return;
+        const touch = e.touches[0];
+        setIsDragging(true);
+        dragStartRef.current = {
+            x: touch.clientX,
+            y: touch.clientY,
+            posX: position.x,
+            posY: position.y,
+            currentX: position.x,
+            currentY: position.y,
+            hasMoved: false
+        };
+    }, [position, disabled]);
+
     // 拖动中 - 直接操作DOM而非setState，避免重渲染卡顿
     useEffect(() => {
         if (!isDragging) return;
 
-        const handleMouseMove = (e: MouseEvent) => {
+        const handleMove = (clientX: number, clientY: number) => {
             if (!buttonRef.current) return;
-            const dx = e.clientX - dragStartRef.current.x;
-            const dy = e.clientY - dragStartRef.current.y;
+            const dx = clientX - dragStartRef.current.x;
+            const dy = clientY - dragStartRef.current.y;
 
             // 检测是否真的移动了
             if (Math.abs(dx) + Math.abs(dy) > 5) {
@@ -101,12 +117,18 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
             buttonRef.current.style.left = `${newX}px`;
             buttonRef.current.style.top = `${newY}px`;
 
-            // 记录最终位置用于 mouseup 时保存
+            // 记录最终位置用于结束时保存
             dragStartRef.current.currentX = newX;
             dragStartRef.current.currentY = newY;
         };
 
-        const handleMouseUp = () => {
+        const handleMouseMove = (e: MouseEvent) => handleMove(e.clientX, e.clientY);
+        const handleTouchMove = (e: TouchEvent) => {
+            e.preventDefault(); // 防止页面滚动
+            handleMove(e.touches[0].clientX, e.touches[0].clientY);
+        };
+
+        const handleEnd = () => {
             setIsDragging(false);
             // 仅在拖动结束时更新 state 和 localStorage
             const finalPos = { x: dragStartRef.current.currentX, y: dragStartRef.current.currentY };
@@ -115,11 +137,15 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
         };
 
         window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
 
         return () => {
             window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mouseup', handleEnd);
+            window.removeEventListener('touchmove', handleTouchMove);
+            window.removeEventListener('touchend', handleEnd);
         };
     }, [isDragging, savePosition]);
 
@@ -136,6 +162,7 @@ export const DrawingModeButton: React.FC<DrawingModeButtonProps> = ({
         <button
             ref={buttonRef}
             onMouseDown={handleMouseDown}
+            onTouchStart={handleTouchStart}
             onClick={handleClick}
             disabled={disabled}
             className={`group fixed z-40 flex items-center justify-center p-2 rounded-full transition-all ${isDragging
