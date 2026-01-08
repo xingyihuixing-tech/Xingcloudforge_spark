@@ -12934,7 +12934,7 @@ void main() {
               // 染色功能参数
               baseHue: gc?.baseHue ?? 200,
               baseSaturation: gc?.baseSaturation ?? 1.0,
-              saturationBoost: settings.saturation ?? 0,
+              saturationBoost: settings.saturation ?? 1.0,
               colorMode: colorMode,
               color1: gc?.color1 ? parseHexToVec3(gc.color1) : new THREE.Vector3(1, 1, 1),
               color2: gc?.color2 ? parseHexToVec3(gc.color2) : new THREE.Vector3(1, 1, 1),

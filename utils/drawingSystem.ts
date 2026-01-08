@@ -1065,10 +1065,10 @@ void main() {
     finalColor = hsl2rgb(hsl);
   }
   
-  // 应用饱和度调整
-  if (abs(uMCSaturationBoost) > 0.001) {
+  // 应用饱和度调整（乘法因子，与粒子画笔一致）
+  if (uMCSaturationBoost > 0.001 || uMCSaturationBoost < 1.999) {
     vec3 hsl = rgb2hsl(finalColor);
-    hsl.y = clamp(hsl.y + uMCSaturationBoost, 0.0, 1.0);
+    hsl.y = clamp(hsl.y * uMCSaturationBoost, 0.0, 1.0);
     finalColor = hsl2rgb(hsl);
   }
   
@@ -1255,7 +1255,7 @@ export function createLightsaberStrokeMesh(
                     // 染色功能参数
                     uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
                     uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                    uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 0 },
+                    uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
                     uMCColorMode: { value: mcSettings.colorMode ?? 0 },
                     uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
                     uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
@@ -1417,7 +1417,7 @@ export function createLightsaberStrokeMesh(
                 // 染色功能参数
                 uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
                 uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 0 },
+                uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
                 uMCColorMode: { value: mcSettings.colorMode ?? 0 },
                 uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
                 uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
