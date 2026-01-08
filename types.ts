@@ -1934,7 +1934,9 @@ export interface MaterialPreset {
 // - kaleidoscope: 万花筒（旋转+镜像）
 // - starburst: 星芒（奇偶分割交替缩放）
 // - prism: 棱镜（3D空间正多边形棱柱面复制）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism';
+// - vortex: 漩涡（随半径变化的旋转扭曲）
+// - bloom: 绽放（层叠缩放旋转）
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism' | 'vortex' | 'bloom';
 
 // 画笔类型
 export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber';

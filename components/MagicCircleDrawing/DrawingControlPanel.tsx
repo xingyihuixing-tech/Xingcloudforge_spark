@@ -88,7 +88,9 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
         { mode: 'radial', label: '径向' },
         { mode: 'kaleidoscope', label: '万花筒' },
         { mode: 'starburst', label: '星芒' },
-        { mode: 'prism', label: '棱镜' }
+        { mode: 'prism', label: '棱镜' },
+        { mode: 'vortex', label: '漩涡' },
+        { mode: 'bloom', label: '绽放' }
     ];
 
     // 对称分割数选项

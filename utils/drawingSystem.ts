@@ -358,6 +358,49 @@ export function applySymmetryTransform(
                 });
             }
         }
+    } else if (mode === 'vortex') {
+        // 漩涡模式：随半径旋转扭曲
+        // 扭曲因子：距离中心越近旋转越剧烈
+        const twistFactor = 2.0;
+        for (let i = 0; i < divisions; i++) {
+            const angleOffset = angleStep * i;
+            // 核心逻辑：角度随半径变化
+            // (1 - radius*2) 使得中心处(radius=0)扭曲最大，边缘处(radius=0.5)扭曲最小
+            // 添加 uTime 相关的动态旋转会让效果更好，但在单纯变换函数里我们只做静态几何变换
+            const twistAngle = twistFactor * Math.max(0, 1.0 - radius * 3.0);
+            const angle = baseAngle + angleOffset + twistAngle;
+
+            results.push({
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle)
+            });
+        }
+    } else if (mode === 'bloom') {
+        // 绽放模式：多层缩放旋转，类似花朵
+        // 每一层比上一层大，且有角度偏移
+        for (let i = 0; i < divisions; i++) {
+            // 基础角度分布
+            const angleOffset = angleStep * i;
+
+            // 层级缩放：从0.5倍到1.5倍分布
+            const scaleStep = 1.0 / divisions;
+            const scale = 0.5 + i * scaleStep;
+
+            // 层级旋转偏移：每一层错开一点角度
+            const rotationOffset = i * (Math.PI / 12);
+
+            const angle = baseAngle + angleOffset + rotationOffset;
+            const scaledRadius = radius * scale;
+
+            // 添加一点Z轴层叠，让花朵更有立体感
+            const zOffset = i * 0.05;
+
+            results.push({
+                x: scaledRadius * Math.cos(angle),
+                y: scaledRadius * Math.sin(angle),
+                z: zOffset
+            });
+        }
     }
 
     return results;
@@ -1596,6 +1639,52 @@ function applySymmetryToPath(
                 }));
                 allPaths.push(mirroredPath);
             }
+        }
+    } else if (symmetryMode === 'vortex') {
+        // 漩涡模式：随半径旋转扭曲
+        const twistFactor = 2.0;
+        for (let div = 0; div < divisions; div++) {
+            const angleOffset = (div / divisions) * Math.PI * 2;
+
+            const twistedPath = basePath.map(p => {
+                const radius = Math.sqrt(p.x * p.x + p.y * p.y);
+                const twistAngle = twistFactor * Math.max(0, 1.0 - radius * 3.0);
+                const angle = angleOffset + twistAngle;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+
+                return {
+                    x: p.x * cos - p.y * sin,
+                    y: p.x * sin + p.y * cos,
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(twistedPath);
+        }
+    } else if (symmetryMode === 'bloom') {
+        // 绽放模式：多层缩放旋转
+        for (let div = 0; div < divisions; div++) {
+            const angleOffset = (div / divisions) * Math.PI * 2;
+            const scaleStep = 1.0 / divisions;
+            const scale = 0.5 + div * scaleStep;
+            const rotationOffset = div * (Math.PI / 12);
+
+            const angle = angleOffset + rotationOffset;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const zOffset = div * 0.05;
+
+            const bloomPath = basePath.map(p => {
+                const rx = p.x * cos - p.y * sin;
+                const ry = p.x * sin + p.y * cos;
+                return {
+                    x: rx * scale,
+                    y: ry * scale,
+                    z: zOffset, // 3D层叠效果
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(bloomPath);
         }
     }
 
