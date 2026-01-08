@@ -12932,6 +12932,8 @@ void main() {
               pulseIntensity: settings.pulseIntensity,
               particleSizeScale: 0.6,  // 场景中粒子尺寸缩小，降低光晕强度
               // 染色功能参数
+              baseHue: gc?.baseHue ?? 200,
+              baseSaturation: gc?.baseSaturation ?? 1.0,
               saturationBoost: settings.saturation ?? 0,
               colorMode: colorMode,
               color1: gc?.color1 ? parseHexToVec3(gc.color1) : new THREE.Vector3(1, 1, 1),

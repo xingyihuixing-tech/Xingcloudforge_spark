@@ -30,7 +30,7 @@ const DEFAULT_COLOR = '#ffaa00';
 /**
  * 使用CatmullRomCurve3对笔迹点进行平滑处理
  * @param points 原始采样点
- * @param smoothness 平滑度 (0=不平滑, 1=非常平滑)
+ * @param smoothness 平滑度 (0=不平滑保持原样, 1-3=越来越平滑的曲线)
  * @param minPoints 至少需要的点数才进行平滑
  * @returns 平滑后的点数组
  */
@@ -39,7 +39,7 @@ export function smoothStrokePoints(
     smoothness: number = 0.5,
     minPoints: number = 4
 ): StrokePoint[] {
-    // 点数太少不进行平滑
+    // 点数太少或平滑度为0时不进行平滑
     if (points.length < minPoints || smoothness <= 0) {
         return points;
     }
@@ -47,16 +47,19 @@ export function smoothStrokePoints(
     // 创建3D曲线（z用于存储压力值的索引）
     const curve3DPoints = points.map((p, i) => new THREE.Vector3(p.x, p.y, i));
 
-    // 使用CatmullRom样条曲线
-    const curve = new THREE.CatmullRomCurve3(curve3DPoints, false, 'catmullrom', 0.5);
+    // 将smoothness映射到CatmullRom张力参数：
+    // smoothness=0 → tension=0.5（不平滑，贴近原始点）
+    // smoothness=3 → tension=0（最平滑，圆润曲线）
+    const tension = Math.max(0, 0.5 - (smoothness / 6));
 
-    // 根据平滑度决定采样密度
-    // smoothness=0: 保持原始点数
-    // smoothness=1: 采样更多点使曲线更平滑
-    const outputPointCount = Math.max(
-        points.length,
-        Math.floor(points.length * (1 + smoothness * 2))
-    );
+    // 使用CatmullRom样条曲线，张力越小曲线越圆润
+    const curve = new THREE.CatmullRomCurve3(curve3DPoints, false, 'catmullrom', tension);
+
+    // 输出点数：保证足够密集以呈现平滑曲线
+    // 基础点数 + 额外插值点数（根据路径长度）
+    const baseOutputCount = Math.max(points.length, 20);
+    const extraPoints = Math.floor(smoothness * points.length);
+    const outputPointCount = baseOutputCount + extraPoints;
 
     const smoothedPoints: StrokePoint[] = [];
 
@@ -65,7 +68,7 @@ export function smoothStrokePoints(
         const point = curve.getPoint(t);
 
         // 从z坐标插值压力值
-        const originalIndex = point.z;
+        const originalIndex = Math.min(point.z, points.length - 1);
         const lowerIndex = Math.floor(originalIndex);
         const upperIndex = Math.min(lowerIndex + 1, points.length - 1);
         const indexFrac = originalIndex - lowerIndex;
@@ -77,7 +80,7 @@ export function smoothStrokePoints(
             x: point.x,
             y: point.y,
             pressure: pressure,
-            timestamp: Date.now() // 平滑后的点使用当前时间戳
+            timestamp: Date.now()
         });
     }
 
@@ -942,6 +945,8 @@ uniform float uMCPulseSpeed;
 uniform float uMCPulseIntensity;
 
 // 染色功能参数
+uniform float uMCBaseHue;          // 基础色相 0-360
+uniform float uMCBaseSaturation;   // 基础饱和度 0-1
 uniform float uMCSaturationBoost;  // 饱和度增强 -1 to 1
 uniform float uMCColorMode;        // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
 uniform vec3 uMCColor1;
@@ -1027,8 +1032,11 @@ void main() {
     vec3 tintColor = finalColor;
     
     if (uMCColorMode > 3.5) {
-      // 单色模式
-      tintColor = uMCColor1;
+      // 单色模式：使用baseHue和baseSaturation
+      vec3 hsl = rgb2hsl(finalColor);
+      hsl.x = uMCBaseHue / 360.0;
+      hsl.y = uMCBaseSaturation;
+      tintColor = hsl2rgb(hsl);
     } else if (uMCColorMode > 0.5 && uMCColorMode < 1.5) {
       // 双色模式
       tintColor = mix(uMCColor1, uMCColor2, t);
@@ -1090,6 +1098,8 @@ export function createLightsaberStrokeMesh(
         pulseSpeed?: number;
         pulseIntensity?: number;
         // 染色功能参数
+        baseHue?: number;
+        baseSaturation?: number;
         saturationBoost?: number;
         colorMode?: number;  // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
         color1?: THREE.Vector3;
@@ -1243,6 +1253,8 @@ export function createLightsaberStrokeMesh(
                     uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
                     uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
                     // 染色功能参数
+                    uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+                    uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
                     uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 0 },
                     uMCColorMode: { value: mcSettings.colorMode ?? 0 },
                     uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
@@ -1403,6 +1415,8 @@ export function createLightsaberStrokeMesh(
                 uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
                 uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
                 // 染色功能参数
+                uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+                uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
                 uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 0 },
                 uMCColorMode: { value: mcSettings.colorMode ?? 0 },
                 uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
