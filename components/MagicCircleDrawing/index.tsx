@@ -3,6 +3,7 @@
  * output: Drawing overlay UI with 3D canvas, brush tools (arc-length density + pressure mode；粒子密度范围100-800), symmetry controls, layer panel
  * pos: Main React component for custom magic circle drawing system
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
+ * 2026-01-08: 优化粒子预览性能(节流+低密度)；面板位置下移(top:100)；预设交互(点击选中/再击保存/双击重命名)；压感按钮去填充色+次交互色边框；参数数字白色
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -136,9 +137,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     // 墨迹预设
     const { currentUser, saveCloudConfig, loadCloudConfig } = useUser();
     const [brushPresets, setBrushPresets] = useState<BrushPreset[]>([]);
-    const [showPresetNameInput, setShowPresetNameInput] = useState(false);
-    const [newPresetName, setNewPresetName] = useState('');
-    const presetNameInputRef = useRef<HTMLInputElement>(null);
+    const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);  // 当前选中的预设
+    const [editingPresetId, setEditingPresetId] = useState<string | null>(null);  // 正在编辑名称的预设
+    const [editingPresetName, setEditingPresetName] = useState('');  // 编辑中的名称
+    const lastPreviewUpdateRef = useRef<number>(0);  // 预览更新节流
 
     // 加载预设（从本地存储，未来可扩展为云同步）
     useEffect(() => {
@@ -162,12 +164,11 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         }
     }, [currentUser, saveCloudConfig]);
 
-    // 保存当前配置为预设
-    const handleSavePreset = useCallback(() => {
-        if (!newPresetName.trim()) return;
+    // 创建新预设（直接使用默认名称）
+    const handleCreatePreset = useCallback(() => {
         const newPreset: BrushPreset = {
             id: `preset_${Date.now()}`,
-            name: newPresetName.trim(),
+            name: `预设${brushPresets.length + 1}`,
             createdAt: Date.now(),
             brushType,
             particleSettings: brushType === 'particle' ? { ...particleSettings } : undefined,
@@ -175,9 +176,34 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             color: brushColor
         };
         savePresetsToStorage([...brushPresets, newPreset]);
-        setNewPresetName('');
-        setShowPresetNameInput(false);
-    }, [newPresetName, brushType, particleSettings, silkSettings, brushColor, brushPresets, savePresetsToStorage]);
+    }, [brushType, particleSettings, silkSettings, brushColor, brushPresets, savePresetsToStorage]);
+
+    // 更新预设（将当前参数保存到已选中的预设）
+    const handleUpdatePreset = useCallback((presetId: string) => {
+        const updatedPresets = brushPresets.map(p =>
+            p.id === presetId ? {
+                ...p,
+                brushType,
+                particleSettings: brushType === 'particle' ? { ...particleSettings } : undefined,
+                silkSettings: brushType === 'lineRing' ? { ...silkSettings } : undefined,
+                color: brushColor,
+                updatedAt: Date.now()
+            } : p
+        );
+        savePresetsToStorage(updatedPresets);
+        setSelectedPresetId(null);  // 保存后取消选中
+    }, [brushType, particleSettings, silkSettings, brushColor, brushPresets, savePresetsToStorage]);
+
+    // 重命名预设
+    const handleRenamePreset = useCallback((presetId: string, newName: string) => {
+        if (!newName.trim()) return;
+        const updatedPresets = brushPresets.map(p =>
+            p.id === presetId ? { ...p, name: newName.trim() } : p
+        );
+        savePresetsToStorage(updatedPresets);
+        setEditingPresetId(null);
+        setEditingPresetName('');
+    }, [brushPresets, savePresetsToStorage]);
 
     // 应用预设
     const handleApplyPreset = useCallback((preset: BrushPreset) => {
@@ -514,8 +540,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             timestamp: Date.now()
         });
 
-        // 实时预览当前笔画
-        updateCurrentStrokePreview();
+        // 实时预览当前笔画（节流：每50ms更新一次）
+        const now = Date.now();
+        if (now - lastPreviewUpdateRef.current > 50) {
+            lastPreviewUpdateRef.current = now;
+            updateCurrentStrokePreview();
+        }
     }, [isDrawing, brushType, brushColor, symmetryMode, symmetryDivisions]);
 
     // 更新当前笔画预览
@@ -546,13 +576,18 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         if (currentStrokeRef.current.length < 2) return;
 
-        // 创建新预览
+        // 创建新预览（降低密度以提高性能）
         const previewMcSettings = { particleSizeScale: 0.002 };  // 画布粒子缩放
         if (brushType === 'particle') {
+            // 预览时使用较低的密度以避免卡顿
+            const previewSettings = {
+                ...particleSettings,
+                particleDensity: Math.max(50, Math.floor((particleSettings.particleDensity ?? 300) / 4))
+            };
             refs.currentStrokeMesh = createParticleStrokeMesh(
                 currentStrokeRef.current,
                 brushColor,
-                particleSettings,
+                previewSettings,
                 symmetryMode,
                 symmetryDivisions,
                 previewMcSettings
@@ -832,15 +867,13 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 style={{
                     position: 'absolute',
                     left: 20,
-                    top: 70,
-                    bottom: 20,
+                    top: 100,
                     width: 180,
                     borderRadius: 16,
                     padding: 16,
                     pointerEvents: 'auto',
                     display: 'flex',
-                    flexDirection: 'column',
-                    overflowY: 'auto'
+                    flexDirection: 'column'
                 }}
             >
                 <div style={{ color: 'var(--ui-primary)', fontSize: 13, marginBottom: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -874,9 +907,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 12 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                     <span>压感模式</span>
-                                    <span style={{ color: 'var(--ui-primary)' }}>
-                                        {particleSettings.pressureMode === 'brightness' ? '亮度' : particleSettings.pressureMode === 'calligraphy' ? '书法' : '无'}
-                                    </span>
                                 </div>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     <button
@@ -884,10 +914,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         style={{
                                             flex: 1,
                                             padding: '6px 0',
-                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'transparent',
-                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.25)',
+                                            background: 'transparent',
+                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
                                             borderRadius: 6,
-                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
+                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
                                             fontSize: 12,
                                             cursor: 'pointer',
                                             transition: 'all 0.2s'
@@ -900,10 +930,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         style={{
                                             flex: 1,
                                             padding: '6px 0',
-                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
-                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
+                                            background: 'transparent',
+                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
                                             borderRadius: 6,
-                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
+                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'calligraphy' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
                                             fontSize: 12,
                                             cursor: 'pointer',
                                             transition: 'all 0.2s'
@@ -916,10 +946,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         style={{
                                             flex: 1,
                                             padding: '6px 0',
-                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
-                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
+                                            background: 'transparent',
+                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
                                             borderRadius: 6,
-                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
+                                            color: (particleSettings.pressureMode ?? 'calligraphy') === 'brightness' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
                                             fontSize: 12,
                                             cursor: 'pointer',
                                             transition: 'all 0.2s'
@@ -930,11 +960,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                             </div>
 
-                            {/* 粒子大小 */}
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>粒子大小</span>
-                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.particleSize || 2).toFixed(1)}</span>
+                                    <span style={{ color: '#ffffff' }}>{(particleSettings.particleSize || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -950,7 +979,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>粒子密度</span>
-                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 300).toFixed(0)}</span>
+                                    <span style={{ color: '#ffffff' }}>{(particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 300).toFixed(0)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -966,7 +995,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>亮度</span>
-                                    <span style={{ color: 'var(--ui-primary)' }}>{(particleSettings.brightness || 2).toFixed(1)}</span>
+                                    <span style={{ color: '#ffffff' }}>{(particleSettings.brightness || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -983,7 +1012,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
                                     <span>笔触粗细</span>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.bandwidth || 15}</span>
+                                        <span style={{ color: '#ffffff' }}>{particleSettings.bandwidth || 15}</span>
                                         <label style={{ display: 'flex', alignItems: 'center', fontSize: 11, cursor: 'pointer' }}>
                                             <input
                                                 type="checkbox"
@@ -1014,7 +1043,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 <div style={{ marginBottom: 10 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                         <span>Z方向范围</span>
-                                        <span style={{ color: 'var(--ui-primary)' }}>{particleSettings.zThickness ?? particleSettings.bandwidth ?? 15}</span>
+                                        <span style={{ color: '#ffffff' }}>{particleSettings.zThickness ?? particleSettings.bandwidth ?? 15}</span>
                                     </div>
                                     <input
                                         type="range"
@@ -1033,9 +1062,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 12 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
                                     <span>压感模式</span>
-                                    <span style={{ color: 'var(--ui-secondary)' }}>
-                                        {silkSettings.pressureMode === 'calligraphy' ? '书法' : silkSettings.pressureMode === 'brightness' ? '亮度' : '无'}
-                                    </span>
                                 </div>
                                 <div style={{ display: 'flex', gap: 8 }}>
                                     <button
@@ -1043,8 +1069,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         style={{
                                             flex: 1,
                                             padding: '6px 0',
-                                            background: (silkSettings.pressureMode ?? 'none') === 'none' ? 'rgba(var(--ui-secondary-rgb, 0,255,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
-                                            border: (silkSettings.pressureMode ?? 'none') === 'none' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.08)',
+                                            background: 'transparent',
+                                            border: (silkSettings.pressureMode ?? 'none') === 'none' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
                                             borderRadius: 6,
                                             color: (silkSettings.pressureMode ?? 'none') === 'none' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
                                             fontSize: 12,
@@ -1059,8 +1085,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         style={{
                                             flex: 1,
                                             padding: '6px 0',
-                                            background: (silkSettings.pressureMode ?? 'none') === 'calligraphy' ? 'rgba(var(--ui-secondary-rgb, 0,255,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
-                                            border: (silkSettings.pressureMode ?? 'none') === 'calligraphy' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.08)',
+                                            background: 'transparent',
+                                            border: (silkSettings.pressureMode ?? 'none') === 'calligraphy' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
                                             borderRadius: 6,
                                             color: (silkSettings.pressureMode ?? 'none') === 'calligraphy' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
                                             fontSize: 12,
@@ -1075,8 +1101,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         style={{
                                             flex: 1,
                                             padding: '6px 0',
-                                            background: (silkSettings.pressureMode ?? 'none') === 'brightness' ? 'rgba(var(--ui-secondary-rgb, 0,255,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
-                                            border: (silkSettings.pressureMode ?? 'none') === 'brightness' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.08)',
+                                            background: 'transparent',
+                                            border: (silkSettings.pressureMode ?? 'none') === 'brightness' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
                                             borderRadius: 6,
                                             color: (silkSettings.pressureMode ?? 'none') === 'brightness' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
                                             fontSize: 12,
@@ -1093,7 +1119,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>线环粗细</span>
-                                    <span style={{ color: 'var(--ui-secondary)' }}>{((silkSettings.thickness || 0.02) * 1000).toFixed(0)}</span>
+                                    <span style={{ color: '#ffffff' }}>{((silkSettings.thickness || 0.02) * 1000).toFixed(0)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -1109,7 +1135,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>发光强度</span>
-                                    <span style={{ color: 'var(--ui-secondary)' }}>{(silkSettings.emissive || 2).toFixed(1)}</span>
+                                    <span style={{ color: '#ffffff' }}>{(silkSettings.emissive || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -1125,7 +1151,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>菲涅尔边缘</span>
-                                    <span style={{ color: 'var(--ui-secondary)' }}>{(silkSettings.fresnelPower || 2).toFixed(1)}</span>
+                                    <span style={{ color: '#ffffff' }}>{(silkSettings.fresnelPower || 2).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -1164,7 +1190,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>流动速度</span>
-                                    <span style={{ color: 'var(--ui-secondary)' }}>{(silkSettings.flowSpeed || 1).toFixed(1)}</span>
+                                    <span style={{ color: '#ffffff' }}>{(silkSettings.flowSpeed || 1).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
@@ -1197,10 +1223,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                         <span style={{ fontSize: 12, color: '#ffffff' }}>墨迹预设</span>
                         <button
-                            onClick={() => {
-                                setShowPresetNameInput(true);
-                                setTimeout(() => presetNameInputRef.current?.focus(), 50);
-                            }}
+                            onClick={handleCreatePreset}
                             style={{
                                 width: 24,
                                 height: 24,
@@ -1214,52 +1237,11 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 alignItems: 'center',
                                 justifyContent: 'center'
                             }}
-                            title="保存当前配置为预设"
+                            title="新建预设"
                         >
                             +
                         </button>
                     </div>
-
-                    {/* 新建预设输入框 */}
-                    {showPresetNameInput && (
-                        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                            <input
-                                ref={presetNameInputRef}
-                                type="text"
-                                value={newPresetName}
-                                onChange={(e) => setNewPresetName(e.target.value)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') handleSavePreset();
-                                    if (e.key === 'Escape') setShowPresetNameInput(false);
-                                }}
-                                placeholder="预设名称"
-                                style={{
-                                    flex: 1,
-                                    padding: '4px 8px',
-                                    fontSize: 11,
-                                    background: 'rgba(0,0,0,0.3)',
-                                    border: '1px solid rgba(255,255,255,0.2)',
-                                    borderRadius: 4,
-                                    color: '#fff',
-                                    outline: 'none'
-                                }}
-                            />
-                            <button
-                                onClick={handleSavePreset}
-                                style={{
-                                    padding: '4px 10px',
-                                    fontSize: 11,
-                                    background: 'transparent',
-                                    border: '1px solid rgba(255,255,255,0.3)',
-                                    borderRadius: 4,
-                                    color: '#fff',
-                                    cursor: 'pointer'
-                                }}
-                            >
-                                保存
-                            </button>
-                        </div>
-                    )}
 
                     {/* 预设列表 */}
                     <div style={{
@@ -1274,58 +1256,109 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 暂无预设
                             </div>
                         ) : (
-                            brushPresets.map(preset => (
-                                <div
-                                    key={preset.id}
-                                    onClick={() => handleApplyPreset(preset)}
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'space-between',
-                                        padding: '6px 10px',
-                                        cursor: 'pointer',
-                                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                        transition: 'background 0.15s'
-                                    }}
-                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
-                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                                >
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <div style={{
-                                            width: 10,
-                                            height: 10,
-                                            borderRadius: '50%',
-                                            background: preset.color
-                                        }} />
-                                        <span style={{ fontSize: 11, color: '#fff' }}>{preset.name}</span>
-                                        <span style={{ fontSize: 9, color: '#666' }}>
-                                            {preset.brushType === 'particle' ? '粒子' : '丝环'}
-                                        </span>
-                                    </div>
-                                    <button
-                                        onClick={(e) => {
+                            brushPresets.map(preset => {
+                                const isSelected = selectedPresetId === preset.id;
+                                const isEditing = editingPresetId === preset.id;
+                                return (
+                                    <div
+                                        key={preset.id}
+                                        onClick={() => {
+                                            if (isEditing) return;
+                                            if (isSelected) {
+                                                // 已选中状态下再次点击 → 保存当前参数到此预设
+                                                handleUpdatePreset(preset.id);
+                                            } else {
+                                                // 未选中 → 选中并应用预设
+                                                setSelectedPresetId(preset.id);
+                                                handleApplyPreset(preset);
+                                            }
+                                        }}
+                                        onDoubleClick={(e) => {
                                             e.stopPropagation();
-                                            handleDeletePreset(preset.id);
+                                            setEditingPresetId(preset.id);
+                                            setEditingPresetName(preset.name);
                                         }}
                                         style={{
-                                            width: 20,
-                                            height: 20,
-                                            background: 'transparent',
-                                            border: '1px solid rgba(239,68,68,0.5)',
-                                            borderRadius: 4,
-                                            color: '#ef4444',
-                                            fontSize: 12,
-                                            cursor: 'pointer',
                                             display: 'flex',
                                             alignItems: 'center',
-                                            justifyContent: 'center'
+                                            justifyContent: 'space-between',
+                                            padding: '6px 10px',
+                                            cursor: 'pointer',
+                                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                            border: isSelected ? '1px solid var(--ui-primary)' : '1px solid transparent',
+                                            boxShadow: isSelected ? '0 0 8px var(--ui-primary)' : 'none',
+                                            borderRadius: isSelected ? 4 : 0,
+                                            margin: isSelected ? '2px 0' : 0,
+                                            transition: 'all 0.15s'
                                         }}
-                                        title="删除预设"
                                     >
-                                        ×
-                                    </button>
-                                </div>
-                            ))
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                                            <div style={{
+                                                width: 10,
+                                                height: 10,
+                                                borderRadius: '50%',
+                                                background: preset.color,
+                                                flexShrink: 0
+                                            }} />
+                                            {isEditing ? (
+                                                <input
+                                                    type="text"
+                                                    value={editingPresetName}
+                                                    onChange={(e) => setEditingPresetName(e.target.value)}
+                                                    onBlur={() => handleRenamePreset(preset.id, editingPresetName)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') handleRenamePreset(preset.id, editingPresetName);
+                                                        if (e.key === 'Escape') { setEditingPresetId(null); setEditingPresetName(''); }
+                                                    }}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    autoFocus
+                                                    style={{
+                                                        flex: 1,
+                                                        fontSize: 11,
+                                                        background: 'rgba(0,0,0,0.5)',
+                                                        border: '1px solid var(--ui-primary)',
+                                                        borderRadius: 3,
+                                                        color: '#fff',
+                                                        padding: '2px 4px',
+                                                        outline: 'none'
+                                                    }}
+                                                />
+                                            ) : (
+                                                <>
+                                                    <span style={{ fontSize: 11, color: '#fff' }}>{preset.name}</span>
+                                                    <span style={{ fontSize: 9, color: '#666' }}>
+                                                        {preset.brushType === 'particle' ? '粒子' : '丝环'}
+                                                    </span>
+                                                </>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeletePreset(preset.id);
+                                                if (selectedPresetId === preset.id) setSelectedPresetId(null);
+                                            }}
+                                            style={{
+                                                width: 20,
+                                                height: 20,
+                                                background: 'transparent',
+                                                border: '1px solid rgba(239,68,68,0.5)',
+                                                borderRadius: 4,
+                                                color: '#ef4444',
+                                                fontSize: 12,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0
+                                            }}
+                                            title="删除预设"
+                                        >
+                                            ×
+                                        </button>
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                 </div>
@@ -1514,7 +1547,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 onUpdateSymmetry={handleUpdateSymmetry}
                 onClose={onClose}
             />
-        </div>
+        </div >
     );
 };
 
