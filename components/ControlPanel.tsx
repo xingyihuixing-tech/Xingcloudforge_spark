@@ -8113,7 +8113,7 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                                       )}
 
                                       {/* 大小 */}
-                                      <RangeControl label="基准大小" value={orn.baseSize} min={5} max={50} step={1} onChange={(v) => updateOrn({ baseSize: v })} />
+                                      <RangeControl label="基准大小" value={orn.baseSize} min={5} max={150} step={1} onChange={(v) => updateOrn({ baseSize: v })} />
                                       <RangeControl label="随机缩放" value={orn.sizeRandomness} min={0} max={1} step={0.1} onChange={(v) => updateOrn({ sizeRandomness: v })} />
 
                                       {/* 颜色模式 */}

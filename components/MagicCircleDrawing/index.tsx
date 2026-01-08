@@ -792,7 +792,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 </div>
 
                 {/* 画笔参数 */}
-                <div style={{ fontSize: 11, color: '#888', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: '#ffffff', marginBottom: 16 }}>
                     {brushType === 'particle' ? (
                         <>
                             <div style={{ marginBottom: 12 }}>
@@ -808,8 +808,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         style={{
                                             flex: 1,
                                             padding: '6px 0',
-                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'rgba(50, 50, 60, 0.6)',
-                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.08)',
+                                            background: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'rgba(var(--ui-primary-rgb, 113,176,255), 0.15)' : 'transparent',
+                                            border: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? '1px solid var(--ui-primary)' : '1px solid rgba(255,255,255,0.25)',
                                             borderRadius: 6,
                                             color: (particleSettings.pressureMode ?? 'calligraphy') === 'none' ? 'var(--ui-primary)' : 'rgba(255,255,255,0.6)',
                                             fontSize: 12,
@@ -1021,8 +1021,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={5}
-                                    max={80}
+                                    min={1}
+                                    max={160}
                                     step={1}
                                     value={(silkSettings.thickness || 0.02) * 1000}
                                     onChange={(e) => setSilkSettings(prev => ({ ...prev, thickness: Number(e.target.value) / 1000 }))}
@@ -1037,8 +1037,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={0.5}
-                                    max={4}
+                                    min={0.1}
+                                    max={6}
                                     step={0.1}
                                     value={silkSettings.emissive || 2}
                                     onChange={(e) => setSilkSettings(prev => ({ ...prev, emissive: Number(e.target.value) }))}
@@ -1053,9 +1053,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={0.5}
+                                    min={0.02}
                                     max={5}
-                                    step={0.1}
+                                    step={0.02}
                                     value={silkSettings.fresnelPower || 2}
                                     onChange={(e) => setSilkSettings(prev => ({ ...prev, fresnelPower: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
@@ -1088,12 +1088,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>流动速度</span>
-                                    <span style={{ color: '#00ffff' }}>{(silkSettings.flowSpeed || 1).toFixed(1)}</span>
+                                    <span style={{ color: 'var(--ui-secondary)' }}>{(silkSettings.flowSpeed || 1).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
                                     min={0}
-                                    max={3}
+                                    max={10}
                                     step={0.1}
                                     value={silkSettings.flowSpeed || 1}
                                     onChange={(e) => setSilkSettings(prev => ({ ...prev, flowSpeed: Number(e.target.value) }))}
@@ -1106,7 +1106,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
                 {/* 颜色选择 */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                    <span style={{ fontSize: 12, color: '#888' }}>颜色</span>
+                    <span style={{ fontSize: 12, color: '#ffffff' }}>颜色</span>
                     <input
                         type="color"
                         value={brushColor}

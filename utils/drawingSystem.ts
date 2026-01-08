@@ -391,7 +391,7 @@ export function createParticleStrokeMesh(
                 ? 0.55
                 : (pressureMode === 'brightness'
                     ? (0.35 + 0.15 * pe)
-                    : (0.25 + 0.95 * pe));
+                    : (0.15 + 1.85 * pe));  // 书法压感：大幅放大粗细变化 (0→0.15, 1→2.0)
 
             const spawnExtraMax = pressureMode === 'brightness' ? 2 : (pressureMode === 'calligraphy' ? 1 : 0);
             const spawnCount = 1 + Math.floor(pe * spawnExtraMax);
@@ -418,7 +418,7 @@ export function createParticleStrokeMesh(
                     ? 1.0
                     : (pressureMode === 'brightness'
                         ? (0.85 + 0.45 * pe)
-                        : (0.55 + 0.95 * pe));
+                        : (0.25 + 2.75 * pe));  // 书法压感：粒子大小变化约11倍
                 particleSizes.push(particleSize * sizePressureScale * sizeVariation * 0.05);
 
                 const colorMult = pressureMode === 'none'
@@ -977,7 +977,7 @@ export function createLineStrokeMesh(
             const midPressure = clamp01((a.pressure + b.pressure) * 0.5);
             const peSeg = pressureCurve(midPressure);
 
-            const radiusScale = pressureMode === 'calligraphy' ? (0.65 + 1.35 * peSeg) : 1.0;
+            const radiusScale = pressureMode === 'calligraphy' ? (0.3 + 2.7 * peSeg) : 1.0;  // 书法压感：粗细变化约10倍
             const radius = baseLineWidth * radiusScale;
 
             const curve = new THREE.LineCurve3(
