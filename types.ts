@@ -1929,7 +1929,12 @@ export interface MaterialPreset {
 // ==================== 自定义法阵绘制系统类型 ====================
 
 // 对称模式
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope';
+// - none: 无对称
+// - radial: 径向旋转对称
+// - kaleidoscope: 万花筒（旋转+镜像）
+// - starburst: 星芒（奇偶分割交替缩放）
+// - prism: 棱镜（3D空间正多边形棱柱面复制）
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism';
 
 // 画笔类型
 export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber';

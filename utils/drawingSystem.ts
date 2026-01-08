@@ -278,12 +278,12 @@ export function applySymmetryTransform(
     point: { x: number; y: number },
     mode: SymmetryMode,
     divisions: number
-): { x: number; y: number }[] {
+): { x: number; y: number; z?: number }[] {
     if (mode === 'none') {
         return [point];
     }
 
-    const results: { x: number; y: number }[] = [];
+    const results: { x: number; y: number; z?: number }[] = [];
     const angleStep = (Math.PI * 2) / divisions;
 
     // 转换为相对中心的坐标 (画布中心是 0,0，点坐标已是 -0.5 到 0.5)
@@ -292,20 +292,71 @@ export function applySymmetryTransform(
     const radius = Math.sqrt(dx * dx + dy * dy);
     const baseAngle = Math.atan2(dy, dx);
 
-    for (let i = 0; i < divisions; i++) {
-        const angle = baseAngle + angleStep * i;
-        results.push({
-            x: radius * Math.cos(angle),
-            y: radius * Math.sin(angle)
-        });
-
-        // 万花筒模式：每份内部镜像
-        if (mode === 'kaleidoscope') {
+    if (mode === 'radial') {
+        // 径向对称：简单旋转复制
+        for (let i = 0; i < divisions; i++) {
+            const angle = baseAngle + angleStep * i;
+            results.push({
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle)
+            });
+        }
+    } else if (mode === 'kaleidoscope') {
+        // 万花筒模式：旋转+镜像
+        for (let i = 0; i < divisions; i++) {
+            const angle = baseAngle + angleStep * i;
+            results.push({
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle)
+            });
+            // 每份内部镜像
             const mirroredAngle = angleStep * (i + 0.5) * 2 - angle;
             results.push({
                 x: radius * Math.cos(mirroredAngle),
                 y: radius * Math.sin(mirroredAngle)
             });
+        }
+    } else if (mode === 'starburst') {
+        // 星芒模式：奇数分割向外延伸，偶数分割向内收缩
+        const innerScale = 0.5;   // 内缩比例
+        const outerScale = 1.3;   // 外延比例
+        for (let i = 0; i < divisions; i++) {
+            const angle = baseAngle + angleStep * i;
+            const scale = (i % 2 === 0) ? outerScale : innerScale;
+            const scaledRadius = radius * scale;
+            results.push({
+                x: scaledRadius * Math.cos(angle),
+                y: scaledRadius * Math.sin(angle)
+            });
+        }
+    } else if (mode === 'prism') {
+        // 棱镜模式：3D正多边形棱柱，笔迹在各面复制
+        // 每个面有不同的Z偏移，形成立体效果
+        const prismHeight = 0.3;  // 棱柱高度（Z方向范围）
+        const faceCount = Math.max(3, divisions); // 至少三面
+
+        for (let i = 0; i < faceCount; i++) {
+            const angle = baseAngle + angleStep * i;
+            // 计算每个面的Z位置（沿正多边形边缘分布）
+            const faceAngle = (Math.PI * 2 / faceCount) * i;
+            const zOffset = Math.sin(faceAngle) * prismHeight;
+
+            // 主面上的点
+            results.push({
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle),
+                z: zOffset
+            });
+
+            // 对面镜像（棱镜对称特性）
+            if (faceCount >= 4) {
+                const oppositeAngle = angle + Math.PI;
+                results.push({
+                    x: radius * Math.cos(oppositeAngle),
+                    y: radius * Math.sin(oppositeAngle),
+                    z: -zOffset
+                });
+            }
         }
     }
 
@@ -465,10 +516,12 @@ export function createParticleStrokeMesh(
                 const jx = (Math.random() - 0.5) * jitter;
                 const jy = (Math.random() - 0.5) * jitter;
                 const jz = spatialThickness ? (Math.random() - 0.5) * zThickness * 0.002 : 0;
+                // 使用对称变换返回的z坐标（棱镜等3D模式）
+                const symmetryZ = sp.z ?? 0;
 
                 const px = sp.x + jx;
                 const py = sp.y + jy;
-                particlePositions.push(px, py, jz);
+                particlePositions.push(px, py, jz + symmetryZ);
 
                 // 径向距离用于渐变
                 const radialDist = Math.sqrt(px * px + py * py) * 2;
@@ -1171,8 +1224,8 @@ export function createLightsaberStrokeMesh(
         };
 
         if (pressureMode === 'none') {
-            // 使用自定义TubeGeometry实现可变半径
-            const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, 0));
+            // 使用自定义TubeGeometry实现可变半径（使用路径的z坐标支持3D对称）
+            const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, p.z ?? 0));
             const curve = new THREE.CatmullRomCurve3(curvePoints);
             const tubularSegments = Math.max(16, path.length * 3);
             const radialSegments = 8;
@@ -1327,8 +1380,8 @@ export function createLightsaberStrokeMesh(
             return baseLineWidth * radiusScale * Math.max(0.1, taperFactor);
         };
 
-        // 创建连续的曲线点
-        const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, 0));
+        // 创建连续的曲线点（使用路径的z坐标支持3D对称）
+        const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, p.z ?? 0));
         const curve = new THREE.CatmullRomCurve3(curvePoints);
         const tubularSegments = Math.max(16, path.length * 3);
         const radialSegments = 8;
@@ -1449,31 +1502,100 @@ function applySymmetryToPath(
     basePath: { x: number; y: number; pressure: number }[],
     symmetryMode: SymmetryMode,
     divisions: number
-): { x: number; y: number; pressure: number }[][] {
+): { x: number; y: number; z?: number; pressure: number }[][] {
     if (symmetryMode === 'none') return [basePath];
 
-    const allPaths: { x: number; y: number; pressure: number }[][] = [];
+    const allPaths: { x: number; y: number; z?: number; pressure: number }[][] = [];
 
-    for (let div = 0; div < divisions; div++) {
-        const angle = (div / divisions) * Math.PI * 2;
-        const cos = Math.cos(angle);
-        const sin = Math.sin(angle);
+    if (symmetryMode === 'radial') {
+        // 径向对称：简单旋转复制
+        for (let div = 0; div < divisions; div++) {
+            const angle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
 
-        const rotatedPath = basePath.map(p => ({
-            x: p.x * cos - p.y * sin,
-            y: p.x * sin + p.y * cos,
-            pressure: p.pressure
-        }));
-        allPaths.push(rotatedPath);
+            const rotatedPath = basePath.map(p => ({
+                x: p.x * cos - p.y * sin,
+                y: p.x * sin + p.y * cos,
+                pressure: p.pressure
+            }));
+            allPaths.push(rotatedPath);
+        }
+    } else if (symmetryMode === 'kaleidoscope') {
+        // 万花筒模式：旋转+镜像
+        for (let div = 0; div < divisions; div++) {
+            const angle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
 
-        // Kaleidoscope模式添加镜像
-        if (symmetryMode === 'kaleidoscope') {
+            const rotatedPath = basePath.map(p => ({
+                x: p.x * cos - p.y * sin,
+                y: p.x * sin + p.y * cos,
+                pressure: p.pressure
+            }));
+            allPaths.push(rotatedPath);
+
+            // Kaleidoscope模式添加镜像
             const mirroredPath = basePath.map(p => ({
                 x: -(p.x * cos - p.y * sin),
                 y: p.x * sin + p.y * cos,
                 pressure: p.pressure
             }));
             allPaths.push(mirroredPath);
+        }
+    } else if (symmetryMode === 'starburst') {
+        // 星芒模式：奇数分割向外延伸，偶数分割向内收缩
+        const innerScale = 0.5;
+        const outerScale = 1.3;
+        for (let div = 0; div < divisions; div++) {
+            const angle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const scale = (div % 2 === 0) ? outerScale : innerScale;
+
+            const scaledPath = basePath.map(p => ({
+                x: (p.x * cos - p.y * sin) * scale,
+                y: (p.x * sin + p.y * cos) * scale,
+                pressure: p.pressure
+            }));
+            allPaths.push(scaledPath);
+        }
+    } else if (symmetryMode === 'prism') {
+        // 棱镜模式：3D正多边形棱柱面复制
+        const prismHeight = 0.3;
+        const faceCount = Math.max(3, divisions);
+
+        for (let div = 0; div < faceCount; div++) {
+            const angle = (div / faceCount) * Math.PI * 2;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+
+            // 计算Z偏移（棱镜各面的深度位置）
+            const faceAngle = (Math.PI * 2 / faceCount) * div;
+            const zOffset = Math.sin(faceAngle) * prismHeight;
+
+            const rotatedPath = basePath.map(p => ({
+                x: p.x * cos - p.y * sin,
+                y: p.x * sin + p.y * cos,
+                z: zOffset,
+                pressure: p.pressure
+            }));
+            allPaths.push(rotatedPath);
+
+            // 棱镜对面镜像（当面数>=4时）
+            if (faceCount >= 4) {
+                const oppositeAngle = angle + Math.PI;
+                const cosOpp = Math.cos(oppositeAngle);
+                const sinOpp = Math.sin(oppositeAngle);
+
+                const mirroredPath = basePath.map(p => ({
+                    x: p.x * cosOpp - p.y * sinOpp,
+                    y: p.x * sinOpp + p.y * cosOpp,
+                    z: -zOffset,
+                    pressure: p.pressure
+                }));
+                allPaths.push(mirroredPath);
+            }
         }
     }
 

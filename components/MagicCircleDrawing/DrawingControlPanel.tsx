@@ -86,7 +86,9 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
     const symmetryModes: { mode: SymmetryMode; label: string }[] = [
         { mode: 'none', label: '无' },
         { mode: 'radial', label: '径向' },
-        { mode: 'kaleidoscope', label: '万花筒' }
+        { mode: 'kaleidoscope', label: '万花筒' },
+        { mode: 'starburst', label: '星芒' },
+        { mode: 'prism', label: '棱镜' }
     ];
 
     // 对称分割数选项
