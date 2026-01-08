@@ -468,6 +468,15 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         layer.symmetryDivisions,
                         defaultMcSettings
                     );
+                } else if (stroke.brushType === 'lightsaber') {
+                    mesh = createLightsaberStrokeMesh(
+                        stroke.points,
+                        stroke.color,
+                        stroke.lightsaberSettings || {},
+                        layer.symmetryMode,
+                        layer.symmetryDivisions,
+                        defaultMcSettings
+                    );
                 } else {
                     mesh = createLineStrokeMesh(
                         stroke.points,
@@ -1671,17 +1680,19 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             </div>
                         </>
                     )}
-                    {/* 颜色选择 - 在滚动区域内 */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                        <span style={{ fontSize: 12, color: '#ffffff' }}>颜色</span>
-                        <input
-                            type="color"
-                            value={brushColor}
-                            onChange={(e) => setBrushColor(e.target.value)}
-                            style={{ width: 40, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }}
-                        />
-                        <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace' }}>{brushColor}</span>
-                    </div>
+                    {/* 颜色选择 - 在滚动区域内（光剑模式下隐藏，因为光剑有独立双色选择） */}
+                    {brushType !== 'lightsaber' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                            <span style={{ fontSize: 12, color: '#ffffff' }}>颜色</span>
+                            <input
+                                type="color"
+                                value={brushColor}
+                                onChange={(e) => setBrushColor(e.target.value)}
+                                style={{ width: 40, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }}
+                            />
+                            <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace' }}>{brushColor}</span>
+                        </div>
+                    )}
                 </div>
 
             </div>
