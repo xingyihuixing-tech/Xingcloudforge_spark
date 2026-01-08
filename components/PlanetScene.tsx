@@ -11755,24 +11755,27 @@ void main() {
               vec4 texColor = texture2D(uTexture, texUV);
               alpha = texColor.a;
               
-              // === 修复正方形轮廓 ===
+              // === 修复正方形轮廓（只处理角落，不裁剪整体形状）===
               // 1. 提高透明度阈值，丢弃边缘半透明像素
               if(alpha < 0.1) discard;
               
-              // 2. 添加圆形遮罩，柔化边缘
-              vec2 centeredUV = gl_PointCoord - 0.5; // [-0.5, 0.5]
-              float distFromCenter = length(centeredUV) * 2.0; // [0, 1.414]
+              // 2. 只在正方形四角区域衰减（不影响中心贴图形状）
+              vec2 centeredUV = abs(gl_PointCoord - 0.5) * 2.0; // [0, 1] 从中心到边缘
+              // 计算到正方形边缘的距离（角落区域值更大）
+              float cornerDist = max(centeredUV.x, centeredUV.y);
+              // 只有超出内切圆的角落区域才衰减
+              float distFromCenter = length(centeredUV);
+              // 角落检测：当距中心距离 > 正方形边缘距离时，说明在角落
+              float cornerFactor = smoothstep(0.95, 1.3, distFromCenter);
+              // 角落区域透明度衰减
+              alpha *= (1.0 - cornerFactor * 0.8);
               
-              // 圆形边缘软化：从半径0.9开始衰减到1.0
-              float circularMask = 1.0 - smoothstep(0.85, 1.0, distFromCenter);
-              alpha *= circularMask;
-              
-              // 3. 额外的边缘衰减，让贴图边缘更柔和
-              float edgeFade = smoothstep(0.0, 0.15, alpha);
+              // 3. 对低透明度区域进行软化
+              float edgeFade = smoothstep(0.0, 0.1, alpha);
               alpha *= edgeFade;
               
               // 最终透明度检查
-              if(alpha < 0.05) discard;
+              if(alpha < 0.03) discard;
             } else {
               alpha = starShape(uv);
             }
