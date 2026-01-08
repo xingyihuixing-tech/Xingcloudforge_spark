@@ -16,7 +16,8 @@ import {
     DrawingBrushType,
     SymmetryMode,
     ParticleRingSettings,
-    SilkRingSettings
+    SilkRingSettings,
+    BrushPreset
 } from '../../types';
 import {
     createDrawingScene,
@@ -33,6 +34,10 @@ import {
 } from '../../utils/drawingSystem';
 import { DrawingControlPanel } from './DrawingControlPanel';
 import { UndoIcon, RedoIcon, BrushIcon, ClearIcon } from './Icons';
+import { useUser } from '../../contexts/UserContext';
+
+// 本地存储键
+const BRUSH_PRESETS_STORAGE_KEY = 'nebula_brush_presets';
 
 // ==================== 默认画笔设置 ====================
 
@@ -85,7 +90,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         strokesGroup: null,
         symmetryAxesGroup: null,
         centerPoint: null,
-        border: null,
         currentStrokeMesh: null
     });
 
@@ -129,6 +133,65 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     // 图层 solo 模式（仅显示当前图层）
     const [soloLayerId, setSoloLayerId] = useState<string | null>(null);
 
+    // 墨迹预设
+    const { currentUser, saveCloudConfig, loadCloudConfig } = useUser();
+    const [brushPresets, setBrushPresets] = useState<BrushPreset[]>([]);
+    const [showPresetNameInput, setShowPresetNameInput] = useState(false);
+    const [newPresetName, setNewPresetName] = useState('');
+    const presetNameInputRef = useRef<HTMLInputElement>(null);
+
+    // 加载预设（从本地存储，未来可扩展为云同步）
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem(BRUSH_PRESETS_STORAGE_KEY);
+            if (saved) {
+                setBrushPresets(JSON.parse(saved));
+            }
+        } catch (e) {
+            console.error('Failed to load brush presets:', e);
+        }
+    }, []);
+
+    // 保存预设到本地存储（并尝试云同步）
+    const savePresetsToStorage = useCallback((presets: BrushPreset[]) => {
+        setBrushPresets(presets);
+        localStorage.setItem(BRUSH_PRESETS_STORAGE_KEY, JSON.stringify(presets));
+        // 尝试云同步
+        if (currentUser) {
+            saveCloudConfig({ brushPresets: presets }).catch(e => console.warn('Cloud sync failed:', e));
+        }
+    }, [currentUser, saveCloudConfig]);
+
+    // 保存当前配置为预设
+    const handleSavePreset = useCallback(() => {
+        if (!newPresetName.trim()) return;
+        const newPreset: BrushPreset = {
+            id: `preset_${Date.now()}`,
+            name: newPresetName.trim(),
+            createdAt: Date.now(),
+            brushType,
+            particleSettings: brushType === 'particle' ? { ...particleSettings } : undefined,
+            silkSettings: brushType === 'lineRing' ? { ...silkSettings } : undefined,
+            color: brushColor
+        };
+        savePresetsToStorage([...brushPresets, newPreset]);
+        setNewPresetName('');
+        setShowPresetNameInput(false);
+    }, [newPresetName, brushType, particleSettings, silkSettings, brushColor, brushPresets, savePresetsToStorage]);
+
+    // 应用预设
+    const handleApplyPreset = useCallback((preset: BrushPreset) => {
+        setBrushType(preset.brushType);
+        if (preset.particleSettings) setParticleSettings(preset.particleSettings);
+        if (preset.silkSettings) setSilkSettings(preset.silkSettings);
+        setBrushColor(preset.color);
+    }, []);
+
+    // 删除预设
+    const handleDeletePreset = useCallback((presetId: string) => {
+        savePresetsToStorage(brushPresets.filter(p => p.id !== presetId));
+    }, [brushPresets, savePresetsToStorage]);
+
     // Edit/Preview 模式切换
     const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
     const orbitControlsRef = useRef<OrbitControls | null>(null);
@@ -144,7 +207,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (!container) return;
 
         // 1. 创建场景
-        const { scene, camera, canvasGroup, strokesGroup, symmetryAxesGroup, centerPoint, border } = createDrawingScene();
+        const { scene, camera, canvasGroup, strokesGroup, symmetryAxesGroup, centerPoint } = createDrawingScene();
 
         refsRef.current = {
             camera,
@@ -153,7 +216,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             strokesGroup,
             symmetryAxesGroup,
             centerPoint,
-            border,
             currentStrokeMesh: null
         };
 
@@ -204,6 +266,20 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (refs.centerPoint && (refs.centerPoint.material as THREE.ShaderMaterial).uniforms) {
                 const elapsed = (Date.now() - startTime) / 1000;
                 (refs.centerPoint.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
+
+                // 更新所有丝环笔画的uTime (修复压感模式下流动效果静止)
+                if (refs.strokesGroup) {
+                    refs.strokesGroup.traverse((child) => {
+                        if (child instanceof THREE.Group && child.userData.silkMaterials) {
+                            const materials = child.userData.silkMaterials as THREE.ShaderMaterial[];
+                            for (const mat of materials) {
+                                if (mat.uniforms && mat.uniforms.uTime) {
+                                    mat.uniforms.uTime.value = elapsed;
+                                }
+                            }
+                        }
+                    });
+                }
             }
 
             renderer.render(refs.scene, refs.camera);
@@ -1114,6 +1190,144 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         style={{ width: 40, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }}
                     />
                     <span style={{ fontSize: 11, color: '#666', fontFamily: 'monospace' }}>{brushColor}</span>
+                </div>
+
+                {/* 墨迹预设 */}
+                <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, color: '#ffffff' }}>墨迹预设</span>
+                        <button
+                            onClick={() => {
+                                setShowPresetNameInput(true);
+                                setTimeout(() => presetNameInputRef.current?.focus(), 50);
+                            }}
+                            style={{
+                                width: 24,
+                                height: 24,
+                                background: 'transparent',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                borderRadius: 4,
+                                color: '#ffffff',
+                                fontSize: 16,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}
+                            title="保存当前配置为预设"
+                        >
+                            +
+                        </button>
+                    </div>
+
+                    {/* 新建预设输入框 */}
+                    {showPresetNameInput && (
+                        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                            <input
+                                ref={presetNameInputRef}
+                                type="text"
+                                value={newPresetName}
+                                onChange={(e) => setNewPresetName(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSavePreset();
+                                    if (e.key === 'Escape') setShowPresetNameInput(false);
+                                }}
+                                placeholder="预设名称"
+                                style={{
+                                    flex: 1,
+                                    padding: '4px 8px',
+                                    fontSize: 11,
+                                    background: 'rgba(0,0,0,0.3)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    borderRadius: 4,
+                                    color: '#fff',
+                                    outline: 'none'
+                                }}
+                            />
+                            <button
+                                onClick={handleSavePreset}
+                                style={{
+                                    padding: '4px 10px',
+                                    fontSize: 11,
+                                    background: 'transparent',
+                                    border: '1px solid rgba(255,255,255,0.3)',
+                                    borderRadius: 4,
+                                    color: '#fff',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                保存
+                            </button>
+                        </div>
+                    )}
+
+                    {/* 预设列表 */}
+                    <div style={{
+                        maxHeight: 120,
+                        overflowY: 'auto',
+                        background: 'rgba(0,0,0,0.2)',
+                        borderRadius: 6,
+                        border: '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                        {brushPresets.length === 0 ? (
+                            <div style={{ padding: 12, fontSize: 11, color: '#666', textAlign: 'center' }}>
+                                暂无预设
+                            </div>
+                        ) : (
+                            brushPresets.map(preset => (
+                                <div
+                                    key={preset.id}
+                                    onClick={() => handleApplyPreset(preset)}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'space-between',
+                                        padding: '6px 10px',
+                                        cursor: 'pointer',
+                                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                                        transition: 'background 0.15s'
+                                    }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.08)')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <div style={{
+                                            width: 10,
+                                            height: 10,
+                                            borderRadius: '50%',
+                                            background: preset.color
+                                        }} />
+                                        <span style={{ fontSize: 11, color: '#fff' }}>{preset.name}</span>
+                                        <span style={{ fontSize: 9, color: '#666' }}>
+                                            {preset.brushType === 'particle' ? '粒子' : '丝环'}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeletePreset(preset.id);
+                                        }}
+                                        style={{
+                                            width: 20,
+                                            height: 20,
+                                            background: 'transparent',
+                                            border: '1px solid rgba(239,68,68,0.5)',
+                                            borderRadius: 4,
+                                            color: '#ef4444',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center'
+                                        }}
+                                        title="删除预设"
+                                    >
+                                        ×
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
                 </div>
 
             </div>

@@ -1959,3 +1959,13 @@ export interface DrawingModeState {
   redoStack: MagicCircleStroke[];
 }
 
+// 墨迹预设（画笔配置预设）
+export interface BrushPreset {
+  id: string;
+  name: string;
+  createdAt: number;
+  brushType: DrawingBrushType;
+  particleSettings?: Partial<ParticleRingSettings>;
+  silkSettings?: Partial<SilkRingSettings>;
+  color: string;
+}

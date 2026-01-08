@@ -3,6 +3,7 @@
  * output: 3D drawing canvas with orthographic camera, particle/silk ring stroke rendering (particle stroke uses arc-length density + pressure mapping; silk stroke forces depthTest=false + stable renderOrder to avoid transparent sorting flicker)
  * pos: Drawing system utilities for PlanetScene integration
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
+ * 2026-01-08: 粒子密度缩放因子从25提高到80并移除上限；粒子光晕smoothstep范围收紧(0.4→0.22)并降低uEmissive(1.5→0.9)/uCoreBrightness(2.0→1.4)；丝环能量脉冲系数从1.5降为0.8，uBloomBoost从0.3降为0.12
  */
 
 import * as THREE from 'three';
@@ -332,15 +333,10 @@ export function createParticleStrokeMesh(
         return new THREE.Points(geometry);
     }
 
-    // Step 2: 计算粒子总数 = 密度 × 路径长度
-    const canvasDensityScale = 25;
-    const symmetryCopies = symmetryMode === 'none' ? 1 : (symmetryMode === 'kaleidoscope' ? symmetryDivisions * 2 : symmetryDivisions);
-    const maxTotalParticles = 60000;
-    const maxSpawnPerSample = pressureMode === 'brightness' ? 3 : (pressureMode === 'calligraphy' ? 2 : 1);
-    const maxParticlesPerBaseSample = Math.max(1, Math.floor(maxTotalParticles / Math.max(1, symmetryCopies * maxSpawnPerSample)));
-
+    // Step 2: 计算粒子总数 = 密度 × 路径长度（不设上限，让密度完全生效）
+    const canvasDensityScale = 80;
     const particleCountTarget = Math.max(1, Math.floor(particleDensity * totalLength * canvasDensityScale));
-    const particleCount = Math.max(1, Math.min(particleCountTarget, maxParticlesPerBaseSample));
+    const particleCount = particleCountTarget;
 
     const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
     const pressureCurve = (p: number) => {
@@ -397,7 +393,6 @@ export function createParticleStrokeMesh(
             const spawnCount = 1 + Math.floor(pe * spawnExtraMax);
 
             for (let s = 0; s < spawnCount; s++) {
-                if (particleSizes.length >= maxTotalParticles) break;
 
                 const jitter = jitterBase * jitterScale;
                 const jx = (Math.random() - 0.5) * jitter;
@@ -449,8 +444,8 @@ export function createParticleStrokeMesh(
         uniforms: {
             uTime: { value: 0 },
             uGlowIntensity: { value: settings.brightness ?? 2.0 },
-            uEmissive: { value: 1.5 },
-            uCoreBrightness: { value: 2.0 },
+            uEmissive: { value: 0.9 },
+            uCoreBrightness: { value: 1.4 },
             uPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
             uPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
             uPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
@@ -613,16 +608,16 @@ void main() {
   if (dist > 0.5) discard;
   
   // 核心亮度 (中心更亮)
-  float core = 1.0 - smoothstep(0.0, 0.12, dist);
+  float core = 1.0 - smoothstep(0.0, 0.10, dist);
   
-  // 光晕衰减 (线性衰减，不使用pow放大)
-  float glow = 1.0 - smoothstep(0.0, 0.4, dist);
+  // 光晕衰减 (收紧范围)
+  float glow = 1.0 - smoothstep(0.0, 0.22, dist);
   
   // 外层光晕 (更紧凑)
-  float outerGlow = 1.0 - smoothstep(0.25, 0.4, dist);
+  float outerGlow = 1.0 - smoothstep(0.18, 0.28, dist);
   
   // 合成亮度 (降低系数)
-  float brightness = core * uCoreBrightness + glow * uEmissive * 0.6 + outerGlow * 0.3;
+  float brightness = core * uCoreBrightness + glow * uEmissive * 0.35 + outerGlow * 0.15;
   
   // 应用染色功能
   vec3 dyedColor = getDyeColor(vColor, vRadialDist);
@@ -755,7 +750,7 @@ void main() {
     sparkle = step(uSparkleThreshold, fract(sin(dot(vec2(x, y), vec2(12.9898, 78.233))) * 43758.5453));
   }
 
-  float brightness = strands * (energy * 1.5 + sparkle);
+  float brightness = strands * (energy * 0.8 + sparkle);
 
   // 4. 菲涅尔边缘
   vec3 normal = normalize(vNormal);
@@ -766,8 +761,8 @@ void main() {
   float colorT = fract(vUv.x + sin(uTime * 0.5) * 0.1);
   vec3 baseColor = getColor(colorT);
   
-  vec3 finalColor = baseColor * (1.0 + brightness * uEmissive);
-  finalColor *= (1.0 + uBloomBoost * brightness * 0.5);
+  vec3 finalColor = baseColor * (1.0 + brightness * uEmissive * 0.6);
+  finalColor *= (1.0 + uBloomBoost * brightness * 0.25);
   
   // 应用法阵级别脉冲
   if (uMCPulseEnabled > 0.5) {
@@ -825,8 +820,13 @@ export function createLineStrokeMesh(
     }
 ): THREE.Group {
     const group = new THREE.Group();
+    // 收集所有丝环材质，用于后续更新uTime
+    const silkMaterials: THREE.ShaderMaterial[] = [];
 
-    if (points.length < 2) return group;
+    if (points.length < 2) {
+        group.userData.silkMaterials = silkMaterials;
+        return group;
+    }
 
     const colorObj = new THREE.Color(color);
     const pressureMode = settings.pressureMode ?? 'none';
@@ -875,8 +875,11 @@ export function createLineStrokeMesh(
     }
 
     // 为每条路径创建线条 - 使用真正的丝环着色器
-    let renderOrderCursor = 51;
-    for (const path of allPaths) {
+    // 修复闪烁：同一笔画的所有分段使用统一的renderOrder，不同路径间隔开
+    const baseRenderOrder = 51;
+    for (let pathIndex = 0; pathIndex < allPaths.length; pathIndex++) {
+        const path = allPaths[pathIndex];
+        const pathRenderOrder = baseRenderOrder + pathIndex;  // 每条路径一个renderOrder
         if (path.length < 2) continue;
 
         if (pressureMode === 'none') {
@@ -894,8 +897,8 @@ export function createLineStrokeMesh(
                     uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
                     uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
                     uOpacity: { value: settings.opacity ?? 0.85 },
-                    uEmissive: { value: settings.emissive ?? 1.5 },
-                    uBloomBoost: { value: 0.3 },
+                    uEmissive: { value: settings.emissive ?? 0.9 },
+                    uBloomBoost: { value: 0.12 },
                     // 染色模式 - 使用法阵级别参数
                     uColorMode: { value: mcSettings.colorMode ?? 0 },
                     uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
@@ -924,7 +927,8 @@ export function createLineStrokeMesh(
             });
 
             const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = renderOrderCursor++;
+            mesh.renderOrder = pathRenderOrder;  // 同一路径内所有分段使用相同renderOrder
+            silkMaterials.push(material);  // 收集材质用于后续uTime更新
             group.add(mesh);
             continue;
         }
@@ -1003,7 +1007,7 @@ export function createLineStrokeMesh(
                     uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
                     uOpacity: { value: baseOpacity * opacityScale },
                     uEmissive: { value: baseEmissive * emissiveScale },
-                    uBloomBoost: { value: 0.3 },
+                    uBloomBoost: { value: 0.12 },
                     // 染色模式 - 使用法阵级别参数
                     uColorMode: { value: mcSettings.colorMode ?? 0 },
                     uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
@@ -1032,10 +1036,14 @@ export function createLineStrokeMesh(
             });
 
             const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = renderOrderCursor++;
+            mesh.renderOrder = pathRenderOrder;  // 同一路径内所有分段使用相同renderOrder
+            silkMaterials.push(material);  // 收集材质用于后续uTime更新
             group.add(mesh);
         }
     }
+
+    // 将材质列表存储到group.userData，以便在动画循环中更新uTime
+    group.userData.silkMaterials = silkMaterials;
 
     return group;
 }
