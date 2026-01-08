@@ -1435,6 +1435,7 @@ export interface LightsaberSettings {
 
   // 几何参数
   thickness: number;         // 总粗细 0.01-0.1
+  taperLength: number;       // 端点渐变长度 0-0.5（占路径比例）
 
   // 动态效果
   pulseEnabled: boolean;     // 脉冲开关
@@ -1445,7 +1446,7 @@ export interface LightsaberSettings {
   pressureMode: LightsaberPressureMode;
 
   // 笔迹平滑
-  smoothness: number;        // 平滑度 0-1（0=不平滑，1=非常平滑）
+  smoothness: number;        // 平滑度 0-3
 }
 
 // 光环系统配置

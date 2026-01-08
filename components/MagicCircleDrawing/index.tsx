@@ -76,11 +76,12 @@ const defaultLightsaberSettings: Partial<LightsaberSettings> = {
     glowIntensity: 1.5,      // 光晕强度 0.5-3
     glowFalloff: 2.0,        // 光晕衰减 1-5
     thickness: 0.03,         // 线条粗细 0.001-0.1
+    taperLength: 0.15,       // 端点渐变 0-0.5
     pulseEnabled: false,     // 脉冲开关
     pulseSpeed: 1.0,         // 脉冲速度 0.5-3
-    pulseIntensity: 0.2,     // 脈冲强度 0-0.5
+    pulseIntensity: 0.2,     // 脉冲强度 0-0.5
     pressureMode: 'none',
-    smoothness: 0.5          // 笔迹平滑 0-1
+    smoothness: 0.5          // 笔迹平滑 0-3
 };
 
 // ==================== Props 接口 ====================
@@ -1490,12 +1491,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         onClick={() => setLightsaberSettings(prev => ({ ...prev, pressureMode: 'none' }))}
                                         style={{
                                             flex: 1,
-                                            padding: '5px 0',
+                                            padding: '6px 0',
                                             background: 'transparent',
-                                            border: `1px solid ${lightsaberSettings.pressureMode === 'none' ? 'var(--ui-primary)' : 'var(--ui-secondary)'}`,
-                                            color: lightsaberSettings.pressureMode === 'none' ? 'var(--ui-primary)' : '#666',
-                                            fontSize: 10,
-                                            borderRadius: 4,
+                                            border: (lightsaberSettings.pressureMode ?? 'none') === 'none' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
+                                            borderRadius: 6,
+                                            color: (lightsaberSettings.pressureMode ?? 'none') === 'none' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
                                             cursor: 'pointer',
                                             transition: 'all 0.2s'
                                         }}
@@ -1506,12 +1507,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         onClick={() => setLightsaberSettings(prev => ({ ...prev, pressureMode: 'calligraphy' }))}
                                         style={{
                                             flex: 1,
-                                            padding: '5px 0',
+                                            padding: '6px 0',
                                             background: 'transparent',
-                                            border: `1px solid ${lightsaberSettings.pressureMode === 'calligraphy' ? 'var(--ui-primary)' : 'var(--ui-secondary)'}`,
-                                            color: lightsaberSettings.pressureMode === 'calligraphy' ? 'var(--ui-primary)' : '#666',
-                                            fontSize: 10,
-                                            borderRadius: 4,
+                                            border: (lightsaberSettings.pressureMode ?? 'none') === 'calligraphy' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
+                                            borderRadius: 6,
+                                            color: (lightsaberSettings.pressureMode ?? 'none') === 'calligraphy' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
                                             cursor: 'pointer',
                                             transition: 'all 0.2s'
                                         }}
@@ -1522,12 +1523,12 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                         onClick={() => setLightsaberSettings(prev => ({ ...prev, pressureMode: 'brightness' }))}
                                         style={{
                                             flex: 1,
-                                            padding: '5px 0',
+                                            padding: '6px 0',
                                             background: 'transparent',
-                                            border: `1px solid ${lightsaberSettings.pressureMode === 'brightness' ? 'var(--ui-primary)' : 'var(--ui-secondary)'}`,
-                                            color: lightsaberSettings.pressureMode === 'brightness' ? 'var(--ui-primary)' : '#666',
-                                            fontSize: 10,
-                                            borderRadius: 4,
+                                            border: (lightsaberSettings.pressureMode ?? 'none') === 'brightness' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
+                                            borderRadius: 6,
+                                            color: (lightsaberSettings.pressureMode ?? 'none') === 'brightness' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
                                             cursor: 'pointer',
                                             transition: 'all 0.2s'
                                         }}
@@ -1605,15 +1606,31 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>笔迹平滑</span>
-                                    <span style={{ color: '#ffffff' }}>{((lightsaberSettings.smoothness ?? 0.5) * 100).toFixed(0)}%</span>
+                                    <span style={{ color: '#ffffff' }}>{(lightsaberSettings.smoothness ?? 0.5).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
                                     min={0}
-                                    max={100}
+                                    max={3}
+                                    step={0.1}
+                                    value={lightsaberSettings.smoothness ?? 0.5}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, smoothness: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 端点渐变 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>端点渐变</span>
+                                    <span style={{ color: '#ffffff' }}>{((lightsaberSettings.taperLength ?? 0.15) * 100).toFixed(0)}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={50}
                                     step={5}
-                                    value={(lightsaberSettings.smoothness ?? 0.5) * 100}
-                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, smoothness: Number(e.target.value) / 100 }))}
+                                    value={(lightsaberSettings.taperLength ?? 0.15) * 100}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, taperLength: Number(e.target.value) / 100 }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>

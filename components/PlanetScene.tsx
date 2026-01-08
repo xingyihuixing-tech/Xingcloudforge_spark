@@ -12911,7 +12911,18 @@ void main() {
           layer.strokes.forEach((stroke: MagicCircleStroke) => {
             if (!stroke.points || stroke.points.length < 2) return;
             let strokeMesh: THREE.Object3D;
-            // 法阵级别参数（透明度、色相、亮度、脉冲、粒子缩放）- 大幅降低光晕强度
+            // 法阵级别参数（透明度、色相、亮度、脉冲、粒子缩放、染色）
+            const gc = settings.gradientColor;
+            const colorModeMap: { [key: string]: number } = { 'none': 0, 'twoColor': 1, 'threeColor': 2, 'procedural': 3, 'single': 4 };
+            const colorMode = gc?.enabled ? (colorModeMap[gc.mode] ?? 0) : 0;
+            const parseHexToVec3 = (hex: string) => {
+              const c = hex.replace('#', '');
+              return new THREE.Vector3(
+                parseInt(c.substring(0, 2), 16) / 255,
+                parseInt(c.substring(2, 4), 16) / 255,
+                parseInt(c.substring(4, 6), 16) / 255
+              );
+            };
             const mcSettings = {
               opacity: settings.opacity,
               hueShift: settings.hueShift,
@@ -12919,7 +12930,15 @@ void main() {
               pulseEnabled: settings.pulseEnabled,
               pulseSpeed: settings.pulseSpeed,
               pulseIntensity: settings.pulseIntensity,
-              particleSizeScale: 0.6  // 场景中粒子尺寸缩小，降低光晕强度
+              particleSizeScale: 0.6,  // 场景中粒子尺寸缩小，降低光晕强度
+              // 染色功能参数
+              saturationBoost: settings.saturation ?? 0,
+              colorMode: colorMode,
+              color1: gc?.color1 ? parseHexToVec3(gc.color1) : new THREE.Vector3(1, 1, 1),
+              color2: gc?.color2 ? parseHexToVec3(gc.color2) : new THREE.Vector3(1, 1, 1),
+              color3: gc?.color3 ? parseHexToVec3(gc.color3) : new THREE.Vector3(1, 1, 1),
+              colorMidPos: gc?.midPosition ?? 0.5,
+              proceduralIntensity: gc?.proceduralIntensity ?? 1.0
             };
             if (stroke.brushType === 'particle') {
               strokeMesh = createParticleStrokeMesh(stroke.points, stroke.color, stroke.particleRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
