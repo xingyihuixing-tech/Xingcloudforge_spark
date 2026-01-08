@@ -25,6 +25,65 @@ const CANVAS_SIZE = 1; // 归一化画布尺寸 (-0.5 to 0.5)
 const DEFAULT_SYMMETRY_DIVISIONS = 8;
 const DEFAULT_COLOR = '#ffaa00';
 
+// ==================== 笔迹平滑函数 ====================
+
+/**
+ * 使用CatmullRomCurve3对笔迹点进行平滑处理
+ * @param points 原始采样点
+ * @param smoothness 平滑度 (0=不平滑, 1=非常平滑)
+ * @param minPoints 至少需要的点数才进行平滑
+ * @returns 平滑后的点数组
+ */
+export function smoothStrokePoints(
+    points: StrokePoint[],
+    smoothness: number = 0.5,
+    minPoints: number = 4
+): StrokePoint[] {
+    // 点数太少不进行平滑
+    if (points.length < minPoints || smoothness <= 0) {
+        return points;
+    }
+
+    // 创建3D曲线（z用于存储压力值的索引）
+    const curve3DPoints = points.map((p, i) => new THREE.Vector3(p.x, p.y, i));
+
+    // 使用CatmullRom样条曲线
+    const curve = new THREE.CatmullRomCurve3(curve3DPoints, false, 'catmullrom', 0.5);
+
+    // 根据平滑度决定采样密度
+    // smoothness=0: 保持原始点数
+    // smoothness=1: 采样更多点使曲线更平滑
+    const outputPointCount = Math.max(
+        points.length,
+        Math.floor(points.length * (1 + smoothness * 2))
+    );
+
+    const smoothedPoints: StrokePoint[] = [];
+
+    for (let i = 0; i < outputPointCount; i++) {
+        const t = i / (outputPointCount - 1);
+        const point = curve.getPoint(t);
+
+        // 从z坐标插值压力值
+        const originalIndex = point.z;
+        const lowerIndex = Math.floor(originalIndex);
+        const upperIndex = Math.min(lowerIndex + 1, points.length - 1);
+        const indexFrac = originalIndex - lowerIndex;
+
+        const pressure = points[lowerIndex].pressure * (1 - indexFrac) +
+            points[upperIndex].pressure * indexFrac;
+
+        smoothedPoints.push({
+            x: point.x,
+            y: point.y,
+            pressure: pressure,
+            timestamp: Date.now() // 平滑后的点使用当前时间戳
+        });
+    }
+
+    return smoothedPoints;
+}
+
 // ==================== 绘图系统状态接口 ====================
 
 export interface DrawingSystemState {
@@ -297,6 +356,10 @@ export function createParticleStrokeMesh(
         particleSizeScale?: number;
     }
 ): THREE.Points {
+    // 应用笔迹平滑
+    const smoothness = settings.smoothness ?? 0.5;
+    const smoothedPoints = smoothStrokePoints(points, smoothness);
+
     // 沿路径均匀插值生成粒子（参考粒子环实现）
     const particlePositions: number[] = [];
     const particleSizes: number[] = [];
@@ -313,12 +376,12 @@ export function createParticleStrokeMesh(
     const pressureMode = settings.pressureMode ?? 'calligraphy';
     const colorObj = new THREE.Color(color);
 
-    // Step 1: 计算路径累积长度数组
+    // Step 1: 计算路径累积长度数组（使用平滑后的点）
     const segmentLengths: number[] = [0];
     let totalLength = 0;
-    for (let i = 1; i < points.length; i++) {
-        const dx = points[i].x - points[i - 1].x;
-        const dy = points[i].y - points[i - 1].y;
+    for (let i = 1; i < smoothedPoints.length; i++) {
+        const dx = smoothedPoints[i].x - smoothedPoints[i - 1].x;
+        const dy = smoothedPoints[i].y - smoothedPoints[i - 1].y;
         totalLength += Math.sqrt(dx * dx + dy * dy);
         segmentLengths.push(totalLength);
     }
@@ -366,8 +429,8 @@ export function createParticleStrokeMesh(
         const segLen = segEnd - segStart;
         const t = segLen > 0.0001 ? (targetDist - segStart) / segLen : 0;
 
-        const p0 = points[segIndex];
-        const p1 = points[Math.min(segIndex + 1, points.length - 1)];
+        const p0 = smoothedPoints[segIndex];
+        const p1 = smoothedPoints[Math.min(segIndex + 1, smoothedPoints.length - 1)];
 
         // 插值位置
         const baseX = p0.x + (p1.x - p0.x) * t;
@@ -953,6 +1016,10 @@ export function createLightsaberStrokeMesh(
     const group = new THREE.Group();
     if (points.length < 2) return group;
 
+    // 应用笔迹平滑
+    const smoothness = settings.smoothness ?? 0.5;
+    const smoothedPoints = smoothStrokePoints(points, smoothness);
+
     const lightsaberMaterials: THREE.ShaderMaterial[] = [];
     const baseLineWidth = (settings.thickness || 0.03) * 0.5;
     const mcSettings = magicCircleSettings || {};
@@ -965,18 +1032,109 @@ export function createLightsaberStrokeMesh(
     const pressureMode = settings.pressureMode || 'none';
 
     // 应用对称
-    const basePath = points.map(p => ({ x: p.x - 0.5, y: p.y - 0.5, pressure: p.pressure }));
+    const basePath = smoothedPoints.map(p => ({ x: p.x - 0.5, y: p.y - 0.5, pressure: p.pressure }));
     const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions);
 
     const baseRenderOrder = 53;
+
+    // 端点渐变参数
+    const taperLength = 0.15; // 渐变长度占总长度的比例
+
     for (let pathIndex = 0; pathIndex < allPaths.length; pathIndex++) {
         const path = allPaths[pathIndex];
         const pathRenderOrder = baseRenderOrder + pathIndex;
         if (path.length < 2) continue;
 
+        // 计算路径总长度
+        let totalLength = 0;
+        const segmentLengths: number[] = [0];
+        for (let i = 1; i < path.length; i++) {
+            const dx = path[i].x - path[i - 1].x;
+            const dy = path[i].y - path[i - 1].y;
+            totalLength += Math.sqrt(dx * dx + dy * dy);
+            segmentLengths.push(totalLength);
+        }
+
+        // 计算每个点的半径（端点渐变）
+        const getRadiusAtDistance = (dist: number): number => {
+            const t = dist / totalLength;
+            let radiusFactor = 1.0;
+
+            // 起点渐变
+            if (t < taperLength) {
+                radiusFactor = t / taperLength;
+            }
+            // 终点渐变
+            else if (t > 1 - taperLength) {
+                radiusFactor = (1 - t) / taperLength;
+            }
+
+            // 使用平滑的二次曲线使渐变更自然
+            radiusFactor = Math.pow(radiusFactor, 0.5);
+            return baseLineWidth * Math.max(0.1, radiusFactor);
+        };
+
         if (pressureMode === 'none') {
-            const curve = new THREE.CatmullRomCurve3(path.map(p => new THREE.Vector3(p.x, p.y, 0)));
-            const tubeGeometry = new THREE.TubeGeometry(curve, Math.max(16, path.length * 3), baseLineWidth, 8, false);
+            // 使用自定义TubeGeometry实现可变半径
+            const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, 0));
+            const curve = new THREE.CatmullRomCurve3(curvePoints);
+            const tubularSegments = Math.max(16, path.length * 3);
+            const radialSegments = 8;
+
+            // 创建可变半径的管道几何体
+            const frames = curve.computeFrenetFrames(tubularSegments, false);
+            const vertices: number[] = [];
+            const normals: number[] = [];
+            const uvs: number[] = [];
+            const indices: number[] = [];
+
+            for (let i = 0; i <= tubularSegments; i++) {
+                const t = i / tubularSegments;
+                const P = curve.getPointAt(t);
+                const N = frames.normals[i];
+                const B = frames.binormals[i];
+
+                // 计算当前位置的半径
+                const currentDist = t * totalLength;
+                const currentRadius = getRadiusAtDistance(currentDist);
+
+                for (let j = 0; j <= radialSegments; j++) {
+                    const v = j / radialSegments * Math.PI * 2;
+                    const sin = Math.sin(v);
+                    const cos = Math.cos(v);
+
+                    const normal = new THREE.Vector3(
+                        cos * N.x + sin * B.x,
+                        cos * N.y + sin * B.y,
+                        cos * N.z + sin * B.z
+                    ).normalize();
+
+                    vertices.push(
+                        P.x + currentRadius * normal.x,
+                        P.y + currentRadius * normal.y,
+                        P.z + currentRadius * normal.z
+                    );
+                    normals.push(normal.x, normal.y, normal.z);
+                    uvs.push(i / tubularSegments, j / radialSegments);
+                }
+            }
+
+            // 生成索引
+            for (let i = 0; i < tubularSegments; i++) {
+                for (let j = 0; j < radialSegments; j++) {
+                    const a = i * (radialSegments + 1) + j;
+                    const b = (i + 1) * (radialSegments + 1) + j;
+                    const c = (i + 1) * (radialSegments + 1) + (j + 1);
+                    const d = i * (radialSegments + 1) + (j + 1);
+                    indices.push(a, b, d, b, c, d);
+                }
+            }
+
+            const tubeGeometry = new THREE.BufferGeometry();
+            tubeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+            tubeGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+            tubeGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+            tubeGeometry.setIndex(indices);
 
             const material = new THREE.ShaderMaterial({
                 vertexShader: lightsaberVertexShader,

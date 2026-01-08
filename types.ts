@@ -935,6 +935,8 @@ export interface ParticleRingSettings {
   // 空间粗细（自定义法阵绘制专用）
   spatialThickness?: boolean;            // 启用空间粗细（z方向散布）
   zThickness?: number;                   // z方向散布范围（默认与bandwidth一致）
+  // 笔迹平滑（自定义法阵绘制专用）
+  smoothness?: number;                   // 平滑度 0-1（0=不平滑，1=非常平滑）
 }
 
 // 丝绸效果配置
@@ -1441,6 +1443,9 @@ export interface LightsaberSettings {
 
   // 压感模式
   pressureMode: LightsaberPressureMode;
+
+  // 笔迹平滑
+  smoothness: number;        // 平滑度 0-1（0=不平滑，1=非常平滑）
 }
 
 // 光环系统配置

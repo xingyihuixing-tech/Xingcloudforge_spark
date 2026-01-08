@@ -56,7 +56,8 @@ import {
 } from '../services/lightFlowPath';
 import {
   createParticleStrokeMesh,
-  createLineStrokeMesh
+  createLineStrokeMesh,
+  createLightsaberStrokeMesh
 } from '../utils/drawingSystem';
 import { CustomMagicCircle, MagicCircleLayer, MagicCircleStroke } from '../types';
 
@@ -12922,6 +12923,8 @@ void main() {
             };
             if (stroke.brushType === 'particle') {
               strokeMesh = createParticleStrokeMesh(stroke.points, stroke.color, stroke.particleRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
+            } else if (stroke.brushType === 'lightsaber') {
+              strokeMesh = createLightsaberStrokeMesh(stroke.points, stroke.color, stroke.lightsaberSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
             } else {
               strokeMesh = createLineStrokeMesh(stroke.points, stroke.color, stroke.silkRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
             }
