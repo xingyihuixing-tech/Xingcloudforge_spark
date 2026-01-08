@@ -3,7 +3,7 @@
  * output: Drawing overlay UI with 3D canvas, brush tools (arc-length density + pressure mode；粒子密度范围100-800), symmetry controls, layer panel
  * pos: Main React component for custom magic circle drawing system
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
- * 2026-01-08: 优化粒子预览性能(节流+低密度)；面板位置下移(top:100)；预设交互(点击选中/再击保存/双击重命名)；压感按钮去填充色+次交互色边框；参数数字白色
+ * 2026-01-08: 丝环画笔新增参数：波形类型(正弦/三角/无)、波动频率/幅度、流动速度(0-20)、丝线密度、透明度、泛光；与光环系统线环保持一致
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -52,13 +52,18 @@ const defaultParticleSettings: Partial<ParticleRingSettings> = {
 
 const defaultSilkSettings: Partial<SilkRingSettings> = {
     thickness: 0.02,         // 线环粗细 0.005-0.08
-    opacity: 0.9,            // 透明度
+    opacity: 0.9,            // 透明度 0.1-1
     emissive: 2.0,           // 发光强度 0.5-4
     fresnelPower: 2.0,       // 菲涅尔边缘 0.5-5
     sparkleEnabled: false,   // 闪点开关
     sparkleThreshold: 0.95,  // 闪点阈值 0.8-0.99
-    flowSpeed: 1.0,          // 流动速度 0-3
-    strandDensity: 30,       // 丝线密度
+    flowSpeed: 1.0,          // 流动速度 0-20
+    strandDensity: 30,       // 丝线密度 5-100
+    bloomBoost: 0.5,         // 泛光 0-2
+    // 波动参数 (与光环系统一致)
+    waveType: 'off',         // 波形类型: off/sine/triangle
+    wobbleFrequency: 10,     // 波动频率 1-80
+    wobbleAmplitude: 0.5,    // 波动幅度 0.1-3
     pressureMode: 'none'
 };
 
@@ -1195,12 +1200,138 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 <input
                                     type="range"
                                     min={0}
-                                    max={10}
-                                    step={0.1}
+                                    max={20}
+                                    step={0.5}
                                     value={silkSettings.flowSpeed || 1}
                                     onChange={(e) => setSilkSettings(prev => ({ ...prev, flowSpeed: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
+                            </div>
+                            {/* 丝线密度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>丝线密度</span>
+                                    <span style={{ color: '#ffffff' }}>{silkSettings.strandDensity || 30}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={5}
+                                    max={100}
+                                    step={1}
+                                    value={silkSettings.strandDensity || 30}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, strandDensity: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 透明度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>透明度</span>
+                                    <span style={{ color: '#ffffff' }}>{(silkSettings.opacity || 0.9).toFixed(2)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.1}
+                                    max={1}
+                                    step={0.05}
+                                    value={silkSettings.opacity || 0.9}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, opacity: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 泛光 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>泛光</span>
+                                    <span style={{ color: '#ffffff' }}>{(silkSettings.bloomBoost || 0.5).toFixed(2)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={2}
+                                    step={0.05}
+                                    value={silkSettings.bloomBoost || 0.5}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, bloomBoost: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+
+                            {/* 几何波动 */}
+                            <div style={{
+                                marginTop: 12,
+                                padding: '8px 10px',
+                                borderRadius: 8,
+                                background: 'rgba(255,255,255,0.03)',
+                                border: '1px solid rgba(255,255,255,0.1)'
+                            }}>
+                                <div style={{
+                                    fontSize: 11,
+                                    color: 'var(--ui-secondary)',
+                                    marginBottom: 8
+                                }}>
+                                    几何波动
+                                </div>
+
+                                {/* 波形类型选择器 */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                                    <span style={{ fontSize: 12 }}>波形</span>
+                                    <select
+                                        value={silkSettings.waveType || 'off'}
+                                        onChange={(e) => setSilkSettings(prev => ({ ...prev, waveType: e.target.value as any }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '4px 8px',
+                                            background: 'rgba(30,30,40,0.8)',
+                                            border: '1px solid rgba(255,255,255,0.1)',
+                                            borderRadius: 4,
+                                            color: '#fff',
+                                            fontSize: 12,
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value="off">关闭</option>
+                                        <option value="sine">正弦波</option>
+                                        <option value="triangle">三角波</option>
+                                    </select>
+                                </div>
+
+                                {silkSettings.waveType && silkSettings.waveType !== 'off' && (
+                                    <>
+                                        {/* 波动频率 */}
+                                        <div style={{ marginBottom: 10 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                                <span>波动频率</span>
+                                                <span style={{ color: '#ffffff' }}>{silkSettings.wobbleFrequency || 10}</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={1}
+                                                max={80}
+                                                step={1}
+                                                value={silkSettings.wobbleFrequency || 10}
+                                                onChange={(e) => setSilkSettings(prev => ({ ...prev, wobbleFrequency: Number(e.target.value) }))}
+                                                style={{ width: '100%' }}
+                                            />
+                                        </div>
+
+                                        {/* 波动幅度 */}
+                                        <div style={{ marginBottom: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                                <span>波动幅度</span>
+                                                <span style={{ color: '#ffffff' }}>{(silkSettings.wobbleAmplitude || 0.5).toFixed(2)}</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min={0.1}
+                                                max={3}
+                                                step={0.1}
+                                                value={silkSettings.wobbleAmplitude || 0.5}
+                                                onChange={(e) => setSilkSettings(prev => ({ ...prev, wobbleAmplitude: Number(e.target.value) }))}
+                                                style={{ width: '100%' }}
+                                            />
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </>
                     )}

@@ -657,7 +657,7 @@ void main() {
     return mesh;
 }
 
-// ==================== 丝环着色器 (复制自 PlanetScene.tsx) ====================
+// ==================== 丝环着色器 (与光环系统线环保持一致的波动逻辑) ====================
 
 const silkRingVertexShader = `
 precision highp float;
@@ -667,13 +667,45 @@ varying vec3 vNormal;
 varying vec3 vViewPosition;
 
 uniform float uTime;
+uniform float uFlowSpeed;
+uniform float uWaveType;          // 0=off, 1=sine, 2=triangle
+uniform float uWobbleFrequency;
+uniform float uWobbleAmplitude;
+
+// 计算波形值 (仅支持正弦波/三角波/无)
+float computeWave(float phase) {
+  if (uWaveType < 0.5) {
+    return 0.0;  // off
+  } else if (uWaveType < 1.5) {
+    // 正弦波 - 平滑波动
+    return sin(phase);
+  } else {
+    // 三角波 - 锯齿折返
+    float t = mod(phase, 6.28318);
+    return abs(t / 3.14159 - 1.0) * 2.0 - 1.0;
+  }
+}
 
 void main() {
   vUv = uv;
-  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-  vViewPosition = -mvPosition.xyz;
   vNormal = normalize(normalMatrix * normal);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  
+  // 基础位置
+  vec3 pos = position;
+  
+  // 计算相位 (沿UV的x方向，对应笔画路径方向)
+  // 与光环系统一致：phase = 位置因子 * 频率 + 时间 * 流速
+  float phase = vUv.x * uWobbleFrequency * 6.28318 + uTime * uFlowSpeed;
+  
+  // 波动变形 (沿法线方向，与光环系统一致)
+  if (uWaveType > 0.5) {
+    float wave = computeWave(phase) * uWobbleAmplitude * 0.01; // 缩放到画布坐标系
+    pos += normal * wave;
+  }
+  
+  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  vViewPosition = -mvPosition.xyz;
+  gl_Position = projectionMatrix * mvPosition;
 }
 `;
 
@@ -892,13 +924,18 @@ export function createLineStrokeMesh(
                 uniforms: {
                     uTime: { value: 0 },
                     uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
+                    // 波动参数 (与光环系统一致)
+                    uWaveType: { value: settings.waveType === 'sine' ? 1.0 : settings.waveType === 'triangle' ? 2.0 : 0.0 },
+                    uWobbleFrequency: { value: settings.wobbleFrequency ?? 10.0 },
+                    uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.5 },
+                    // 视觉效果参数
                     uStrandDensity: { value: settings.strandDensity ?? 30.0 },
                     uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
                     uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
                     uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
                     uOpacity: { value: settings.opacity ?? 0.85 },
                     uEmissive: { value: settings.emissive ?? 0.9 },
-                    uBloomBoost: { value: 0.12 },
+                    uBloomBoost: { value: settings.bloomBoost ?? 0.12 },
                     // 染色模式 - 使用法阵级别参数
                     uColorMode: { value: mcSettings.colorMode ?? 0 },
                     uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
@@ -1001,13 +1038,18 @@ export function createLineStrokeMesh(
                 uniforms: {
                     uTime: { value: 0 },
                     uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
+                    // 波动参数 (与光环系统一致)
+                    uWaveType: { value: settings.waveType === 'sine' ? 1.0 : settings.waveType === 'triangle' ? 2.0 : 0.0 },
+                    uWobbleFrequency: { value: settings.wobbleFrequency ?? 10.0 },
+                    uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.5 },
+                    // 视觉效果参数
                     uStrandDensity: { value: settings.strandDensity ?? 30.0 },
                     uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
                     uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
                     uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
                     uOpacity: { value: baseOpacity * opacityScale },
                     uEmissive: { value: baseEmissive * emissiveScale },
-                    uBloomBoost: { value: 0.12 },
+                    uBloomBoost: { value: settings.bloomBoost ?? 0.12 },
                     // 染色模式 - 使用法阵级别参数
                     uColorMode: { value: mcSettings.colorMode ?? 0 },
                     uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
