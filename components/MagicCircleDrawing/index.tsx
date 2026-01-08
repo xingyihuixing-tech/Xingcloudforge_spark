@@ -1039,7 +1039,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
                 {/* 画笔参数 - 可滚动区域 */}
                 <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', fontSize: 11, color: '#ffffff' }} className="custom-scrollbar">
-                    {brushType === 'particle' ? (
+                    {brushType === 'particle' && (
                         <>
                             <div style={{ marginBottom: 12 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
@@ -1194,7 +1194,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                             )}
                         </>
-                    ) : (
+                    )}
+                    {brushType === 'lineRing' && (
                         <>
                             <div style={{ marginBottom: 12 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
