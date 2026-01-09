@@ -507,6 +507,68 @@ export function applySymmetryTransform(
                 y: nRadius * Math.sin(finalAngle)
             });
         }
+    } else if (mode === 'gridHex') {
+        // 蜂巢网格模式：六边形平铺
+        // 将画布分割成六边形网格，笔迹在每个六边形单元中复制
+        const cellSize = 0.15;  // 单元格大小
+        const hexHeight = cellSize * Math.sqrt(3);  // 六边形高度
+        const hexWidth = cellSize * 2;  // 六边形宽度
+
+        // 计算局部坐标（在单元格内的位置）
+        const localX = ((dx % cellSize) + cellSize) % cellSize;
+        const localY = ((dy % cellSize) + cellSize) % cellSize;
+
+        // 在多个六边形单元中复制（3x3网格 = 9个单元）
+        const gridRange = 2;
+        for (let gx = -gridRange; gx <= gridRange; gx++) {
+            for (let gy = -gridRange; gy <= gridRange; gy++) {
+                // 六边形网格的错位排列
+                const offsetX = (gy % 2 === 0) ? 0 : hexWidth * 0.75;
+                const worldX = gx * hexWidth * 1.5 + offsetX + localX;
+                const worldY = gy * hexHeight * 0.5 + localY;
+
+                // 限制在画布范围内
+                if (Math.abs(worldX) <= 0.5 && Math.abs(worldY) <= 0.5) {
+                    results.push({ x: worldX, y: worldY });
+                    // 中心对称的镜像副本
+                    if (gx !== 0 || gy !== 0) {
+                        results.push({ x: -worldX, y: -worldY });
+                    }
+                }
+            }
+        }
+        // 如果没有结果，至少返回原点
+        if (results.length === 0) {
+            results.push({ x: dx, y: dy });
+        }
+    } else if (mode === 'gridCircle') {
+        // 圆形网格模式：同心圆+径向分割平铺
+        // 多层同心圆，每层分割成多个扇区
+        const rings = 4;  // 环数
+        const sectorsPerRing = divisions;  // 每环扇区数
+        const maxRadius = 0.45;  // 最大半径
+
+        // 计算原始点在极坐标中的位置
+        const ringSpacing = maxRadius / rings;
+
+        // 复制到每个环和每个扇区
+        for (let ring = 0; ring < rings; ring++) {
+            const ringRadius = (ring + 0.5) * ringSpacing;
+            const ringScale = ringRadius / (radius + 0.001);  // 缩放比例
+
+            for (let sector = 0; sector < sectorsPerRing; sector++) {
+                const sectorAngle = (sector / sectorsPerRing) * Math.PI * 2;
+                const angle = baseAngle + sectorAngle;
+
+                // 将原始半径映射到这个环的半径范围
+                const mappedRadius = (radius % ringSpacing) + ring * ringSpacing;
+
+                results.push({
+                    x: mappedRadius * Math.cos(angle),
+                    y: mappedRadius * Math.sin(angle)
+                });
+            }
+        }
     }
 
     return results;
@@ -1929,6 +1991,65 @@ function applySymmetryToPath(
                 };
             });
             allPaths.push(liquidPath);
+        }
+    } else if (symmetryMode === 'gridHex') {
+        // 蜂巢网格模式：六边形平铺
+        const cellSize = 0.15;
+        const hexHeight = cellSize * Math.sqrt(3);
+        const hexWidth = cellSize * 2;
+        const gridRange = 2;
+
+        for (let gx = -gridRange; gx <= gridRange; gx++) {
+            for (let gy = -gridRange; gy <= gridRange; gy++) {
+                const offsetX = (gy % 2 === 0) ? 0 : hexWidth * 0.75;
+
+                const hexPath = basePath.map(p => {
+                    const localX = ((p.x % cellSize) + cellSize) % cellSize;
+                    const localY = ((p.y % cellSize) + cellSize) % cellSize;
+                    const worldX = gx * hexWidth * 1.5 + offsetX + localX;
+                    const worldY = gy * hexHeight * 0.5 + localY;
+
+                    return {
+                        x: worldX,
+                        y: worldY,
+                        pressure: p.pressure
+                    };
+                });
+
+                // 只添加在画布范围内的路径
+                const isInBounds = hexPath.some(p => Math.abs(p.x) <= 0.5 && Math.abs(p.y) <= 0.5);
+                if (isInBounds) {
+                    allPaths.push(hexPath);
+                }
+            }
+        }
+    } else if (symmetryMode === 'gridCircle') {
+        // 圆形网格模式：同心圆+径向分割平铺
+        const rings = 4;
+        const sectorsPerRing = divisions;
+        const maxRadius = 0.45;
+        const ringSpacing = maxRadius / rings;
+
+        for (let ring = 0; ring < rings; ring++) {
+            for (let sector = 0; sector < sectorsPerRing; sector++) {
+                const sectorAngle = (sector / sectorsPerRing) * Math.PI * 2;
+                const cos = Math.cos(sectorAngle);
+                const sin = Math.sin(sectorAngle);
+
+                const circlePath = basePath.map(p => {
+                    const r = Math.sqrt(p.x * p.x + p.y * p.y);
+                    const angle = Math.atan2(p.y, p.x);
+                    const mappedRadius = (r % ringSpacing) + ring * ringSpacing;
+                    const finalAngle = angle + sectorAngle;
+
+                    return {
+                        x: mappedRadius * Math.cos(finalAngle),
+                        y: mappedRadius * Math.sin(finalAngle),
+                        pressure: p.pressure
+                    };
+                });
+                allPaths.push(circlePath);
+            }
         }
     }
 

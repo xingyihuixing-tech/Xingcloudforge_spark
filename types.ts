@@ -1940,7 +1940,39 @@ export interface MaterialPreset {
 // - orbital: 轨道环（多轴旋转形成的原子轨道效果）
 // - folding: 多边形折叠（六边形空间折叠）
 // - liquid: 湍流/液态（噪声场扭曲）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism' | 'vortex' | 'bloom' | 'sphere' | 'orbital' | 'folding' | 'liquid';
+// - gridHex: 蜂巢网格平铺
+// - gridCircle: 圆形网格平铺
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism' | 'vortex' | 'bloom' | 'sphere' | 'orbital' | 'folding' | 'liquid' | 'gridHex' | 'gridCircle';
+
+// 对称模式专属参数
+export interface SymmetryParams {
+  // 星芒参数
+  starburstInnerScale?: number;   // 0.1~0.9, 默认0.5
+  starburstOuterScale?: number;   // 1.1~2.0, 默认1.3
+  // 棱镜参数
+  prismRadius?: number;           // 0.1~0.5, 默认0.3
+  // 漩涡参数
+  vortexMaxTwist?: number;        // 0.5~5.0 (圈数), 默认1.5
+  // 绽放参数
+  bloomMinScale?: number;         // 0.1~0.5, 默认0.2
+  bloomMaxScale?: number;         // 1.5~3.0, 默认2.0
+  bloomRotationDeg?: number;      // 10~60, 默认30
+  // 球面参数
+  sphereRadius?: number;          // 0.1~0.5, 默认0.25
+  // 轨道环参数
+  orbitalMaxTiltDeg?: number;     // 30~90, 默认90
+  // 折叠参数
+  foldingRadius?: number;         // 0.1~0.4, 默认0.25
+  // 湍流参数
+  liquidStrength?: number;        // 0.02~0.2, 默认0.08
+  liquidFrequency?: number;       // 1~20, 默认7
+  // 网格参数（蜂巢/圆形通用）
+  gridCellSize?: number;          // 0.05~0.3, 默认0.15
+  gridMirrorX?: boolean;          // 水平镜像
+  gridMirrorY?: boolean;          // 垂直镜像
+  // 圆形网格专属
+  gridCircleRings?: number;       // 环数 2~10, 默认4
+}
 
 // 画笔类型
 export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber';
@@ -1974,6 +2006,7 @@ export interface MagicCircleLayer {
   opacity: number;        // 0-1
   symmetryMode: SymmetryMode;
   symmetryDivisions: number;  // 3-36
+  symmetryParams?: SymmetryParams;  // 模式专属参数
   strokes: MagicCircleStroke[];
 }
 

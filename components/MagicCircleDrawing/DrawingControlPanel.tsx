@@ -94,7 +94,9 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
         { mode: 'sphere', label: '球面' },
         { mode: 'orbital', label: '轨道环' },
         { mode: 'folding', label: '折叠' },
-        { mode: 'liquid', label: '湍流' }
+        { mode: 'liquid', label: '湍流' },
+        { mode: 'gridHex', label: '蜂巢' },
+        { mode: 'gridCircle', label: '圆形' }
     ];
 
     // 对称分割数选项
