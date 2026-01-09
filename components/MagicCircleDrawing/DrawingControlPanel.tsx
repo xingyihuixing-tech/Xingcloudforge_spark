@@ -219,13 +219,13 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                         <span className="text-xs font-medium">对称设置</span>
                     </div>
 
-                    {/* 对称模式 */}
-                    <div className="flex gap-1 mb-2">
+                    {/* 对称模式 - 多行布局 */}
+                    <div className="flex flex-wrap gap-1 mb-2">
                         {symmetryModes.map(({ mode, label }) => (
                             <button
                                 key={mode}
                                 onClick={() => onUpdateSymmetry(mode, symmetryDivisions)}
-                                className={`flex-1 px-2 py-1.5 text-xs rounded transition-all ${symmetryMode === mode
+                                className={`px-2 py-1 text-xs rounded transition-all ${symmetryMode === mode
                                     ? 'drawing-symmetry-btn-active'
                                     : 'drawing-symmetry-btn-inactive'
                                     }`}

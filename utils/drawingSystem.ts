@@ -330,34 +330,40 @@ export function applySymmetryTransform(
             });
         }
     } else if (mode === 'prism') {
-        // 棱镜模式：3D立体棱柱，每个副本在不同的Z深度平面上
-        // 效果：像钻石切面一样的3D分布
-        const prismDepth = 0.4;  // 增大Z深度以产生明显立体感
+        // 棱镜模式：真正的3D棱柱侧面映射
+        // 将笔迹映射到多边形棱柱的各个侧面上，每个侧面是一个倾斜的3D平面
+        const prismRadius = 0.3;  // 棱柱外接圆半径（侧面到中心的距离）
         const faceCount = Math.max(3, divisions);
 
         for (let i = 0; i < faceCount; i++) {
-            const angle = baseAngle + angleStep * i;
-            // Z位置：从-prismDepth/2到+prismDepth/2均匀分布
-            const zProgress = i / (faceCount - 1 || 1); // 0到1
-            const zOffset = (zProgress - 0.5) * prismDepth;
+            const faceAngle = angleStep * i;  // 这个侧面的朝向角度
 
-            results.push({
-                x: radius * Math.cos(angle),
-                y: radius * Math.sin(angle),
-                z: zOffset
-            });
+            // 计算侧面的法向量（指向外）
+            const normalX = Math.cos(faceAngle);
+            const normalZ = Math.sin(faceAngle);
+
+            // 将原始点映射到这个侧面上：
+            // - x坐标沿侧面的宽度方向（切向）
+            // - y坐标沿侧面的高度方向（Y轴）
+            // - 侧面向外偏移prismRadius距离
+            const tangentX = -normalZ;  // 切向量 = 法向量旋转90度
+            const tangentZ = normalX;
+
+            // 最终3D坐标：侧面位置 + 沿切向的偏移
+            const px = normalX * prismRadius + tangentX * dx * 0.5;
+            const py = dy;  // Y轴直接保持
+            const pz = normalZ * prismRadius + tangentZ * dx * 0.5;
+
+            results.push({ x: px, y: py, z: pz });
         }
     } else if (mode === 'vortex') {
         // 漩涡模式：黑洞吸入式螺旋扭曲
-        // 核心：越靠近中心，旋转扭曲越剧烈，形成螺旋臂效果
-        const maxTwist = Math.PI * 3;  // 最大扭曲角度（中心处可以转1.5圈）
+        const maxTwist = Math.PI * 3;
 
         for (let i = 0; i < divisions; i++) {
             const angleOffset = angleStep * i;
-            // 扭曲程度与半径成反比：中心扭曲最大，边缘几乎不扭曲
-            // 使用平滑的衰减函数
-            const normalizedRadius = Math.min(1, radius * 2); // 0~1范围
-            const twistAmount = maxTwist * Math.pow(1 - normalizedRadius, 2); // 二次方衰减
+            const normalizedRadius = Math.min(1, radius * 2);
+            const twistAmount = maxTwist * Math.pow(1 - normalizedRadius, 2);
             const angle = baseAngle + angleOffset + twistAmount;
 
             results.push({
@@ -368,19 +374,20 @@ export function applySymmetryTransform(
     } else if (mode === 'bloom') {
         // 绽放模式：花朵层叠绽开
         // 每层是完整的笔迹副本，从小到大、从内到外展开
-        const layerCount = divisions;
-        const minScale = 0.3;  // 最内层缩放
-        const maxScale = 1.5;  // 最外层缩放
-        const rotationPerLayer = Math.PI / 8; // 每层旋转22.5度
+        // 同时每层也进行径向对称复制
+        const layerCount = Math.max(3, Math.min(12, divisions));  // 层数限制在3-12层
+        const minScale = 0.2;   // 最内层缩放20%
+        const maxScale = 2.0;   // 最外层缩放200%
+        const rotationPerLayer = Math.PI / 6;  // 每层旋转30度
 
         for (let i = 0; i < layerCount; i++) {
-            const progress = i / (layerCount - 1 || 1); // 0到1
+            const progress = i / (layerCount - 1 || 1);
             const scale = minScale + (maxScale - minScale) * progress;
             const layerRotation = i * rotationPerLayer;
             const angle = baseAngle + layerRotation;
             const scaledRadius = radius * scale;
-            // Z轴：内层在前，外层在后
-            const zOffset = progress * 0.15;
+            // Z轴：内层在前（Z负），外层在后（Z正），增大Z范围
+            const zOffset = (progress - 0.5) * 0.3;
 
             results.push({
                 x: scaledRadius * Math.cos(angle),
@@ -390,7 +397,7 @@ export function applySymmetryTransform(
         }
     } else if (mode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
-        const R = 0.5;
+        const R = 0.25;  // 缩小球体半径，使其只占画布的1/4
         const lat = dy * Math.PI;
         const lon = dx * Math.PI * 2;
         const bx = R * Math.cos(lat) * Math.sin(lon);
@@ -1703,24 +1710,24 @@ function applySymmetryToPath(
             allPaths.push(scaledPath);
         }
     } else if (symmetryMode === 'prism') {
-        // 棱镜模式：3D立体棱柱，每个副本在不同的Z深度平面上
-        const prismDepth = 0.4;
+        // 棱镜模式：真正的3D棱柱侧面映射
+        const prismRadius = 0.3;
         const faceCount = Math.max(3, divisions);
 
         for (let div = 0; div < faceCount; div++) {
-            const angle = (div / faceCount) * Math.PI * 2;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const zProgress = div / (faceCount - 1 || 1);
-            const zOffset = (zProgress - 0.5) * prismDepth;
+            const faceAngle = (div / faceCount) * Math.PI * 2;
+            const normalX = Math.cos(faceAngle);
+            const normalZ = Math.sin(faceAngle);
+            const tangentX = -normalZ;
+            const tangentZ = normalX;
 
-            const rotatedPath = basePath.map(p => ({
-                x: p.x * cos - p.y * sin,
-                y: p.x * sin + p.y * cos,
-                z: zOffset,
+            const prismPath = basePath.map(p => ({
+                x: normalX * prismRadius + tangentX * p.x * 0.5,
+                y: p.y,
+                z: normalZ * prismRadius + tangentZ * p.x * 0.5,
                 pressure: p.pressure
             }));
-            allPaths.push(rotatedPath);
+            allPaths.push(prismPath);
         }
     } else if (symmetryMode === 'vortex') {
         // 漩涡模式：黑洞吸入式螺旋扭曲
@@ -1746,16 +1753,16 @@ function applySymmetryToPath(
         }
     } else if (symmetryMode === 'bloom') {
         // 绽放模式：花朵层叠绽开
-        const layerCount = divisions;
-        const minScale = 0.3;
-        const maxScale = 1.5;
-        const rotationPerLayer = Math.PI / 8;
+        const layerCount = Math.max(3, Math.min(12, divisions));
+        const minScale = 0.2;
+        const maxScale = 2.0;
+        const rotationPerLayer = Math.PI / 6;
 
         for (let div = 0; div < layerCount; div++) {
             const progress = div / (layerCount - 1 || 1);
             const scale = minScale + (maxScale - minScale) * progress;
             const layerRotation = div * rotationPerLayer;
-            const zOffset = progress * 0.15;
+            const zOffset = (progress - 0.5) * 0.3;
 
             const cos = Math.cos(layerRotation);
             const sin = Math.sin(layerRotation);
@@ -1774,7 +1781,7 @@ function applySymmetryToPath(
         }
     } else if (symmetryMode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
-        const R = 0.5;
+        const R = 0.25;  // 缩小球体半径
         for (let div = 0; div < divisions; div++) {
             const rotAngle = (div / divisions) * Math.PI * 2;
             const cos = Math.cos(rotAngle);
