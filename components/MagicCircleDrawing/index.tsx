@@ -146,6 +146,24 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     const symmetryMode = currentLayer?.symmetryMode || 'radial';
     const symmetryDivisions = currentLayer?.symmetryDivisions || 8;
 
+    // 对称模式专属参数 (从当前图层读取或使用默认值)
+    const symmetryParams = currentLayer?.symmetryParams || {
+        vortexMaxTwist: 1.5,
+        bloomMinScale: 0.2,
+        bloomMaxScale: 2.0,
+        bloomRotationDeg: 30,
+        sphereRadius: 0.25,
+        gridCellSize: 0.15,
+        gridCircleRings: 4,
+        liquidStrength: 0.08,
+        liquidFrequency: 7,
+        starburstInnerScale: 0.5,
+        starburstOuterScale: 1.3,
+        prismRadius: 0.3,
+        orbitalMaxTiltDeg: 90,
+        foldingRadius: 0.25
+    };
+
     // 绘制状态
     const [isDrawing, setIsDrawing] = useState(false);
     const currentStrokeRef = useRef<StrokePoint[]>([]);
@@ -623,7 +641,11 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (currentStrokeRef.current.length < 2) return;
 
         // 创建新预览（降低密度以提高性能）
-        const previewMcSettings = { particleSizeScale: 0.002 };  // 画布粒子缩放
+        const previewMcSettings = {
+            particleSizeScale: 0.002,  // 画布粒子缩放
+            opacity: 1.0,
+            brightness: 1.0
+        };
         if (brushType === 'particle') {
             // 预览时使用较低的密度以避免卡顿
             const previewSettings = {
@@ -644,7 +666,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushColor,
                 lightsaberSettings,
                 symmetryMode,
-                symmetryDivisions
+                symmetryDivisions,
+                previewMcSettings  // 添加缺失的参数
             );
         } else {
             refs.currentStrokeMesh = createLineStrokeMesh(
@@ -652,7 +675,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushColor,
                 silkSettings,
                 symmetryMode,
-                symmetryDivisions
+                symmetryDivisions,
+                previewMcSettings  // 添加缺失的参数
             );
         }
 
@@ -817,6 +841,27 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         onUpdateCircles(updatedCircles);
     }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
+
+    // 更新对称模式专属参数
+    const handleUpdateSymmetryParams = useCallback((params: Partial<typeof symmetryParams>) => {
+        if (!currentCircle || !currentLayerId) return;
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: c.layers.map(l => {
+                    if (l.id !== currentLayerId) return l;
+                    return {
+                        ...l,
+                        symmetryParams: { ...symmetryParams, ...params }
+                    };
+                })
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+    }, [currentCircle, currentLayerId, customMagicCircles, symmetryParams, onUpdateCircles]);
 
     // 删除图层
     const handleDeleteLayer = useCallback((layerId: string) => {
@@ -1921,6 +1966,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 symmetryMode={symmetryMode}
                 symmetryDivisions={symmetryDivisions}
                 onUpdateSymmetry={handleUpdateSymmetry}
+                symmetryParams={symmetryParams}
+                onUpdateSymmetryParams={handleUpdateSymmetryParams}
                 onClose={onClose}
             />
         </div >

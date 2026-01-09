@@ -49,6 +49,23 @@ interface DrawingControlPanelProps {
     symmetryMode: SymmetryMode;
     symmetryDivisions: number;
     onUpdateSymmetry: (mode: SymmetryMode, divisions: number) => void;
+    symmetryParams: {
+        vortexMaxTwist?: number;
+        bloomMinScale?: number;
+        bloomMaxScale?: number;
+        bloomRotationDeg?: number;
+        sphereRadius?: number;
+        gridCellSize?: number;
+        gridCircleRings?: number;
+        liquidStrength?: number;
+        liquidFrequency?: number;
+        starburstInnerScale?: number;
+        starburstOuterScale?: number;
+        prismRadius?: number;
+        orbitalMaxTiltDeg?: number;
+        foldingRadius?: number;
+    };
+    onUpdateSymmetryParams: (params: Partial<DrawingControlPanelProps['symmetryParams']>) => void;
 
     // 关闭
     onClose: () => void;
@@ -74,6 +91,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
     symmetryMode,
     symmetryDivisions,
     onUpdateSymmetry,
+    symmetryParams,
+    onUpdateSymmetryParams,
     onClose
 }) => {
     const [editingCircleName, setEditingCircleName] = useState<string | null>(null);
@@ -154,48 +173,30 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                         </button>
                     </div>
 
-                    {/* 法阵选择列表 - 单行水平滚动 */}
-                    <div className="flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide pb-1" style={{ maxWidth: '100%' }}>
-                        {customMagicCircles.map(circle => {
-                            const isSelected = circle.id === currentCircleId;
-                            const isEditing = editingCircleName === circle.id;
-
-                            return isEditing ? (
-                                <input
-                                    key={circle.id}
-                                    type="text"
-                                    value={tempName}
-                                    onChange={e => setTempName(e.target.value)}
-                                    onBlur={finishRenaming}
-                                    onKeyDown={e => e.key === 'Enter' && finishRenaming()}
-                                    className="px-2 py-1 text-xs bg-gray-700 rounded text-white outline-none w-20"
-                                    autoFocus
-                                />
+                    {/* 法阵下拉选择器 */}
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={currentCircleId || ''}
+                            onChange={(e) => onSelectCircle(e.target.value)}
+                            className="flex-1 bg-gray-700/80 text-white text-xs rounded px-2 py-1.5 border border-white/10 outline-none cursor-pointer hover:bg-gray-600/80 transition-colors"
+                        >
+                            {customMagicCircles.length === 0 ? (
+                                <option value="" disabled>暂无法阵</option>
                             ) : (
-                                <div
-                                    key={circle.id}
-                                    className={`group flex items-center gap-1 px-2 py-1 rounded transition-all cursor-pointer ${isSelected
-                                        ? 'bg-purple-500/30 border border-purple-400/50 text-white'
-                                        : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 border border-transparent'
-                                        }`}
-                                    onClick={() => onSelectCircle(circle.id)}
-                                    onDoubleClick={() => startRenaming(circle)}
-                                >
-                                    <span className="text-xs truncate max-w-[60px]">{circle.name}</span>
-                                    {isSelected && <span className="text-purple-400 text-xs">★</span>}
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); onDeleteCircle(circle.id); }}
-                                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
-                                        title="删除"
-                                    >
-                                        <DeleteIcon size={10} />
-                                    </button>
-                                </div>
-                            );
-                        })}
-
-                        {customMagicCircles.length === 0 && (
-                            <span className="text-gray-500 text-xs">点击 + 创建法阵</span>
+                                customMagicCircles.map(circle => (
+                                    <option key={circle.id} value={circle.id}>{circle.name}</option>
+                                ))
+                            )}
+                        </select>
+                        {/* 删除当前法阵 */}
+                        {currentCircleId && customMagicCircles.length > 1 && (
+                            <button
+                                onClick={() => onDeleteCircle(currentCircleId)}
+                                className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-red-400"
+                                title="删除当前法阵"
+                            >
+                                <DeleteIcon size={12} />
+                            </button>
                         )}
                     </div>
                 </div>
@@ -265,9 +266,11 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                         <div className="mt-2 pt-2 border-t border-white/10">
                             <span className="text-xs text-gray-400 block mb-1">扭曲圈数</span>
                             <div className="flex items-center gap-2">
-                                <input type="range" min={0.5} max={5} step={0.1} defaultValue={1.5}
+                                <input type="range" min={0.5} max={5} step={0.1}
+                                    value={symmetryParams.vortexMaxTwist ?? 1.5}
+                                    onChange={(e) => onUpdateSymmetryParams({ vortexMaxTwist: Number(e.target.value) })}
                                     className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                                <span className="text-xs text-white w-8 text-center">1.5</span>
+                                <span className="text-xs text-white w-8 text-center">{(symmetryParams.vortexMaxTwist ?? 1.5).toFixed(1)}</span>
                             </div>
                         </div>
                     )}
@@ -276,19 +279,33 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                     {symmetryMode === 'bloom' && (
                         <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
                             <div>
-                                <span className="text-xs text-gray-400 block mb-1">缩放范围</span>
+                                <span className="text-xs text-gray-400 block mb-1">最小缩放</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs text-gray-500 w-8">0.2x</span>
-                                    <div className="flex-1 h-1.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg" />
-                                    <span className="text-xs text-gray-500 w-8">2.0x</span>
+                                    <input type="range" min={0.1} max={1} step={0.1}
+                                        value={symmetryParams.bloomMinScale ?? 0.2}
+                                        onChange={(e) => onUpdateSymmetryParams({ bloomMinScale: Number(e.target.value) })}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">{(symmetryParams.bloomMinScale ?? 0.2).toFixed(1)}x</span>
+                                </div>
+                            </div>
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">最大缩放</span>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min={1} max={4} step={0.1}
+                                        value={symmetryParams.bloomMaxScale ?? 2.0}
+                                        onChange={(e) => onUpdateSymmetryParams({ bloomMaxScale: Number(e.target.value) })}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">{(symmetryParams.bloomMaxScale ?? 2.0).toFixed(1)}x</span>
                                 </div>
                             </div>
                             <div>
                                 <span className="text-xs text-gray-400 block mb-1">层间角度</span>
                                 <div className="flex items-center gap-2">
-                                    <input type="range" min={10} max={60} step={5} defaultValue={30}
+                                    <input type="range" min={10} max={60} step={5}
+                                        value={symmetryParams.bloomRotationDeg ?? 30}
+                                        onChange={(e) => onUpdateSymmetryParams({ bloomRotationDeg: Number(e.target.value) })}
                                         className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                                    <span className="text-xs text-white w-8 text-center">30°</span>
+                                    <span className="text-xs text-white w-8 text-center">{symmetryParams.bloomRotationDeg ?? 30}°</span>
                                 </div>
                             </div>
                         </div>
@@ -299,9 +316,79 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                         <div className="mt-2 pt-2 border-t border-white/10">
                             <span className="text-xs text-gray-400 block mb-1">球体半径</span>
                             <div className="flex items-center gap-2">
-                                <input type="range" min={0.1} max={0.5} step={0.05} defaultValue={0.25}
+                                <input type="range" min={0.1} max={0.5} step={0.05}
+                                    value={symmetryParams.sphereRadius ?? 0.25}
+                                    onChange={(e) => onUpdateSymmetryParams({ sphereRadius: Number(e.target.value) })}
                                     className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                                <span className="text-xs text-white w-8 text-center">0.25</span>
+                                <span className="text-xs text-white w-8 text-center">{(symmetryParams.sphereRadius ?? 0.25).toFixed(2)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 星芒模式参数 */}
+                    {symmetryMode === 'starburst' && (
+                        <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">内缩比例</span>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min={0.2} max={0.8} step={0.05}
+                                        value={symmetryParams.starburstInnerScale ?? 0.5}
+                                        onChange={(e) => onUpdateSymmetryParams({ starburstInnerScale: Number(e.target.value) })}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">{(symmetryParams.starburstInnerScale ?? 0.5).toFixed(2)}</span>
+                                </div>
+                            </div>
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">外延比例</span>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min={1} max={2} step={0.1}
+                                        value={symmetryParams.starburstOuterScale ?? 1.3}
+                                        onChange={(e) => onUpdateSymmetryParams({ starburstOuterScale: Number(e.target.value) })}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">{(symmetryParams.starburstOuterScale ?? 1.3).toFixed(1)}</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 棱镜模式参数 */}
+                    {symmetryMode === 'prism' && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                            <span className="text-xs text-gray-400 block mb-1">棱柱半径</span>
+                            <div className="flex items-center gap-2">
+                                <input type="range" min={0.1} max={0.5} step={0.05}
+                                    value={symmetryParams.prismRadius ?? 0.3}
+                                    onChange={(e) => onUpdateSymmetryParams({ prismRadius: Number(e.target.value) })}
+                                    className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                <span className="text-xs text-white w-8 text-center">{(symmetryParams.prismRadius ?? 0.3).toFixed(2)}</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 轨道环模式参数 */}
+                    {symmetryMode === 'orbital' && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                            <span className="text-xs text-gray-400 block mb-1">最大倾角</span>
+                            <div className="flex items-center gap-2">
+                                <input type="range" min={30} max={90} step={5}
+                                    value={symmetryParams.orbitalMaxTiltDeg ?? 90}
+                                    onChange={(e) => onUpdateSymmetryParams({ orbitalMaxTiltDeg: Number(e.target.value) })}
+                                    className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                <span className="text-xs text-white w-8 text-center">{symmetryParams.orbitalMaxTiltDeg ?? 90}°</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 折叠模式参数 */}
+                    {symmetryMode === 'folding' && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                            <span className="text-xs text-gray-400 block mb-1">折叠半径</span>
+                            <div className="flex items-center gap-2">
+                                <input type="range" min={0.1} max={0.4} step={0.05}
+                                    value={symmetryParams.foldingRadius ?? 0.25}
+                                    onChange={(e) => onUpdateSymmetryParams({ foldingRadius: Number(e.target.value) })}
+                                    className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                <span className="text-xs text-white w-8 text-center">{(symmetryParams.foldingRadius ?? 0.25).toFixed(2)}</span>
                             </div>
                         </div>
                     )}
@@ -312,18 +399,22 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                             <div>
                                 <span className="text-xs text-gray-400 block mb-1">格子大小</span>
                                 <div className="flex items-center gap-2">
-                                    <input type="range" min={0.05} max={0.3} step={0.01} defaultValue={0.15}
+                                    <input type="range" min={0.05} max={0.3} step={0.01}
+                                        value={symmetryParams.gridCellSize ?? 0.15}
+                                        onChange={(e) => onUpdateSymmetryParams({ gridCellSize: Number(e.target.value) })}
                                         className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                                    <span className="text-xs text-white w-8 text-center">0.15</span>
+                                    <span className="text-xs text-white w-8 text-center">{(symmetryParams.gridCellSize ?? 0.15).toFixed(2)}</span>
                                 </div>
                             </div>
                             {symmetryMode === 'gridCircle' && (
                                 <div>
                                     <span className="text-xs text-gray-400 block mb-1">环数</span>
                                     <div className="flex items-center gap-2">
-                                        <input type="range" min={2} max={10} step={1} defaultValue={4}
+                                        <input type="range" min={2} max={10} step={1}
+                                            value={symmetryParams.gridCircleRings ?? 4}
+                                            onChange={(e) => onUpdateSymmetryParams({ gridCircleRings: Number(e.target.value) })}
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                                        <span className="text-xs text-white w-8 text-center">4</span>
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams.gridCircleRings ?? 4}</span>
                                     </div>
                                 </div>
                             )}
@@ -336,17 +427,21 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                             <div>
                                 <span className="text-xs text-gray-400 block mb-1">扭曲强度</span>
                                 <div className="flex items-center gap-2">
-                                    <input type="range" min={0.02} max={0.2} step={0.01} defaultValue={0.08}
+                                    <input type="range" min={0.02} max={0.2} step={0.01}
+                                        value={symmetryParams.liquidStrength ?? 0.08}
+                                        onChange={(e) => onUpdateSymmetryParams({ liquidStrength: Number(e.target.value) })}
                                         className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                                    <span className="text-xs text-white w-8 text-center">0.08</span>
+                                    <span className="text-xs text-white w-8 text-center">{(symmetryParams.liquidStrength ?? 0.08).toFixed(2)}</span>
                                 </div>
                             </div>
                             <div>
                                 <span className="text-xs text-gray-400 block mb-1">噪声频率</span>
                                 <div className="flex items-center gap-2">
-                                    <input type="range" min={1} max={20} step={1} defaultValue={7}
+                                    <input type="range" min={1} max={20} step={1}
+                                        value={symmetryParams.liquidFrequency ?? 7}
+                                        onChange={(e) => onUpdateSymmetryParams({ liquidFrequency: Number(e.target.value) })}
                                         className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
-                                    <span className="text-xs text-white w-8 text-center">7</span>
+                                    <span className="text-xs text-white w-8 text-center">{symmetryParams.liquidFrequency ?? 7}</span>
                                 </div>
                             </div>
                         </div>
