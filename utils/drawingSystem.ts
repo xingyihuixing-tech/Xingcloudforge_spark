@@ -1208,16 +1208,16 @@ uniform float uMCPulseEnabled;
 uniform float uMCPulseSpeed;
 uniform float uMCPulseIntensity;
 
-// 染色功能参数
-uniform float uMCBaseHue;          // 基础色相 0-360
-uniform float uMCBaseSaturation;   // 基础饱和度 0-1
-uniform float uMCSaturationBoost;  // 饱和度增强 -1 to 1
-uniform float uMCColorMode;        // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
-uniform vec3 uMCColor1;
-uniform vec3 uMCColor2;
-uniform vec3 uMCColor3;
-uniform float uMCColorMidPos;
-uniform float uMCProceduralIntensity;
+// 染色功能参数（与粒子/丝环统一命名）
+uniform float uBaseHue;          // 基础色相 0-360
+uniform float uBaseSaturation;   // 基础饱和度 0-1
+uniform float uSaturationBoost;  // 饱和度增强 -1 to 1
+uniform float uColorMode;        // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
+uniform vec3 uColor1;
+uniform vec3 uColor2;
+uniform vec3 uColor3;
+uniform float uColorMidPos;
+uniform float uProceduralIntensity;
 
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -1291,30 +1291,30 @@ void main() {
   }
   
   // 应用染色功能
-  if (uMCColorMode > 0.5) {
+  if (uColorMode > 0.5) {
     float t = vUv.x; // 沿路径的位置
     vec3 tintColor = finalColor;
     
-    if (uMCColorMode > 3.5) {
+    if (uColorMode > 3.5) {
       // 单色模式：使用baseHue和baseSaturation
       vec3 hsl = rgb2hsl(finalColor);
-      hsl.x = uMCBaseHue / 360.0;
-      hsl.y = uMCBaseSaturation;
+      hsl.x = uBaseHue / 360.0;
+      hsl.y = uBaseSaturation;
       tintColor = hsl2rgb(hsl);
-    } else if (uMCColorMode > 0.5 && uMCColorMode < 1.5) {
+    } else if (uColorMode > 0.5 && uColorMode < 1.5) {
       // 双色模式
-      tintColor = mix(uMCColor1, uMCColor2, t);
-    } else if (uMCColorMode > 1.5 && uMCColorMode < 2.5) {
+      tintColor = mix(uColor1, uColor2, t);
+    } else if (uColorMode > 1.5 && uColorMode < 2.5) {
       // 三色模式
-      if (t < uMCColorMidPos) {
-        tintColor = mix(uMCColor1, uMCColor2, t / uMCColorMidPos);
+      if (t < uColorMidPos) {
+        tintColor = mix(uColor1, uColor2, t / uColorMidPos);
       } else {
-        tintColor = mix(uMCColor2, uMCColor3, (t - uMCColorMidPos) / (1.0 - uMCColorMidPos));
+        tintColor = mix(uColor2, uColor3, (t - uColorMidPos) / (1.0 - uColorMidPos));
       }
-    } else if (uMCColorMode > 2.5 && uMCColorMode < 3.5) {
+    } else if (uColorMode > 2.5 && uColorMode < 3.5) {
       // 程序色模式
       float hue = mod(t + uTime * 0.1, 1.0);
-      tintColor = hsl2rgb(vec3(hue, 0.8, 0.6)) * uMCProceduralIntensity;
+      tintColor = hsl2rgb(vec3(hue, 0.8, 0.6)) * uProceduralIntensity;
     }
     
     // 将染色应用到光晕部分，核心保持原色
@@ -1516,16 +1516,16 @@ export function createLightsaberStrokeMesh(
                     uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
                     uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
                     uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                    // 染色功能参数
-                    uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
-                    uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                    uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                    uMCColorMode: { value: mcSettings.colorMode ?? 0 },
-                    uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                    uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+                    // 染色功能参数（与粒子/丝环统一命名）
+                    uBaseHue: { value: mcSettings.baseHue ?? 200 },
+                    uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+                    uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+                    uColorMode: { value: mcSettings.colorMode ?? 0 },
+                    uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+                    uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+                    uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+                    uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+                    uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
                 },
                 transparent: true,
                 depthTest: false,
@@ -1678,16 +1678,16 @@ export function createLightsaberStrokeMesh(
                 uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
                 uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
                 uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                // 染色功能参数
-                uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
-                uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                uMCColorMode: { value: mcSettings.colorMode ?? 0 },
-                uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+                // 染色功能参数（与粒子/丝环统一命名）
+                uBaseHue: { value: mcSettings.baseHue ?? 200 },
+                uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+                uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+                uColorMode: { value: mcSettings.colorMode ?? 0 },
+                uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+                uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+                uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+                uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+                uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
             },
             transparent: true,
             depthTest: false,

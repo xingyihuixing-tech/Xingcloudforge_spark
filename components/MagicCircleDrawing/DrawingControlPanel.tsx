@@ -154,62 +154,48 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                         </button>
                     </div>
 
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {/* 法阵选择列表 - 水平标签布局 */}
+                    <div className="flex flex-wrap gap-1">
                         {customMagicCircles.map(circle => {
                             const isSelected = circle.id === currentCircleId;
                             const isEditing = editingCircleName === circle.id;
 
-                            return (
+                            return isEditing ? (
+                                <input
+                                    key={circle.id}
+                                    type="text"
+                                    value={tempName}
+                                    onChange={e => setTempName(e.target.value)}
+                                    onBlur={finishRenaming}
+                                    onKeyDown={e => e.key === 'Enter' && finishRenaming()}
+                                    className="px-2 py-1 text-xs bg-gray-700 rounded text-white outline-none w-20"
+                                    autoFocus
+                                />
+                            ) : (
                                 <div
                                     key={circle.id}
-                                    className={`flex items-center gap-2 px-2 py-1.5 rounded-md transition-all ${isSelected
-                                        ? 'drawing-circle-selected'
-                                        : 'hover:bg-white/5 border border-transparent'
+                                    className={`group flex items-center gap-1 px-2 py-1 rounded transition-all cursor-pointer ${isSelected
+                                        ? 'bg-purple-500/30 border border-purple-400/50 text-white'
+                                        : 'bg-gray-700/50 hover:bg-gray-600/50 text-gray-300 border border-transparent'
                                         }`}
+                                    onClick={() => onSelectCircle(circle.id)}
+                                    onDoubleClick={() => startRenaming(circle)}
                                 >
-
-                                    {/* 名称 (可编辑) */}
-                                    <div className="flex-1 min-w-0">
-                                        {isEditing ? (
-                                            <input
-                                                type="text"
-                                                value={tempName}
-                                                onChange={e => setTempName(e.target.value)}
-                                                onBlur={finishRenaming}
-                                                onKeyDown={e => e.key === 'Enter' && finishRenaming()}
-                                                className="w-full px-1 py-0.5 text-xs bg-gray-700 rounded text-white outline-none"
-                                                autoFocus
-                                            />
-                                        ) : (
-                                            <button
-                                                onClick={() => onSelectCircle(circle.id)}
-                                                onDoubleClick={() => startRenaming(circle)}
-                                                className={`w-full text-left text-xs truncate ${isSelected ? 'text-white' : 'text-gray-300'
-                                                    }`}
-                                            >
-                                                {circle.name}
-                                                {isSelected && <span className="ml-1 text-purple-400">★</span>}
-                                            </button>
-                                        )}
-                                    </div>
-
-
-                                    {/* 删除按钮 */}
+                                    <span className="text-xs truncate max-w-[60px]">{circle.name}</span>
+                                    {isSelected && <span className="text-purple-400 text-xs">★</span>}
                                     <button
-                                        onClick={() => onDeleteCircle(circle.id)}
-                                        className="p-1 rounded text-gray-500 hover:text-red-400 transition-colors"
-                                        title="删除法阵"
+                                        onClick={(e) => { e.stopPropagation(); onDeleteCircle(circle.id); }}
+                                        className="opacity-0 group-hover:opacity-100 text-gray-500 hover:text-red-400 transition-all"
+                                        title="删除"
                                     >
-                                        <DeleteIcon size={12} />
+                                        <DeleteIcon size={10} />
                                     </button>
                                 </div>
                             );
                         })}
 
                         {customMagicCircles.length === 0 && (
-                            <div className="text-center py-3 text-gray-500 text-xs">
-                                暂无法阵，点击 + 创建
-                            </div>
+                            <span className="text-gray-500 text-xs">点击 + 创建法阵</span>
                         )}
                     </div>
                 </div>
