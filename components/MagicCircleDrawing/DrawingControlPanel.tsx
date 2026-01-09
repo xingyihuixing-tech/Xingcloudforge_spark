@@ -154,8 +154,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                         </button>
                     </div>
 
-                    {/* 法阵选择列表 - 水平标签布局 */}
-                    <div className="flex flex-wrap gap-1">
+                    {/* 法阵选择列表 - 单行水平滚动 */}
+                    <div className="flex flex-nowrap gap-1 overflow-x-auto scrollbar-hide pb-1" style={{ maxWidth: '100%' }}>
                         {customMagicCircles.map(circle => {
                             const isSelected = circle.id === currentCircleId;
                             const isEditing = editingCircleName === circle.id;
@@ -256,6 +256,99 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
 
                             {/* 数值显示 */}
                             <span className="text-xs text-white w-8 text-center">{symmetryDivisions}</span>
+                        </div>
+                    )}
+
+                    {/* ==================== 模式专属参数 ==================== */}
+                    {/* 漩涡模式参数 */}
+                    {symmetryMode === 'vortex' && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                            <span className="text-xs text-gray-400 block mb-1">扭曲圈数</span>
+                            <div className="flex items-center gap-2">
+                                <input type="range" min={0.5} max={5} step={0.1} defaultValue={1.5}
+                                    className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                <span className="text-xs text-white w-8 text-center">1.5</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 绽放模式参数 */}
+                    {symmetryMode === 'bloom' && (
+                        <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">缩放范围</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-500 w-8">0.2x</span>
+                                    <div className="flex-1 h-1.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg" />
+                                    <span className="text-xs text-gray-500 w-8">2.0x</span>
+                                </div>
+                            </div>
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">层间角度</span>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min={10} max={60} step={5} defaultValue={30}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">30°</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 球面模式参数 */}
+                    {symmetryMode === 'sphere' && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                            <span className="text-xs text-gray-400 block mb-1">球体半径</span>
+                            <div className="flex items-center gap-2">
+                                <input type="range" min={0.1} max={0.5} step={0.05} defaultValue={0.25}
+                                    className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                <span className="text-xs text-white w-8 text-center">0.25</span>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 网格模式参数 */}
+                    {(symmetryMode === 'gridHex' || symmetryMode === 'gridCircle') && (
+                        <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">格子大小</span>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min={0.05} max={0.3} step={0.01} defaultValue={0.15}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">0.15</span>
+                                </div>
+                            </div>
+                            {symmetryMode === 'gridCircle' && (
+                                <div>
+                                    <span className="text-xs text-gray-400 block mb-1">环数</span>
+                                    <div className="flex items-center gap-2">
+                                        <input type="range" min={2} max={10} step={1} defaultValue={4}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                        <span className="text-xs text-white w-8 text-center">4</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* 湍流模式参数 */}
+                    {symmetryMode === 'liquid' && (
+                        <div className="mt-2 pt-2 border-t border-white/10 space-y-2">
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">扭曲强度</span>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min={0.02} max={0.2} step={0.01} defaultValue={0.08}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">0.08</span>
+                                </div>
+                            </div>
+                            <div>
+                                <span className="text-xs text-gray-400 block mb-1">噪声频率</span>
+                                <div className="flex items-center gap-2">
+                                    <input type="range" min={1} max={20} step={1} defaultValue={7}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500" />
+                                    <span className="text-xs text-white w-8 text-center">7</span>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>

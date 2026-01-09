@@ -511,6 +511,17 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         }
     }, [isActive, customMagicCircles.length, currentCircleId]);
 
+    // 同步currentLayerId：当切换法阵时，自动选中新法阵的第一个图层
+    useEffect(() => {
+        if (currentCircle && currentCircle.layers.length > 0) {
+            // 如果当前layerId不在新法阵的图层列表中，切换到第一个图层
+            const layerExists = currentCircle.layers.some(l => l.id === currentLayerId);
+            if (!layerExists) {
+                setCurrentLayerId(currentCircle.layers[0].id);
+            }
+        }
+    }, [currentCircle, currentLayerId]);
+
     // 处理指针按下
     const handlePointerDown = useCallback((e: React.PointerEvent) => {
         // Preview模式下禁止绘制
@@ -991,10 +1002,13 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                             justifyContent: 'space-between',
                                             gap: 6,
                                             cursor: 'pointer',
-                                            background: isSelected ? 'rgba(var(--ui-primary-rgb), 0.15)' : 'transparent',
+                                            background: isSelected ? 'rgba(var(--ui-primary-rgb), 0.25)' : 'transparent',
+                                            borderLeft: isSelected ? '3px solid var(--ui-primary)' : '3px solid transparent',
                                             borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                            transition: 'background 0.15s'
+                                            transition: 'all 0.15s'
                                         }}
+                                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
+                                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                                             {isEditing ? (
