@@ -1,7 +1,7 @@
 /**
  * input: App.tsx 传入的星球 settings + nebulaSettings + 自定义法阵 customMagicCircles（含 updatedAt 用于触发重建）+ 手势/图像等数据；依赖 shaders 与三维后处理
  * output: 渲染 Planet 场景；互通模式（Interop）下接管星云实例渲染与相关 uniforms 同步
- * pos: 互通模式渲染的权威入口，负责“星球 + 星云叠加”整体画面与特效即时生效
+ * pos: 互通模式渲染的权威入口，负责“星球 + 星云叠加”整体画面与特效即时生效；并在运行时同步自定义法阵各笔刷材质（包含 lightsaber 的 uMC* 命名）uniforms
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  */
 
@@ -9342,16 +9342,38 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
                     if (mat.uniforms.uMCPulseIntensity) mat.uniforms.uMCPulseIntensity.value = settings.pulseIntensity;
 
                     // 更新染色功能参数
-                    if (mat.uniforms.uBaseHue) mat.uniforms.uBaseHue.value = settings.baseHue ?? 200;
-                    if (mat.uniforms.uBaseSaturation) mat.uniforms.uBaseSaturation.value = settings.baseSaturation ?? 1.0;
-                    if (mat.uniforms.uSaturationBoost) mat.uniforms.uSaturationBoost.value = settings.saturationBoost ?? 1.0;
+                    const baseHue = settings.baseHue ?? 200;
+                    const baseSaturation = settings.baseSaturation ?? 1.0;
+                    const saturationBoost = settings.saturationBoost ?? 1.0;
+                    const colorMidPos = gc?.colorMidPosition ?? 0.5;
+                    const proceduralIntensity = gc?.proceduralIntensity ?? 1.0;
+
+                    if (mat.uniforms.uBaseHue) mat.uniforms.uBaseHue.value = baseHue;
+                    if (mat.uniforms.uBaseSaturation) mat.uniforms.uBaseSaturation.value = baseSaturation;
+                    if (mat.uniforms.uSaturationBoost) mat.uniforms.uSaturationBoost.value = saturationBoost;
                     if (mat.uniforms.uColorMode) mat.uniforms.uColorMode.value = colorMode;
-                    if (mat.uniforms.uColorMidPos) mat.uniforms.uColorMidPos.value = gc?.colorMidPosition ?? 0.5;
-                    if (mat.uniforms.uProceduralIntensity) mat.uniforms.uProceduralIntensity.value = gc?.proceduralIntensity ?? 1.0;
+                    if (mat.uniforms.uColorMidPos) mat.uniforms.uColorMidPos.value = colorMidPos;
+                    if (mat.uniforms.uProceduralIntensity) mat.uniforms.uProceduralIntensity.value = proceduralIntensity;
+
+                    if (mat.uniforms.uMCBaseHue) mat.uniforms.uMCBaseHue.value = baseHue;
+                    if (mat.uniforms.uMCBaseSaturation) mat.uniforms.uMCBaseSaturation.value = baseSaturation;
+                    if (mat.uniforms.uMCSaturationBoost) mat.uniforms.uMCSaturationBoost.value = saturationBoost;
+                    if (mat.uniforms.uMCColorMode) mat.uniforms.uMCColorMode.value = colorMode;
+                    if (mat.uniforms.uMCColorMidPos) mat.uniforms.uMCColorMidPos.value = colorMidPos;
+                    if (mat.uniforms.uMCProceduralIntensity) mat.uniforms.uMCProceduralIntensity.value = proceduralIntensity;
+
                     // 更新渐变颜色
-                    if (gc?.colors?.[0] && mat.uniforms.uColor1) mat.uniforms.uColor1.value = parseColor(gc.colors[0]);
-                    if (gc?.colors?.[1] && mat.uniforms.uColor2) mat.uniforms.uColor2.value = parseColor(gc.colors[1]);
-                    if (gc?.colors?.[2] && mat.uniforms.uColor3) mat.uniforms.uColor3.value = parseColor(gc.colors[2]);
+                    const color1 = gc?.colors?.[0] ? parseColor(gc.colors[0]) : undefined;
+                    const color2 = gc?.colors?.[1] ? parseColor(gc.colors[1]) : undefined;
+                    const color3 = gc?.colors?.[2] ? parseColor(gc.colors[2]) : undefined;
+
+                    if (color1 && mat.uniforms.uColor1) mat.uniforms.uColor1.value = color1;
+                    if (color2 && mat.uniforms.uColor2) mat.uniforms.uColor2.value = color2;
+                    if (color3 && mat.uniforms.uColor3) mat.uniforms.uColor3.value = color3;
+
+                    if (color1 && mat.uniforms.uMCColor1) mat.uniforms.uMCColor1.value = color1;
+                    if (color2 && mat.uniforms.uMCColor2) mat.uniforms.uMCColor2.value = color2;
+                    if (color3 && mat.uniforms.uMCColor3) mat.uniforms.uMCColor3.value = color3;
                   }
                 }
               });

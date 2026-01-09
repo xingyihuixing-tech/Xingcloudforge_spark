@@ -28,7 +28,7 @@
 
 - PlanetScene.tsx
   - 地位: 星球与互通模式渲染核心
-  - 功能: 渲染星球场景；互通模式下接管星云实例渲染并同步 uniforms
+  - 功能: 渲染星球场景；互通模式下接管星云实例渲染并同步 uniforms；运行时同步自定义法阵各笔刷材质 uniforms（包含 lightsaber 的 uMC* 染色/饱和度命名）
 
 - MagicCircleDrawing/
   - 地位: 自定义法阵绘图系统入口
