@@ -666,8 +666,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushColor,
                 lightsaberSettings,
                 symmetryMode,
-                symmetryDivisions,
-                previewMcSettings  // 添加缺失的参数
+                symmetryDivisions
+                // 不传mcSettings，光剑使用函数内部默认值
             );
         } else {
             refs.currentStrokeMesh = createLineStrokeMesh(
@@ -675,8 +675,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushColor,
                 silkSettings,
                 symmetryMode,
-                symmetryDivisions,
-                previewMcSettings  // 添加缺失的参数
+                symmetryDivisions
+                // 不传mcSettings，丝环使用函数内部默认值
             );
         }
 

@@ -5,7 +5,7 @@
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     CustomMagicCircle,
     MagicCircleLayer,
@@ -97,6 +97,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
 }) => {
     const [editingCircleName, setEditingCircleName] = useState<string | null>(null);
     const [tempName, setTempName] = useState('');
+    const [isCircleListOpen, setIsCircleListOpen] = useState(false);
+    const circleListRef = useRef<HTMLDivElement>(null);
 
     const currentCircle = customMagicCircles.find(c => c.id === currentCircleId);
     const layers = currentCircle?.layers || [];
@@ -136,6 +138,19 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
         setTempName('');
     };
 
+    // 点击外部关闭法阵列表
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (circleListRef.current && !circleListRef.current.contains(e.target as Node)) {
+                setIsCircleListOpen(false);
+            }
+        };
+        if (isCircleListOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+            return () => document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [isCircleListOpen]);
+
     return (
         <div
             className="drawing-panel-glass fixed right-0 top-0 bottom-0 w-64 flex flex-col z-[200]"
@@ -173,30 +188,77 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                         </button>
                     </div>
 
-                    {/* 法阵下拉选择器 */}
-                    <div className="flex items-center gap-2">
-                        <select
-                            value={currentCircleId || ''}
-                            onChange={(e) => onSelectCircle(e.target.value)}
-                            className="flex-1 bg-gray-700/80 text-white text-xs rounded px-2 py-1.5 border border-white/10 outline-none cursor-pointer hover:bg-gray-600/80 transition-colors"
+                    {/* 法阵弹出式选择器 */}
+                    <div ref={circleListRef} className="relative">
+                        {/* 触发按钮 - 显示当前选中法阵 */}
+                        <button
+                            onClick={() => setIsCircleListOpen(!isCircleListOpen)}
+                            className="w-full flex items-center justify-between px-2 py-1.5 bg-gray-700/80 text-white text-xs rounded border border-white/10 cursor-pointer hover:bg-gray-600/80 transition-colors"
                         >
-                            {customMagicCircles.length === 0 ? (
-                                <option value="" disabled>暂无法阵</option>
-                            ) : (
-                                customMagicCircles.map(circle => (
-                                    <option key={circle.id} value={circle.id}>{circle.name}</option>
-                                ))
-                            )}
-                        </select>
-                        {/* 删除当前法阵 */}
-                        {currentCircleId && customMagicCircles.length > 1 && (
-                            <button
-                                onClick={() => onDeleteCircle(currentCircleId)}
-                                className="p-1 rounded hover:bg-white/10 transition-colors text-gray-500 hover:text-red-400"
-                                title="删除当前法阵"
-                            >
-                                <DeleteIcon size={12} />
-                            </button>
+                            <span className="truncate">
+                                {currentCircle?.name || '选择法阵...'}
+                            </span>
+                            <span className="text-gray-500 ml-2">{isCircleListOpen ? '▲' : '▼'}</span>
+                        </button>
+
+                        {/* 弹出列表 */}
+                        {isCircleListOpen && (
+                            <div className="absolute z-50 left-0 right-0 mt-1 bg-gray-800 border border-gray-600 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                {customMagicCircles.length === 0 ? (
+                                    <div className="px-3 py-2 text-gray-500 text-xs">暂无法阵</div>
+                                ) : (
+                                    customMagicCircles.map(circle => {
+                                        const isSelected = circle.id === currentCircleId;
+                                        const isEditing = editingCircleName === circle.id;
+
+                                        return isEditing ? (
+                                            <div key={circle.id} className="px-2 py-1">
+                                                <input
+                                                    type="text"
+                                                    value={tempName}
+                                                    onChange={e => setTempName(e.target.value)}
+                                                    onBlur={finishRenaming}
+                                                    onKeyDown={e => e.key === 'Enter' && finishRenaming()}
+                                                    className="w-full px-2 py-1 text-xs bg-gray-700 rounded text-white outline-none"
+                                                    autoFocus
+                                                />
+                                            </div>
+                                        ) : (
+                                            <div
+                                                key={circle.id}
+                                                className={`group flex items-center justify-between px-2 py-1.5 cursor-pointer transition-colors ${isSelected ? 'bg-purple-500/30 text-white' : 'text-gray-300 hover:bg-gray-700'
+                                                    }`}
+                                                onClick={() => {
+                                                    onSelectCircle(circle.id);
+                                                    setIsCircleListOpen(false);
+                                                }}
+                                                onDoubleClick={(e) => {
+                                                    e.stopPropagation();
+                                                    startRenaming(circle);
+                                                }}
+                                            >
+                                                <div className="flex items-center gap-2 flex-1 truncate">
+                                                    {isSelected && <span className="text-purple-400 text-xs">★</span>}
+                                                    <span className="text-xs truncate">{circle.name}</span>
+                                                </div>
+                                                {/* 删除按钮 - 每项都有 */}
+                                                {customMagicCircles.length > 1 && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onDeleteCircle(circle.id);
+                                                        }}
+                                                        className="opacity-0 group-hover:opacity-100 p-1 text-gray-500 hover:text-red-400 transition-all"
+                                                        title="删除"
+                                                    >
+                                                        <DeleteIcon size={10} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
