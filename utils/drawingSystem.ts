@@ -1199,7 +1199,8 @@ export function createLightsaberStrokeMesh(
         color3?: THREE.Vector3;
         colorMidPos?: number;
         proceduralIntensity?: number;
-    }
+    },
+    symmetryParams?: SymmetryParams
 ): THREE.Group {
     const group = new THREE.Group();
     if (points.length < 2) return group;
@@ -1221,7 +1222,7 @@ export function createLightsaberStrokeMesh(
 
     // 应用对称（注意Y轴翻转，与粒子画笔一致）
     const basePath = smoothedPoints.map(p => ({ x: p.x - 0.5, y: 0.5 - p.y, pressure: p.pressure }));
-    const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions);
+    const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
 
     const baseRenderOrder = 53;
 
@@ -1703,7 +1704,8 @@ export function createLineStrokeMesh(
         color3?: THREE.Vector3;
         colorMidPos?: number;
         proceduralIntensity?: number;
-    }
+    },
+    symmetryParams?: SymmetryParams
 ): THREE.Group {
     const group = new THREE.Group();
     // 收集所有丝环材质，用于后续更新uTime
@@ -1726,39 +1728,16 @@ export function createLineStrokeMesh(
     const mcSettings = magicCircleSettings || {};
 
     // 为每个对称副本创建线条
-    type PathPoint = { x: number; y: number; pressure: number };
-    const allPaths: PathPoint[][] = [];
-
     // 生成路径点
-    const basePath: PathPoint[] = points.map(p => ({
+    const basePath = points.map(p => ({
         x: p.x - 0.5,
         y: 0.5 - p.y,
         pressure: clamp01(p.pressure ?? 0.5)
     }));
 
-    if (symmetryMode === 'none') {
-        allPaths.push(basePath.map(p => ({ x: p.x, y: p.y, pressure: p.pressure })));
-    } else {
-        // 对整条路径应用对称
-        for (let i = 0; i < symmetryDivisions; i++) {
-            const angle = (Math.PI * 2 / symmetryDivisions) * i;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-
-            const transformedPath: PathPoint[] = basePath.map(p => {
-                const x = p.x * cos - p.y * sin;
-                const y = p.x * sin + p.y * cos;
-                return { x, y, pressure: p.pressure };
-            });
-            allPaths.push(transformedPath);
-
-            // 万花筒镜像
-            if (symmetryMode === 'kaleidoscope') {
-                const mirroredPath = transformedPath.map(v => ({ x: -v.x, y: v.y, pressure: v.pressure }));
-                allPaths.push(mirroredPath);
-            }
-        }
-    }
+    // 使用统一的对称变换函数
+    const symmetricPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
+    const allPaths = symmetricPaths.map(path => path.map(p => ({ x: p.x, y: p.y, z: p.z, pressure: p.pressure })));
 
     // 为每条路径创建线条 - 使用真正的丝环着色器
     // 修复闪烁：同一笔画的所有分段使用统一的renderOrder，不同路径间隔开
@@ -1840,6 +1819,7 @@ export function createLineStrokeMesh(
         const segCountByLen = Math.max(1, Math.floor(totalLen / targetSpacing));
         const segCount = Math.min(maxSegmentsPerPath, segCountByLen);
 
+        type PathPoint = { x: number; y: number; z?: number; pressure: number };
         const sampleAt = (dist: number): PathPoint => {
             const d = Math.max(0, Math.min(totalLen, dist));
             let segIndex = 0;

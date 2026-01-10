@@ -469,7 +469,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.particleRingSettings || {},
                         layer.symmetryMode,
                         layer.symmetryDivisions,
-                        defaultMcSettings
+                        defaultMcSettings,
+                        layer.symmetryParams
                     );
                 } else if (stroke.brushType === 'lightsaber') {
                     mesh = createLightsaberStrokeMesh(
@@ -478,7 +479,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.lightsaberSettings || {},
                         layer.symmetryMode,
                         layer.symmetryDivisions,
-                        defaultMcSettings
+                        defaultMcSettings,
+                        layer.symmetryParams
                     );
                 } else {
                     mesh = createLineStrokeMesh(
@@ -487,7 +489,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         stroke.silkRingSettings || {},
                         layer.symmetryMode,
                         layer.symmetryDivisions,
-                        defaultMcSettings
+                        defaultMcSettings,
+                        layer.symmetryParams
                     );
                 }
                 strokesGroup.add(mesh);
@@ -626,7 +629,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 previewSettings,
                 symmetryMode,
                 symmetryDivisions,
-                previewMcSettings
+                previewMcSettings,
+                symmetryParams
             );
         } else if (brushType === 'lightsaber') {
             refs.currentStrokeMesh = createLightsaberStrokeMesh(
@@ -634,7 +638,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushColor,
                 lightsaberSettings,
                 symmetryMode,
-                symmetryDivisions
+                symmetryDivisions,
+                undefined,
+                symmetryParams
             );
         } else {
             refs.currentStrokeMesh = createLineStrokeMesh(
@@ -642,12 +648,14 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 brushColor,
                 silkSettings,
                 symmetryMode,
-                symmetryDivisions
+                symmetryDivisions,
+                undefined,
+                symmetryParams
             );
         }
 
         refs.strokesGroup.add(refs.currentStrokeMesh);
-    }, [brushType, brushColor, particleSettings, silkSettings, lightsaberSettings, symmetryMode, symmetryDivisions]);
+    }, [brushType, brushColor, particleSettings, silkSettings, lightsaberSettings, symmetryMode, symmetryDivisions, symmetryParams]);
 
     // 处理指针抬起
     const handlePointerUp = useCallback(() => {
