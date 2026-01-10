@@ -146,24 +146,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     const symmetryMode = currentLayer?.symmetryMode || 'radial';
     const symmetryDivisions = currentLayer?.symmetryDivisions || 8;
 
-    // 对称模式专属参数 (从当前图层读取或使用默认值)
-    const symmetryParams = currentLayer?.symmetryParams || {
-        vortexMaxTwist: 1.5,
-        bloomMinScale: 0.2,
-        bloomMaxScale: 2.0,
-        bloomRotationDeg: 30,
-        sphereRadius: 0.25,
-        gridCellSize: 0.15,
-        gridCircleRings: 4,
-        liquidStrength: 0.08,
-        liquidFrequency: 7,
-        starburstInnerScale: 0.5,
-        starburstOuterScale: 1.3,
-        prismRadius: 0.3,
-        orbitalMaxTiltDeg: 90,
-        foldingRadius: 0.25
-    };
-
     // 绘制状态
     const [isDrawing, setIsDrawing] = useState(false);
     const currentStrokeRef = useRef<StrokePoint[]>([]);
@@ -529,17 +511,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         }
     }, [isActive, customMagicCircles.length, currentCircleId]);
 
-    // 同步currentLayerId：当切换法阵时，自动选中新法阵的第一个图层
-    useEffect(() => {
-        if (currentCircle && currentCircle.layers.length > 0) {
-            // 如果当前layerId不在新法阵的图层列表中，切换到第一个图层
-            const layerExists = currentCircle.layers.some(l => l.id === currentLayerId);
-            if (!layerExists) {
-                setCurrentLayerId(currentCircle.layers[0].id);
-            }
-        }
-    }, [currentCircle, currentLayerId]);
-
     // 处理指针按下
     const handlePointerDown = useCallback((e: React.PointerEvent) => {
         // Preview模式下禁止绘制
@@ -641,11 +612,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         if (currentStrokeRef.current.length < 2) return;
 
         // 创建新预览（降低密度以提高性能）
-        const previewMcSettings = {
-            particleSizeScale: 0.002,  // 画布粒子缩放
-            opacity: 1.0,
-            brightness: 1.0
-        };
+        const previewMcSettings = { particleSizeScale: 0.002 };  // 画布粒子缩放
         if (brushType === 'particle') {
             // 预览时使用较低的密度以避免卡顿
             const previewSettings = {
@@ -667,7 +634,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 lightsaberSettings,
                 symmetryMode,
                 symmetryDivisions
-                // 不传mcSettings，光剑使用函数内部默认值
             );
         } else {
             refs.currentStrokeMesh = createLineStrokeMesh(
@@ -676,7 +642,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 silkSettings,
                 symmetryMode,
                 symmetryDivisions
-                // 不传mcSettings，丝环使用函数内部默认值
             );
         }
 
@@ -841,27 +806,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         onUpdateCircles(updatedCircles);
     }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
-
-    // 更新对称模式专属参数
-    const handleUpdateSymmetryParams = useCallback((params: Partial<typeof symmetryParams>) => {
-        if (!currentCircle || !currentLayerId) return;
-
-        const updatedCircles = customMagicCircles.map(c => {
-            if (c.id !== currentCircle.id) return c;
-            return {
-                ...c,
-                layers: c.layers.map(l => {
-                    if (l.id !== currentLayerId) return l;
-                    return {
-                        ...l,
-                        symmetryParams: { ...symmetryParams, ...params }
-                    };
-                })
-            };
-        });
-
-        onUpdateCircles(updatedCircles);
-    }, [currentCircle, currentLayerId, customMagicCircles, symmetryParams, onUpdateCircles]);
 
     // 删除图层
     const handleDeleteLayer = useCallback((layerId: string) => {
@@ -1047,13 +991,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                             justifyContent: 'space-between',
                                             gap: 6,
                                             cursor: 'pointer',
-                                            background: isSelected ? 'rgba(var(--ui-primary-rgb), 0.25)' : 'transparent',
-                                            borderLeft: isSelected ? '3px solid var(--ui-primary)' : '3px solid transparent',
+                                            background: isSelected ? 'rgba(var(--ui-primary-rgb), 0.15)' : 'transparent',
                                             borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                            transition: 'all 0.15s'
+                                            transition: 'background 0.15s'
                                         }}
-                                        onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.08)'; }}
-                                        onMouseLeave={(e) => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                                             {isEditing ? (
@@ -1966,8 +1907,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 symmetryMode={symmetryMode}
                 symmetryDivisions={symmetryDivisions}
                 onUpdateSymmetry={handleUpdateSymmetry}
-                symmetryParams={symmetryParams}
-                onUpdateSymmetryParams={handleUpdateSymmetryParams}
                 onClose={onClose}
             />
         </div >

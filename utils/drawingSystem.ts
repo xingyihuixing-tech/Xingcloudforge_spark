@@ -330,41 +330,45 @@ export function applySymmetryTransform(
             });
         }
     } else if (mode === 'prism') {
-        // 棱镜模式：真正的3D棱柱侧面映射
-        // 将笔迹映射到多边形棱柱的各个侧面上，每个侧面是一个倾斜的3D平面
-        const prismRadius = 0.3;  // 棱柱外接圆半径（侧面到中心的距离）
-        const faceCount = Math.max(3, divisions);
+        // 棱镜模式：3D正多边形棱柱，笔迹在各面复制
+        // 每个面有不同的Z偏移，形成立体效果
+        const prismHeight = 0.3;  // 棱柱高度（Z方向范围）
+        const faceCount = Math.max(3, divisions); // 至少三面
 
         for (let i = 0; i < faceCount; i++) {
-            const faceAngle = angleStep * i;  // 这个侧面的朝向角度
+            const angle = baseAngle + angleStep * i;
+            // 计算每个面的Z位置（沿正多边形边缘分布）
+            const faceAngle = (Math.PI * 2 / faceCount) * i;
+            const zOffset = Math.sin(faceAngle) * prismHeight;
 
-            // 计算侧面的法向量（指向外）
-            const normalX = Math.cos(faceAngle);
-            const normalZ = Math.sin(faceAngle);
+            // 主面上的点
+            results.push({
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle),
+                z: zOffset
+            });
 
-            // 将原始点映射到这个侧面上：
-            // - x坐标沿侧面的宽度方向（切向）
-            // - y坐标沿侧面的高度方向（Y轴）
-            // - 侧面向外偏移prismRadius距离
-            const tangentX = -normalZ;  // 切向量 = 法向量旋转90度
-            const tangentZ = normalX;
-
-            // 最终3D坐标：侧面位置 + 沿切向的偏移
-            const px = normalX * prismRadius + tangentX * dx * 0.5;
-            const py = dy;  // Y轴直接保持
-            const pz = normalZ * prismRadius + tangentZ * dx * 0.5;
-
-            results.push({ x: px, y: py, z: pz });
+            // 对面镜像（棱镜对称特性）
+            if (faceCount >= 4) {
+                const oppositeAngle = angle + Math.PI;
+                results.push({
+                    x: radius * Math.cos(oppositeAngle),
+                    y: radius * Math.sin(oppositeAngle),
+                    z: -zOffset
+                });
+            }
         }
     } else if (mode === 'vortex') {
-        // 漩涡模式：黑洞吸入式螺旋扭曲
-        const maxTwist = Math.PI * 3;
-
+        // 漩涡模式：随半径旋转扭曲
+        // 扭曲因子：距离中心越近旋转越剧烈
+        const twistFactor = 2.0;
         for (let i = 0; i < divisions; i++) {
             const angleOffset = angleStep * i;
-            const normalizedRadius = Math.min(1, radius * 2);
-            const twistAmount = maxTwist * Math.pow(1 - normalizedRadius, 2);
-            const angle = baseAngle + angleOffset + twistAmount;
+            // 核心逻辑：角度随半径变化
+            // (1 - radius*2) 使得中心处(radius=0)扭曲最大，边缘处(radius=0.5)扭曲最小
+            // 添加 uTime 相关的动态旋转会让效果更好，但在单纯变换函数里我们只做静态几何变换
+            const twistAngle = twistFactor * Math.max(0, 1.0 - radius * 3.0);
+            const angle = baseAngle + angleOffset + twistAngle;
 
             results.push({
                 x: radius * Math.cos(angle),
@@ -372,22 +376,24 @@ export function applySymmetryTransform(
             });
         }
     } else if (mode === 'bloom') {
-        // 绽放模式：花朵层叠绽开
-        // 每层是完整的笔迹副本，从小到大、从内到外展开
-        // 同时每层也进行径向对称复制
-        const layerCount = Math.max(3, Math.min(12, divisions));  // 层数限制在3-12层
-        const minScale = 0.2;   // 最内层缩放20%
-        const maxScale = 2.0;   // 最外层缩放200%
-        const rotationPerLayer = Math.PI / 6;  // 每层旋转30度
+        // 绽放模式：多层缩放旋转，类似花朵
+        // 每一层比上一层大，且有角度偏移
+        for (let i = 0; i < divisions; i++) {
+            // 基础角度分布
+            const angleOffset = angleStep * i;
 
-        for (let i = 0; i < layerCount; i++) {
-            const progress = i / (layerCount - 1 || 1);
-            const scale = minScale + (maxScale - minScale) * progress;
-            const layerRotation = i * rotationPerLayer;
-            const angle = baseAngle + layerRotation;
+            // 层级缩放：从0.5倍到1.5倍分布
+            const scaleStep = 1.0 / divisions;
+            const scale = 0.5 + i * scaleStep;
+
+            // 层级旋转偏移：每一层错开一点角度
+            const rotationOffset = i * (Math.PI / 12);
+
+            const angle = baseAngle + angleOffset + rotationOffset;
             const scaledRadius = radius * scale;
-            // Z轴：内层在前（Z负），外层在后（Z正），增大Z范围
-            const zOffset = (progress - 0.5) * 0.3;
+
+            // 添加一点Z轴层叠，让花朵更有立体感
+            const zOffset = i * 0.05;
 
             results.push({
                 x: scaledRadius * Math.cos(angle),
@@ -397,9 +403,15 @@ export function applySymmetryTransform(
         }
     } else if (mode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
-        const R = 0.25;  // 缩小球体半径，使其只占画布的1/4
-        const lat = dy * Math.PI;
-        const lon = dx * Math.PI * 2;
+        // y -> 纬度 (-PI/2 到 PI/2)
+        // x -> 经度 (-PI 到 PI)
+        const R = 0.5; // 球体半径
+
+        // 经纬度映射
+        const lat = dy * Math.PI; // -0.5~0.5 -> -PI/2~PI/2
+        const lon = dx * Math.PI * 2; // -0.5~0.5 -> -PI~PI
+
+        // 球坐标转笛卡尔坐标 (基础点)
         const bx = R * Math.cos(lat) * Math.sin(lon);
         const by = R * Math.sin(lat);
         const bz = R * Math.cos(lat) * Math.cos(lon);
@@ -408,6 +420,8 @@ export function applySymmetryTransform(
             const rotAngle = angleStep * i;
             const cos = Math.cos(rotAngle);
             const sin = Math.sin(rotAngle);
+
+            // 绕Y轴旋转复制
             results.push({
                 x: bx * cos + bz * sin,
                 y: by,
@@ -415,159 +429,33 @@ export function applySymmetryTransform(
             });
         }
     } else if (mode === 'orbital') {
-        // 轨道环模式：原子电子云，每个轨道是不同倾斜角度的平面
-        // 关键：每个副本的倾斜角度不同，形成球状笼
+        // 轨道环模式：多轴旋转形成的原子轨道效果
+        // 将平面笔迹视为一个倾斜的轨道平面，然后旋转复制
+        const tiltAngle = Math.PI / 3; // 轨道倾角 60度
+        const cosTilt = Math.cos(tiltAngle);
+        const sinTilt = Math.sin(tiltAngle);
+
+        // 先将点变换到倾斜平面上 (绕X轴旋转)
+        // 初始 z = 0
+        const p1x = dx;
+        const p1y = dy * cosTilt;
+        const p1z = dy * sinTilt;
+
         for (let i = 0; i < divisions; i++) {
-            // 每个轨道使用不同的倾斜角度（从0到90度均匀分布）
-            const tiltAngle = (Math.PI / 2) * (i / divisions); // 0到90度
-            const azimuthAngle = angleStep * i; // 方位角
+            const rotAngle = (i / divisions) * Math.PI; // 轨道只需转180度即可覆盖球体（如果是完整环），但为了均匀分布这里用半周分布
+            // 或者用 2 * PI 分布？ 如果画的是非闭合线，用 2PI 更好。如果是闭合圆，PI和2PI重叠？
+            // 采用 2*PI 分布更通用，让用户自己决定画什么
+            const orbitAngle = (i / divisions) * Math.PI * 2;
 
-            // 先绕X轴倾斜
-            const cosTilt = Math.cos(tiltAngle);
-            const sinTilt = Math.sin(tiltAngle);
-            const p1x = dx;
-            const p1y = dy * cosTilt;
-            const p1z = dy * sinTilt;
+            const cos = Math.cos(orbitAngle);
+            const sin = Math.sin(orbitAngle);
 
-            // 再绕Y轴旋转方位角
-            const cosAz = Math.cos(azimuthAngle);
-            const sinAz = Math.sin(azimuthAngle);
-
+            // 绕Y轴旋转整个轨道平面
             results.push({
-                x: p1x * cosAz + p1z * sinAz,
+                x: p1x * cos + p1z * sin, // 注意这里是混合 x 和 z (绕Y轴)
                 y: p1y,
-                z: -p1x * sinAz + p1z * cosAz
+                z: -p1x * sin + p1z * cos
             });
-        }
-    } else if (mode === 'folding') {
-        // 折叠模式：空间折叠，超出边界的笔迹折回
-        // 同时结合角度和半径的折叠，形成万花筒+边界反射效果
-        const foldRadius = 0.25;  // 折叠边界半径
-        const foldAngle = Math.PI / divisions;  // 角度折叠区间
-
-        // 半径折叠（镜像反射）
-        let foldedR = radius;
-        if (foldedR > foldRadius) {
-            const excess = foldedR - foldRadius;
-            const foldCount = Math.floor(excess / foldRadius);
-            const remainder = excess % foldRadius;
-            foldedR = (foldCount % 2 === 0) ? (foldRadius + remainder) : (foldRadius - remainder);
-            foldedR = Math.max(0, Math.min(foldRadius * 2, foldedR));
-        }
-
-        // 角度折叠到基础扇区内
-        let foldedAngle = baseAngle % foldAngle;
-        const sectorIndex = Math.floor(baseAngle / foldAngle);
-        if (sectorIndex % 2 === 1) {
-            foldedAngle = foldAngle - foldedAngle; // 镜像
-        }
-
-        for (let i = 0; i < divisions; i++) {
-            const sectorAngle = angleStep * i;
-            const finalAngle = sectorAngle + foldedAngle;
-            results.push({
-                x: foldedR * Math.cos(finalAngle),
-                y: foldedR * Math.sin(finalAngle)
-            });
-            // 镜像副本
-            const mirrorAngle = sectorAngle + angleStep - foldedAngle;
-            results.push({
-                x: foldedR * Math.cos(mirrorAngle),
-                y: foldedR * Math.sin(mirrorAngle)
-            });
-        }
-
-    } else if (mode === 'liquid') {
-        // 湍流模式：有机流体扭曲
-        // 使用多频率叠加的噪声产生自然的流动感
-        const turbulence = (x: number, y: number): { nx: number; ny: number } => {
-            // 多层噪声叠加（类似FBM - Fractal Brownian Motion）
-            let offsetX = 0, offsetY = 0;
-            const freqs = [3, 7, 13];  // 多频率
-            const amps = [0.08, 0.04, 0.02];  // 振幅递减
-
-            for (let i = 0; i < freqs.length; i++) {
-                const f = freqs[i];
-                const a = amps[i];
-                offsetX += Math.sin(x * f + y * f * 0.7) * a;
-                offsetY += Math.cos(y * f + x * f * 0.7) * a;
-            }
-            return { nx: x + offsetX, ny: y + offsetY };
-        };
-
-        const distorted = turbulence(dx, dy);
-        const nRadius = Math.sqrt(distorted.nx * distorted.nx + distorted.ny * distorted.ny);
-        const nAngle = Math.atan2(distorted.ny, distorted.nx);
-
-        for (let i = 0; i < divisions; i++) {
-            const rotAngle = angleStep * i;
-            const finalAngle = nAngle + rotAngle;
-            results.push({
-                x: nRadius * Math.cos(finalAngle),
-                y: nRadius * Math.sin(finalAngle)
-            });
-        }
-    } else if (mode === 'gridHex') {
-        // 蜂巢网格模式：六边形平铺
-        // 将画布分割成六边形网格，笔迹在每个六边形单元中复制
-        const cellSize = 0.15;  // 单元格大小
-        const hexHeight = cellSize * Math.sqrt(3);  // 六边形高度
-        const hexWidth = cellSize * 2;  // 六边形宽度
-
-        // 计算局部坐标（在单元格内的位置）
-        const localX = ((dx % cellSize) + cellSize) % cellSize;
-        const localY = ((dy % cellSize) + cellSize) % cellSize;
-
-        // 在多个六边形单元中复制（3x3网格 = 9个单元）
-        const gridRange = 2;
-        for (let gx = -gridRange; gx <= gridRange; gx++) {
-            for (let gy = -gridRange; gy <= gridRange; gy++) {
-                // 六边形网格的错位排列
-                const offsetX = (gy % 2 === 0) ? 0 : hexWidth * 0.75;
-                const worldX = gx * hexWidth * 1.5 + offsetX + localX;
-                const worldY = gy * hexHeight * 0.5 + localY;
-
-                // 限制在画布范围内
-                if (Math.abs(worldX) <= 0.5 && Math.abs(worldY) <= 0.5) {
-                    results.push({ x: worldX, y: worldY });
-                    // 中心对称的镜像副本
-                    if (gx !== 0 || gy !== 0) {
-                        results.push({ x: -worldX, y: -worldY });
-                    }
-                }
-            }
-        }
-        // 如果没有结果，至少返回原点
-        if (results.length === 0) {
-            results.push({ x: dx, y: dy });
-        }
-    } else if (mode === 'gridCircle') {
-        // 圆形网格模式：同心圆+径向分割平铺
-        // 多层同心圆，每层分割成多个扇区
-        const rings = 4;  // 环数
-        const sectorsPerRing = divisions;  // 每环扇区数
-        const maxRadius = 0.45;  // 最大半径
-
-        // 计算原始点在极坐标中的位置
-        const ringSpacing = maxRadius / rings;
-
-        // 复制到每个环和每个扇区
-        for (let ring = 0; ring < rings; ring++) {
-            const ringRadius = (ring + 0.5) * ringSpacing;
-            const ringScale = ringRadius / (radius + 0.001);  // 缩放比例
-
-            for (let sector = 0; sector < sectorsPerRing; sector++) {
-                const sectorAngle = (sector / sectorsPerRing) * Math.PI * 2;
-                const angle = baseAngle + sectorAngle;
-
-                // 将原始半径映射到这个环的半径范围
-                const mappedRadius = (radius % ringSpacing) + ring * ringSpacing;
-
-                results.push({
-                    x: mappedRadius * Math.cos(angle),
-                    y: mappedRadius * Math.sin(angle)
-                });
-            }
         }
     }
 
@@ -1208,16 +1096,16 @@ uniform float uMCPulseEnabled;
 uniform float uMCPulseSpeed;
 uniform float uMCPulseIntensity;
 
-// 染色功能参数（与粒子/丝环统一命名）
-uniform float uBaseHue;          // 基础色相 0-360
-uniform float uBaseSaturation;   // 基础饱和度 0-1
-uniform float uSaturationBoost;  // 饱和度增强 -1 to 1
-uniform float uColorMode;        // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
-uniform vec3 uColor1;
-uniform vec3 uColor2;
-uniform vec3 uColor3;
-uniform float uColorMidPos;
-uniform float uProceduralIntensity;
+// 染色功能参数
+uniform float uMCBaseHue;          // 基础色相 0-360
+uniform float uMCBaseSaturation;   // 基础饱和度 0-1
+uniform float uMCSaturationBoost;  // 饱和度增强 -1 to 1
+uniform float uMCColorMode;        // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
+uniform vec3 uMCColor1;
+uniform vec3 uMCColor2;
+uniform vec3 uMCColor3;
+uniform float uMCColorMidPos;
+uniform float uMCProceduralIntensity;
 
 varying vec2 vUv;
 varying vec3 vNormal;
@@ -1291,30 +1179,30 @@ void main() {
   }
   
   // 应用染色功能
-  if (uColorMode > 0.5) {
+  if (uMCColorMode > 0.5) {
     float t = vUv.x; // 沿路径的位置
     vec3 tintColor = finalColor;
     
-    if (uColorMode > 3.5) {
+    if (uMCColorMode > 3.5) {
       // 单色模式：使用baseHue和baseSaturation
       vec3 hsl = rgb2hsl(finalColor);
-      hsl.x = uBaseHue / 360.0;
-      hsl.y = uBaseSaturation;
+      hsl.x = uMCBaseHue / 360.0;
+      hsl.y = uMCBaseSaturation;
       tintColor = hsl2rgb(hsl);
-    } else if (uColorMode > 0.5 && uColorMode < 1.5) {
+    } else if (uMCColorMode > 0.5 && uMCColorMode < 1.5) {
       // 双色模式
-      tintColor = mix(uColor1, uColor2, t);
-    } else if (uColorMode > 1.5 && uColorMode < 2.5) {
+      tintColor = mix(uMCColor1, uMCColor2, t);
+    } else if (uMCColorMode > 1.5 && uMCColorMode < 2.5) {
       // 三色模式
-      if (t < uColorMidPos) {
-        tintColor = mix(uColor1, uColor2, t / uColorMidPos);
+      if (t < uMCColorMidPos) {
+        tintColor = mix(uMCColor1, uMCColor2, t / uMCColorMidPos);
       } else {
-        tintColor = mix(uColor2, uColor3, (t - uColorMidPos) / (1.0 - uColorMidPos));
+        tintColor = mix(uMCColor2, uMCColor3, (t - uMCColorMidPos) / (1.0 - uMCColorMidPos));
       }
-    } else if (uColorMode > 2.5 && uColorMode < 3.5) {
+    } else if (uMCColorMode > 2.5 && uMCColorMode < 3.5) {
       // 程序色模式
       float hue = mod(t + uTime * 0.1, 1.0);
-      tintColor = hsl2rgb(vec3(hue, 0.8, 0.6)) * uProceduralIntensity;
+      tintColor = hsl2rgb(vec3(hue, 0.8, 0.6)) * uMCProceduralIntensity;
     }
     
     // 将染色应用到光晕部分，核心保持原色
@@ -1516,16 +1404,16 @@ export function createLightsaberStrokeMesh(
                     uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
                     uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
                     uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                    // 染色功能参数（与粒子/丝环统一命名）
-                    uBaseHue: { value: mcSettings.baseHue ?? 200 },
-                    uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                    uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                    uColorMode: { value: mcSettings.colorMode ?? 0 },
-                    uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                    uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                    uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                    uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                    uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+                    // 染色功能参数
+                    uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+                    uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+                    uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+                    uMCColorMode: { value: mcSettings.colorMode ?? 0 },
+                    uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+                    uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+                    uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+                    uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+                    uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
                 },
                 transparent: true,
                 depthTest: false,
@@ -1678,16 +1566,16 @@ export function createLightsaberStrokeMesh(
                 uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
                 uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
                 uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                // 染色功能参数（与粒子/丝环统一命名）
-                uBaseHue: { value: mcSettings.baseHue ?? 200 },
-                uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                uColorMode: { value: mcSettings.colorMode ?? 0 },
-                uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+                // 染色功能参数
+                uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+                uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+                uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+                uMCColorMode: { value: mcSettings.colorMode ?? 0 },
+                uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+                uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+                uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+                uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+                uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
             },
             transparent: true,
             depthTest: false,
@@ -1772,62 +1660,75 @@ function applySymmetryToPath(
             allPaths.push(scaledPath);
         }
     } else if (symmetryMode === 'prism') {
-        // 棱镜模式：真正的3D棱柱侧面映射
-        const prismRadius = 0.3;
+        // 棱镜模式：3D正多边形棱柱面复制
+        const prismHeight = 0.3;
         const faceCount = Math.max(3, divisions);
 
         for (let div = 0; div < faceCount; div++) {
-            const faceAngle = (div / faceCount) * Math.PI * 2;
-            const normalX = Math.cos(faceAngle);
-            const normalZ = Math.sin(faceAngle);
-            const tangentX = -normalZ;
-            const tangentZ = normalX;
+            const angle = (div / faceCount) * Math.PI * 2;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
 
-            const prismPath = basePath.map(p => ({
-                x: normalX * prismRadius + tangentX * p.x * 0.5,
-                y: p.y,
-                z: normalZ * prismRadius + tangentZ * p.x * 0.5,
+            // 计算Z偏移（棱镜各面的深度位置）
+            const faceAngle = (Math.PI * 2 / faceCount) * div;
+            const zOffset = Math.sin(faceAngle) * prismHeight;
+
+            const rotatedPath = basePath.map(p => ({
+                x: p.x * cos - p.y * sin,
+                y: p.x * sin + p.y * cos,
+                z: zOffset,
                 pressure: p.pressure
             }));
-            allPaths.push(prismPath);
+            allPaths.push(rotatedPath);
+
+            // 棱镜对面镜像（当面数>=4时）
+            if (faceCount >= 4) {
+                const oppositeAngle = angle + Math.PI;
+                const cosOpp = Math.cos(oppositeAngle);
+                const sinOpp = Math.sin(oppositeAngle);
+
+                const mirroredPath = basePath.map(p => ({
+                    x: p.x * cosOpp - p.y * sinOpp,
+                    y: p.x * sinOpp + p.y * cosOpp,
+                    z: -zOffset,
+                    pressure: p.pressure
+                }));
+                allPaths.push(mirroredPath);
+            }
         }
     } else if (symmetryMode === 'vortex') {
-        // 漩涡模式：黑洞吸入式螺旋扭曲
-        const maxTwist = Math.PI * 3;
-
+        // 漩涡模式：随半径旋转扭曲
+        const twistFactor = 2.0;
         for (let div = 0; div < divisions; div++) {
             const angleOffset = (div / divisions) * Math.PI * 2;
 
             const twistedPath = basePath.map(p => {
                 const radius = Math.sqrt(p.x * p.x + p.y * p.y);
-                const normalizedRadius = Math.min(1, radius * 2);
-                const twistAmount = maxTwist * Math.pow(1 - normalizedRadius, 2);
-                const baseAngle = Math.atan2(p.y, p.x);
-                const angle = baseAngle + angleOffset + twistAmount;
+                const twistAngle = twistFactor * Math.max(0, 1.0 - radius * 3.0);
+                const angle = angleOffset + twistAngle;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
 
                 return {
-                    x: radius * Math.cos(angle),
-                    y: radius * Math.sin(angle),
+                    x: p.x * cos - p.y * sin,
+                    y: p.x * sin + p.y * cos,
                     pressure: p.pressure
                 };
             });
             allPaths.push(twistedPath);
         }
     } else if (symmetryMode === 'bloom') {
-        // 绽放模式：花朵层叠绽开
-        const layerCount = Math.max(3, Math.min(12, divisions));
-        const minScale = 0.2;
-        const maxScale = 2.0;
-        const rotationPerLayer = Math.PI / 6;
+        // 绽放模式：多层缩放旋转
+        for (let div = 0; div < divisions; div++) {
+            const angleOffset = (div / divisions) * Math.PI * 2;
+            const scaleStep = 1.0 / divisions;
+            const scale = 0.5 + div * scaleStep;
+            const rotationOffset = div * (Math.PI / 12);
 
-        for (let div = 0; div < layerCount; div++) {
-            const progress = div / (layerCount - 1 || 1);
-            const scale = minScale + (maxScale - minScale) * progress;
-            const layerRotation = div * rotationPerLayer;
-            const zOffset = (progress - 0.5) * 0.3;
-
-            const cos = Math.cos(layerRotation);
-            const sin = Math.sin(layerRotation);
+            const angle = angleOffset + rotationOffset;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const zOffset = div * 0.05;
 
             const bloomPath = basePath.map(p => {
                 const rx = p.x * cos - p.y * sin;
@@ -1835,7 +1736,7 @@ function applySymmetryToPath(
                 return {
                     x: rx * scale,
                     y: ry * scale,
-                    z: zOffset,
+                    z: zOffset, // 3D层叠效果
                     pressure: p.pressure
                 };
             });
@@ -1843,19 +1744,23 @@ function applySymmetryToPath(
         }
     } else if (symmetryMode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
-        const R = 0.25;  // 缩小球体半径
+        const R = 0.5;
         for (let div = 0; div < divisions; div++) {
             const rotAngle = (div / divisions) * Math.PI * 2;
             const cos = Math.cos(rotAngle);
             const sin = Math.sin(rotAngle);
 
             const spherePath = basePath.map(p => {
+                // 坐标映射
                 const lat = p.y * Math.PI;
                 const lon = p.x * Math.PI * 2;
+
+                // 基础球坐标
                 const bx = R * Math.cos(lat) * Math.sin(lon);
                 const by = R * Math.sin(lat);
                 const bz = R * Math.cos(lat) * Math.cos(lon);
 
+                // 绕Y轴旋转复制
                 return {
                     x: bx * cos + bz * sin,
                     y: by,
@@ -1866,198 +1771,38 @@ function applySymmetryToPath(
             allPaths.push(spherePath);
         }
     } else if (symmetryMode === 'orbital') {
-        // 轨道环模式：原子电子云，每个轨道是不同倾斜角度的平面
-        for (let div = 0; div < divisions; div++) {
-            const tiltAngle = (Math.PI / 2) * (div / divisions);
-            const azimuthAngle = (div / divisions) * Math.PI * 2;
+        // 轨道环模式：多轴旋转形成的原子轨道效果
+        const tiltAngle = Math.PI / 3;
+        const cosTilt = Math.cos(tiltAngle);
+        const sinTilt = Math.sin(tiltAngle);
 
-            const cosTilt = Math.cos(tiltAngle);
-            const sinTilt = Math.sin(tiltAngle);
-            const cosAz = Math.cos(azimuthAngle);
-            const sinAz = Math.sin(azimuthAngle);
+        for (let div = 0; div < divisions; div++) {
+            const orbitAngle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(orbitAngle);
+            const sin = Math.sin(orbitAngle);
 
             const orbitalPath = basePath.map(p => {
+                // 先变换到倾斜平面
                 const p1x = p.x;
                 const p1y = p.y * cosTilt;
                 const p1z = p.y * sinTilt;
 
+                // 再绕Y轴旋转
                 return {
-                    x: p1x * cosAz + p1z * sinAz,
+                    x: p1x * cos + p1z * sin,
                     y: p1y,
-                    z: -p1x * sinAz + p1z * cosAz,
+                    z: -p1x * sin + p1z * cos,
                     pressure: p.pressure
                 };
             });
             allPaths.push(orbitalPath);
         }
-    } else if (symmetryMode === 'folding') {
-        // 折叠模式：空间折叠+万花筒效果
-        const foldRadius = 0.25;
-        const foldAngle = Math.PI / divisions;
-
-        for (let div = 0; div < divisions; div++) {
-            const sectorAngle = (div / divisions) * Math.PI * 2;
-
-            const foldedPath = basePath.map(p => {
-                const dx = p.x;
-                const dy = p.y;
-                let r = Math.sqrt(dx * dx + dy * dy);
-                let angle = Math.atan2(dy, dx);
-
-                // 半径折叠
-                if (r > foldRadius) {
-                    const excess = r - foldRadius;
-                    const foldCount = Math.floor(excess / foldRadius);
-                    const remainder = excess % foldRadius;
-                    r = (foldCount % 2 === 0) ? (foldRadius + remainder) : (foldRadius - remainder);
-                    r = Math.max(0, Math.min(foldRadius * 2, r));
-                }
-
-                // 角度折叠到扇区内
-                let foldedAngle = angle % foldAngle;
-                const sectorIndex = Math.floor(angle / foldAngle);
-                if (sectorIndex % 2 === 1) {
-                    foldedAngle = foldAngle - foldedAngle;
-                }
-
-                const finalAngle = sectorAngle + foldedAngle;
-
-                return {
-                    x: r * Math.cos(finalAngle),
-                    y: r * Math.sin(finalAngle),
-                    pressure: p.pressure
-                };
-            });
-            allPaths.push(foldedPath);
-
-            // 镜像副本
-            const mirrorPath = basePath.map(p => {
-                const dx = p.x;
-                const dy = p.y;
-                let r = Math.sqrt(dx * dx + dy * dy);
-                let angle = Math.atan2(dy, dx);
-
-                if (r > foldRadius) {
-                    const excess = r - foldRadius;
-                    const foldCount = Math.floor(excess / foldRadius);
-                    const remainder = excess % foldRadius;
-                    r = (foldCount % 2 === 0) ? (foldRadius + remainder) : (foldRadius - remainder);
-                    r = Math.max(0, Math.min(foldRadius * 2, r));
-                }
-
-                let foldedAngle = angle % foldAngle;
-                const sectorIndex = Math.floor(angle / foldAngle);
-                if (sectorIndex % 2 === 1) {
-                    foldedAngle = foldAngle - foldedAngle;
-                }
-
-                const mirrorAngle = sectorAngle + (foldAngle * 2 / divisions) - foldedAngle;
-
-                return {
-                    x: r * Math.cos(mirrorAngle),
-                    y: r * Math.sin(mirrorAngle),
-                    pressure: p.pressure
-                };
-            });
-            allPaths.push(mirrorPath);
-        }
-    } else if (symmetryMode === 'liquid') {
-        // 湍流模式：有机流体扭曲
-        const turbulence = (x: number, y: number): { nx: number; ny: number } => {
-            let offsetX = 0, offsetY = 0;
-            const freqs = [3, 7, 13];
-            const amps = [0.08, 0.04, 0.02];
-
-            for (let i = 0; i < freqs.length; i++) {
-                const f = freqs[i];
-                const a = amps[i];
-                offsetX += Math.sin(x * f + y * f * 0.7) * a;
-                offsetY += Math.cos(y * f + x * f * 0.7) * a;
-            }
-            return { nx: x + offsetX, ny: y + offsetY };
-        };
-
-        for (let div = 0; div < divisions; div++) {
-            const rotAngle = (div / divisions) * Math.PI * 2;
-            const cos = Math.cos(rotAngle);
-            const sin = Math.sin(rotAngle);
-
-            const liquidPath = basePath.map(p => {
-                const distorted = turbulence(p.x, p.y);
-                return {
-                    x: distorted.nx * cos - distorted.ny * sin,
-                    y: distorted.nx * sin + distorted.ny * cos,
-                    pressure: p.pressure
-                };
-            });
-            allPaths.push(liquidPath);
-        }
-    } else if (symmetryMode === 'gridHex') {
-        // 蜂巢网格模式：六边形平铺
-        const cellSize = 0.15;
-        const hexHeight = cellSize * Math.sqrt(3);
-        const hexWidth = cellSize * 2;
-        const gridRange = 2;
-
-        for (let gx = -gridRange; gx <= gridRange; gx++) {
-            for (let gy = -gridRange; gy <= gridRange; gy++) {
-                const offsetX = (gy % 2 === 0) ? 0 : hexWidth * 0.75;
-
-                const hexPath = basePath.map(p => {
-                    const localX = ((p.x % cellSize) + cellSize) % cellSize;
-                    const localY = ((p.y % cellSize) + cellSize) % cellSize;
-                    const worldX = gx * hexWidth * 1.5 + offsetX + localX;
-                    const worldY = gy * hexHeight * 0.5 + localY;
-
-                    return {
-                        x: worldX,
-                        y: worldY,
-                        pressure: p.pressure
-                    };
-                });
-
-                // 只添加在画布范围内的路径
-                const isInBounds = hexPath.some(p => Math.abs(p.x) <= 0.5 && Math.abs(p.y) <= 0.5);
-                if (isInBounds) {
-                    allPaths.push(hexPath);
-                }
-            }
-        }
-    } else if (symmetryMode === 'gridCircle') {
-        // 圆形网格模式：同心圆+径向分割平铺
-        const rings = 4;
-        const sectorsPerRing = divisions;
-        const maxRadius = 0.45;
-        const ringSpacing = maxRadius / rings;
-
-        for (let ring = 0; ring < rings; ring++) {
-            for (let sector = 0; sector < sectorsPerRing; sector++) {
-                const sectorAngle = (sector / sectorsPerRing) * Math.PI * 2;
-                const cos = Math.cos(sectorAngle);
-                const sin = Math.sin(sectorAngle);
-
-                const circlePath = basePath.map(p => {
-                    const r = Math.sqrt(p.x * p.x + p.y * p.y);
-                    const angle = Math.atan2(p.y, p.x);
-                    const mappedRadius = (r % ringSpacing) + ring * ringSpacing;
-                    const finalAngle = angle + sectorAngle;
-
-                    return {
-                        x: mappedRadius * Math.cos(finalAngle),
-                        y: mappedRadius * Math.sin(finalAngle),
-                        pressure: p.pressure
-                    };
-                });
-                allPaths.push(circlePath);
-            }
-        }
     }
+
+
 
     return allPaths;
 }
-
-
-
 
 // ==================== 创建线环画笔笔画 (复用丝环着色器) ====================
 
