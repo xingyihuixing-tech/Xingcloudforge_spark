@@ -1933,12 +1933,24 @@ export interface MaterialPreset {
 // - radial: 径向旋转对称
 // - kaleidoscope: 万花筒（旋转+镜像）
 // - starburst: 星芒（奇偶分割交替缩放）
-// - prism: 棱镜（3D空间正多边形棱柱面复制）
 // - vortex: 漩涡（随半径变化的旋转扭曲）
-// - bloom: 绽放（层叠缩放旋转）
 // - sphere: 球面（2D映射到3D球体表面）
 // - orbital: 轨道环（多轴旋转形成的原子轨道效果）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'prism' | 'vortex' | 'bloom' | 'sphere' | 'orbital';
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'vortex' | 'sphere' | 'orbital';
+
+// 对称模式可调参数
+export interface SymmetryParams {
+  // 星芒参数
+  starburstInnerScale?: number;  // 0.1-1.0, 默认0.5
+  starburstOuterScale?: number;  // 1.0-2.0, 默认1.3
+  // 漩涡参数
+  vortexTwistFactor?: number;    // 0-5, 默认2.0
+  vortexTwistDecay?: number;     // 0.5-6, 默认3.0
+  // 球面参数
+  sphereRadius?: number;         // 0.2-1.0, 默认0.5
+  // 轨道环参数
+  orbitalTiltAngle?: number;     // 0-90度, 默认60
+}
 
 // 画笔类型
 export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber';
@@ -1972,6 +1984,7 @@ export interface MagicCircleLayer {
   opacity: number;        // 0-1
   symmetryMode: SymmetryMode;
   symmetryDivisions: number;  // 3-36
+  symmetryParams?: SymmetryParams;  // 对称模式可调参数
   strokes: MagicCircleStroke[];
 }
 

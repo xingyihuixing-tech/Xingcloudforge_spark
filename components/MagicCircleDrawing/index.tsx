@@ -145,6 +145,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     // 对称设置 (从当前图层读取)
     const symmetryMode = currentLayer?.symmetryMode || 'radial';
     const symmetryDivisions = currentLayer?.symmetryDivisions || 8;
+    const symmetryParams = currentLayer?.symmetryParams || {};
 
     // 绘制状态
     const [isDrawing, setIsDrawing] = useState(false);
@@ -800,6 +801,24 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return { ...l, symmetryMode: mode, symmetryDivisions: divisions };
+                })
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+    }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
+
+    // 更新图层对称参数
+    const handleUpdateSymmetryParams = useCallback((params: import('../../types').SymmetryParams) => {
+        if (!currentCircle || !currentLayerId) return;
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: c.layers.map(l => {
+                    if (l.id !== currentLayerId) return l;
+                    return { ...l, symmetryParams: params };
                 })
             };
         });
@@ -1906,7 +1925,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 onCreateLayer={handleNewLayer}
                 symmetryMode={symmetryMode}
                 symmetryDivisions={symmetryDivisions}
+                symmetryParams={symmetryParams}
                 onUpdateSymmetry={handleUpdateSymmetry}
+                onUpdateSymmetryParams={handleUpdateSymmetryParams}
                 onClose={onClose}
             />
         </div >

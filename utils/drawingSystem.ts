@@ -14,6 +14,7 @@ import {
     StrokePoint,
     DrawingBrushType,
     SymmetryMode,
+    SymmetryParams,
     ParticleRingSettings,
     SilkRingSettings,
     LightsaberSettings
@@ -277,7 +278,8 @@ export function updateSymmetryAxes(
 export function applySymmetryTransform(
     point: { x: number; y: number },
     mode: SymmetryMode,
-    divisions: number
+    divisions: number,
+    params?: SymmetryParams
 ): { x: number; y: number; z?: number }[] {
     if (mode === 'none') {
         return [point];
@@ -318,8 +320,8 @@ export function applySymmetryTransform(
         }
     } else if (mode === 'starburst') {
         // 星芒模式：奇数分割向外延伸，偶数分割向内收缩
-        const innerScale = 0.5;   // 内缩比例
-        const outerScale = 1.3;   // 外延比例
+        const innerScale = params?.starburstInnerScale ?? 0.5;
+        const outerScale = params?.starburstOuterScale ?? 1.3;
         for (let i = 0; i < divisions; i++) {
             const angle = baseAngle + angleStep * i;
             const scale = (i % 2 === 0) ? outerScale : innerScale;
@@ -329,45 +331,14 @@ export function applySymmetryTransform(
                 y: scaledRadius * Math.sin(angle)
             });
         }
-    } else if (mode === 'prism') {
-        // 棱镜模式：3D正多边形棱柱，笔迹在各面复制
-        // 每个面有不同的Z偏移，形成立体效果
-        const prismHeight = 0.3;  // 棱柱高度（Z方向范围）
-        const faceCount = Math.max(3, divisions); // 至少三面
-
-        for (let i = 0; i < faceCount; i++) {
-            const angle = baseAngle + angleStep * i;
-            // 计算每个面的Z位置（沿正多边形边缘分布）
-            const faceAngle = (Math.PI * 2 / faceCount) * i;
-            const zOffset = Math.sin(faceAngle) * prismHeight;
-
-            // 主面上的点
-            results.push({
-                x: radius * Math.cos(angle),
-                y: radius * Math.sin(angle),
-                z: zOffset
-            });
-
-            // 对面镜像（棱镜对称特性）
-            if (faceCount >= 4) {
-                const oppositeAngle = angle + Math.PI;
-                results.push({
-                    x: radius * Math.cos(oppositeAngle),
-                    y: radius * Math.sin(oppositeAngle),
-                    z: -zOffset
-                });
-            }
-        }
     } else if (mode === 'vortex') {
         // 漩涡模式：随半径旋转扭曲
-        // 扭曲因子：距离中心越近旋转越剧烈
-        const twistFactor = 2.0;
+        const twistFactor = params?.vortexTwistFactor ?? 2.0;
+        const twistDecay = params?.vortexTwistDecay ?? 3.0;
         for (let i = 0; i < divisions; i++) {
             const angleOffset = angleStep * i;
-            // 核心逻辑：角度随半径变化
-            // (1 - radius*2) 使得中心处(radius=0)扭曲最大，边缘处(radius=0.5)扭曲最小
-            // 添加 uTime 相关的动态旋转会让效果更好，但在单纯变换函数里我们只做静态几何变换
-            const twistAngle = twistFactor * Math.max(0, 1.0 - radius * 3.0);
+            // 核心逻辑：角度随半径变化，twistDecay控制衰减速率
+            const twistAngle = twistFactor * Math.max(0, 1.0 - radius * twistDecay);
             const angle = baseAngle + angleOffset + twistAngle;
 
             results.push({
@@ -375,43 +346,15 @@ export function applySymmetryTransform(
                 y: radius * Math.sin(angle)
             });
         }
-    } else if (mode === 'bloom') {
-        // 绽放模式：多层缩放旋转，类似花朵
-        // 每一层比上一层大，且有角度偏移
-        for (let i = 0; i < divisions; i++) {
-            // 基础角度分布
-            const angleOffset = angleStep * i;
-
-            // 层级缩放：从0.5倍到1.5倍分布
-            const scaleStep = 1.0 / divisions;
-            const scale = 0.5 + i * scaleStep;
-
-            // 层级旋转偏移：每一层错开一点角度
-            const rotationOffset = i * (Math.PI / 12);
-
-            const angle = baseAngle + angleOffset + rotationOffset;
-            const scaledRadius = radius * scale;
-
-            // 添加一点Z轴层叠，让花朵更有立体感
-            const zOffset = i * 0.05;
-
-            results.push({
-                x: scaledRadius * Math.cos(angle),
-                y: scaledRadius * Math.sin(angle),
-                z: zOffset
-            });
-        }
     } else if (mode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
-        // y -> 纬度 (-PI/2 到 PI/2)
-        // x -> 经度 (-PI 到 PI)
-        const R = 0.5; // 球体半径
+        const R = params?.sphereRadius ?? 0.5;
 
         // 经纬度映射
-        const lat = dy * Math.PI; // -0.5~0.5 -> -PI/2~PI/2
-        const lon = dx * Math.PI * 2; // -0.5~0.5 -> -PI~PI
+        const lat = dy * Math.PI;
+        const lon = dx * Math.PI * 2;
 
-        // 球坐标转笛卡尔坐标 (基础点)
+        // 球坐标转笛卡尔坐标
         const bx = R * Math.cos(lat) * Math.sin(lon);
         const by = R * Math.sin(lat);
         const bz = R * Math.cos(lat) * Math.cos(lon);
@@ -430,29 +373,24 @@ export function applySymmetryTransform(
         }
     } else if (mode === 'orbital') {
         // 轨道环模式：多轴旋转形成的原子轨道效果
-        // 将平面笔迹视为一个倾斜的轨道平面，然后旋转复制
-        const tiltAngle = Math.PI / 3; // 轨道倾角 60度
+        const tiltDegrees = params?.orbitalTiltAngle ?? 60;
+        const tiltAngle = (tiltDegrees / 180) * Math.PI;
         const cosTilt = Math.cos(tiltAngle);
         const sinTilt = Math.sin(tiltAngle);
 
         // 先将点变换到倾斜平面上 (绕X轴旋转)
-        // 初始 z = 0
         const p1x = dx;
         const p1y = dy * cosTilt;
         const p1z = dy * sinTilt;
 
         for (let i = 0; i < divisions; i++) {
-            const rotAngle = (i / divisions) * Math.PI; // 轨道只需转180度即可覆盖球体（如果是完整环），但为了均匀分布这里用半周分布
-            // 或者用 2 * PI 分布？ 如果画的是非闭合线，用 2PI 更好。如果是闭合圆，PI和2PI重叠？
-            // 采用 2*PI 分布更通用，让用户自己决定画什么
             const orbitAngle = (i / divisions) * Math.PI * 2;
-
             const cos = Math.cos(orbitAngle);
             const sin = Math.sin(orbitAngle);
 
             // 绕Y轴旋转整个轨道平面
             results.push({
-                x: p1x * cos + p1z * sin, // 注意这里是混合 x 和 z (绕Y轴)
+                x: p1x * cos + p1z * sin,
                 y: p1y,
                 z: -p1x * sin + p1z * cos
             });
@@ -507,7 +445,8 @@ export function createParticleStrokeMesh(
         proceduralIntensity?: number;
         // 粒子大小缩放因子
         particleSizeScale?: number;
-    }
+    },
+    symmetryParams?: SymmetryParams
 ): THREE.Points {
     // 应用笔迹平滑
     const smoothness = settings.smoothness ?? 0.5;
@@ -595,7 +534,8 @@ export function createParticleStrokeMesh(
         const symmetricPoints = applySymmetryTransform(
             { x: baseX - 0.5, y: 0.5 - baseY },
             symmetryMode,
-            symmetryDivisions
+            symmetryDivisions,
+            symmetryParams
         );
 
         for (const sp of symmetricPoints) {
@@ -1600,7 +1540,8 @@ export function createLightsaberStrokeMesh(
 function applySymmetryToPath(
     basePath: { x: number; y: number; pressure: number }[],
     symmetryMode: SymmetryMode,
-    divisions: number
+    divisions: number,
+    params?: SymmetryParams
 ): { x: number; y: number; z?: number; pressure: number }[][] {
     if (symmetryMode === 'none') return [basePath];
 
@@ -1644,8 +1585,8 @@ function applySymmetryToPath(
         }
     } else if (symmetryMode === 'starburst') {
         // 星芒模式：奇数分割向外延伸，偶数分割向内收缩
-        const innerScale = 0.5;
-        const outerScale = 1.3;
+        const innerScale = params?.starburstInnerScale ?? 0.5;
+        const outerScale = params?.starburstOuterScale ?? 1.3;
         for (let div = 0; div < divisions; div++) {
             const angle = (div / divisions) * Math.PI * 2;
             const cos = Math.cos(angle);
@@ -1659,52 +1600,16 @@ function applySymmetryToPath(
             }));
             allPaths.push(scaledPath);
         }
-    } else if (symmetryMode === 'prism') {
-        // 棱镜模式：3D正多边形棱柱面复制
-        const prismHeight = 0.3;
-        const faceCount = Math.max(3, divisions);
-
-        for (let div = 0; div < faceCount; div++) {
-            const angle = (div / faceCount) * Math.PI * 2;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-
-            // 计算Z偏移（棱镜各面的深度位置）
-            const faceAngle = (Math.PI * 2 / faceCount) * div;
-            const zOffset = Math.sin(faceAngle) * prismHeight;
-
-            const rotatedPath = basePath.map(p => ({
-                x: p.x * cos - p.y * sin,
-                y: p.x * sin + p.y * cos,
-                z: zOffset,
-                pressure: p.pressure
-            }));
-            allPaths.push(rotatedPath);
-
-            // 棱镜对面镜像（当面数>=4时）
-            if (faceCount >= 4) {
-                const oppositeAngle = angle + Math.PI;
-                const cosOpp = Math.cos(oppositeAngle);
-                const sinOpp = Math.sin(oppositeAngle);
-
-                const mirroredPath = basePath.map(p => ({
-                    x: p.x * cosOpp - p.y * sinOpp,
-                    y: p.x * sinOpp + p.y * cosOpp,
-                    z: -zOffset,
-                    pressure: p.pressure
-                }));
-                allPaths.push(mirroredPath);
-            }
-        }
     } else if (symmetryMode === 'vortex') {
         // 漩涡模式：随半径旋转扭曲
-        const twistFactor = 2.0;
+        const twistFactor = params?.vortexTwistFactor ?? 2.0;
+        const twistDecay = params?.vortexTwistDecay ?? 3.0;
         for (let div = 0; div < divisions; div++) {
             const angleOffset = (div / divisions) * Math.PI * 2;
 
             const twistedPath = basePath.map(p => {
                 const radius = Math.sqrt(p.x * p.x + p.y * p.y);
-                const twistAngle = twistFactor * Math.max(0, 1.0 - radius * 3.0);
+                const twistAngle = twistFactor * Math.max(0, 1.0 - radius * twistDecay);
                 const angle = angleOffset + twistAngle;
                 const cos = Math.cos(angle);
                 const sin = Math.sin(angle);
@@ -1717,50 +1622,22 @@ function applySymmetryToPath(
             });
             allPaths.push(twistedPath);
         }
-    } else if (symmetryMode === 'bloom') {
-        // 绽放模式：多层缩放旋转
-        for (let div = 0; div < divisions; div++) {
-            const angleOffset = (div / divisions) * Math.PI * 2;
-            const scaleStep = 1.0 / divisions;
-            const scale = 0.5 + div * scaleStep;
-            const rotationOffset = div * (Math.PI / 12);
-
-            const angle = angleOffset + rotationOffset;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const zOffset = div * 0.05;
-
-            const bloomPath = basePath.map(p => {
-                const rx = p.x * cos - p.y * sin;
-                const ry = p.x * sin + p.y * cos;
-                return {
-                    x: rx * scale,
-                    y: ry * scale,
-                    z: zOffset, // 3D层叠效果
-                    pressure: p.pressure
-                };
-            });
-            allPaths.push(bloomPath);
-        }
     } else if (symmetryMode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
-        const R = 0.5;
+        const R = params?.sphereRadius ?? 0.5;
         for (let div = 0; div < divisions; div++) {
             const rotAngle = (div / divisions) * Math.PI * 2;
             const cos = Math.cos(rotAngle);
             const sin = Math.sin(rotAngle);
 
             const spherePath = basePath.map(p => {
-                // 坐标映射
                 const lat = p.y * Math.PI;
                 const lon = p.x * Math.PI * 2;
 
-                // 基础球坐标
                 const bx = R * Math.cos(lat) * Math.sin(lon);
                 const by = R * Math.sin(lat);
                 const bz = R * Math.cos(lat) * Math.cos(lon);
 
-                // 绕Y轴旋转复制
                 return {
                     x: bx * cos + bz * sin,
                     y: by,
@@ -1772,7 +1649,8 @@ function applySymmetryToPath(
         }
     } else if (symmetryMode === 'orbital') {
         // 轨道环模式：多轴旋转形成的原子轨道效果
-        const tiltAngle = Math.PI / 3;
+        const tiltDegrees = params?.orbitalTiltAngle ?? 60;
+        const tiltAngle = (tiltDegrees / 180) * Math.PI;
         const cosTilt = Math.cos(tiltAngle);
         const sinTilt = Math.sin(tiltAngle);
 
@@ -1782,12 +1660,10 @@ function applySymmetryToPath(
             const sin = Math.sin(orbitAngle);
 
             const orbitalPath = basePath.map(p => {
-                // 先变换到倾斜平面
                 const p1x = p.x;
                 const p1y = p.y * cosTilt;
                 const p1z = p.y * sinTilt;
 
-                // 再绕Y轴旋转
                 return {
                     x: p1x * cos + p1z * sin,
                     y: p1y,
@@ -1798,8 +1674,6 @@ function applySymmetryToPath(
             allPaths.push(orbitalPath);
         }
     }
-
-
 
     return allPaths;
 }
