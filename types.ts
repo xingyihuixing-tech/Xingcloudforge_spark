@@ -1940,16 +1940,35 @@ export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'v
 
 // 对称模式可调参数
 export interface SymmetryParams {
-  // 星芒参数
-  starburstInnerScale?: number;  // 0.1-1.0, 默认0.5
-  starburstOuterScale?: number;  // 1.0-2.0, 默认1.3
-  // 漩涡参数
-  vortexTwistFactor?: number;    // 0-5, 默认2.0
-  vortexTwistDecay?: number;     // 0.5-6, 默认3.0
-  // 球面参数
-  sphereRadius?: number;         // 0.2-1.0, 默认0.5
-  // 轨道环参数
-  orbitalTiltAngle?: number;     // 0-90度, 默认60
+  // ========== 径向参数 ==========
+  radialPhaseOffset?: number;      // 起始相位角度, 0-360°, 默认0
+  radialScaleVariation?: number;   // 每份缩放变化幅度, 0-0.5, 默认0
+
+  // ========== 万花筒参数 ==========
+  kaleidoscopeMirrorAngle?: number; // 镜像轴角度, 0-180°, 默认0
+
+  // ========== 星芒参数 ==========
+  starburstInnerScale?: number;    // 内缩比例, 0.1-1.0, 默认0.5
+  starburstOuterScale?: number;    // 外延比例, 1.0-2.0, 默认1.3
+  starburstPhaseOffset?: number;   // 相位偏移角度, 0-360°, 默认0
+
+
+
+  // ========== 漩涡参数 ==========
+  vortexTwistFactor?: number;      // 扭曲强度, 0-5, 默认2.0
+  vortexTwistDecay?: number;       // 衰减系数, 0.5-6, 默认3.0
+  vortexDirection?: number;        // 旋转方向, -1=顺时针, 1=逆时针, 默认1
+  vortexCenterOffset?: number;     // 中心偏移量, 0-0.3, 默认0
+
+  // ========== 球面参数 ==========
+  sphereRadius?: number;           // 球体半径, 0.2-1.0, 默认0.5
+  sphereLatScale?: number;         // 纬度映射缩放, 0.5-2.0, 默认1.0
+  sphereLonScale?: number;         // 经度映射缩放, 0.5-2.0, 默认1.0
+
+  // ========== 轨道环参数 ==========
+  orbitalTiltAngle?: number;       // 主轨道倾角, 0-90°, 默认60
+  orbitalSecondaryTilt?: number;   // 二级倾斜角, 0-90°, 默认0
+  orbitalRadiusScale?: number;     // 轨道半径缩放, 0.5-2.0, 默认1.0
 }
 
 // 画笔类型

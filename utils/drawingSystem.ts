@@ -296,23 +296,28 @@ export function applySymmetryTransform(
 
     if (mode === 'radial') {
         // 径向对称：简单旋转复制
+        const phaseOffset = ((params?.radialPhaseOffset ?? 0) / 180) * Math.PI;
+        const scaleVariation = params?.radialScaleVariation ?? 0;
         for (let i = 0; i < divisions; i++) {
-            const angle = baseAngle + angleStep * i;
+            const angle = baseAngle + angleStep * i + phaseOffset;
+            const scale = 1.0 + (i % 2 === 0 ? scaleVariation : -scaleVariation);
+            const scaledRadius = radius * scale;
             results.push({
-                x: radius * Math.cos(angle),
-                y: radius * Math.sin(angle)
+                x: scaledRadius * Math.cos(angle),
+                y: scaledRadius * Math.sin(angle)
             });
         }
     } else if (mode === 'kaleidoscope') {
         // 万花筒模式：旋转+镜像
+        const mirrorAngle = ((params?.kaleidoscopeMirrorAngle ?? 0) / 180) * Math.PI;
         for (let i = 0; i < divisions; i++) {
             const angle = baseAngle + angleStep * i;
             results.push({
                 x: radius * Math.cos(angle),
                 y: radius * Math.sin(angle)
             });
-            // 每份内部镜像
-            const mirroredAngle = angleStep * (i + 0.5) * 2 - angle;
+            // 每份内部镜像（基于镜像轴角度）
+            const mirroredAngle = 2 * (angleStep * i + mirrorAngle) - angle;
             results.push({
                 x: radius * Math.cos(mirroredAngle),
                 y: radius * Math.sin(mirroredAngle)
@@ -322,8 +327,9 @@ export function applySymmetryTransform(
         // 星芒模式：奇数分割向外延伸，偶数分割向内收缩
         const innerScale = params?.starburstInnerScale ?? 0.5;
         const outerScale = params?.starburstOuterScale ?? 1.3;
+        const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
         for (let i = 0; i < divisions; i++) {
-            const angle = baseAngle + angleStep * i;
+            const angle = baseAngle + angleStep * i + phaseOffset;
             const scale = (i % 2 === 0) ? outerScale : innerScale;
             const scaledRadius = radius * scale;
             results.push({
@@ -335,10 +341,13 @@ export function applySymmetryTransform(
         // 漩涡模式：随半径旋转扭曲
         const twistFactor = params?.vortexTwistFactor ?? 2.0;
         const twistDecay = params?.vortexTwistDecay ?? 3.0;
+        const direction = params?.vortexDirection ?? 1;
+        const centerOffset = params?.vortexCenterOffset ?? 0;
         for (let i = 0; i < divisions; i++) {
             const angleOffset = angleStep * i;
-            // 核心逻辑：角度随半径变化，twistDecay控制衰减速率
-            const twistAngle = twistFactor * Math.max(0, 1.0 - radius * twistDecay);
+            // 核心逻辑：角度随半径变化，方向和中心偏移可调
+            const adjustedRadius = Math.max(0.001, radius - centerOffset);
+            const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
             const angle = baseAngle + angleOffset + twistAngle;
 
             results.push({
@@ -349,10 +358,12 @@ export function applySymmetryTransform(
     } else if (mode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
         const R = params?.sphereRadius ?? 0.5;
+        const latScale = params?.sphereLatScale ?? 1.0;
+        const lonScale = params?.sphereLonScale ?? 1.0;
 
-        // 经纬度映射
-        const lat = dy * Math.PI;
-        const lon = dx * Math.PI * 2;
+        // 经纬度映射（带缩放）
+        const lat = dy * Math.PI * latScale;
+        const lon = dx * Math.PI * 2 * lonScale;
 
         // 球坐标转笛卡尔坐标
         const bx = R * Math.cos(lat) * Math.sin(lon);
@@ -375,13 +386,28 @@ export function applySymmetryTransform(
         // 轨道环模式：多轴旋转形成的原子轨道效果
         const tiltDegrees = params?.orbitalTiltAngle ?? 60;
         const tiltAngle = (tiltDegrees / 180) * Math.PI;
+        const secondaryTiltDeg = params?.orbitalSecondaryTilt ?? 0;
+        const secondaryTilt = (secondaryTiltDeg / 180) * Math.PI;
+        const radiusScale = params?.orbitalRadiusScale ?? 1.0;
+
         const cosTilt = Math.cos(tiltAngle);
         const sinTilt = Math.sin(tiltAngle);
+        const cosSecond = Math.cos(secondaryTilt);
+        const sinSecond = Math.sin(secondaryTilt);
+
+        // 应用半径缩放
+        const scaledDx = dx * radiusScale;
+        const scaledDy = dy * radiusScale;
 
         // 先将点变换到倾斜平面上 (绕X轴旋转)
-        const p1x = dx;
-        const p1y = dy * cosTilt;
-        const p1z = dy * sinTilt;
+        const p1x = scaledDx;
+        const p1y = scaledDy * cosTilt;
+        const p1z = scaledDy * sinTilt;
+
+        // 再应用二级倾斜 (绕Z轴旋转)
+        const p2x = p1x * cosSecond - p1y * sinSecond;
+        const p2y = p1x * sinSecond + p1y * cosSecond;
+        const p2z = p1z;
 
         for (let i = 0; i < divisions; i++) {
             const orbitAngle = (i / divisions) * Math.PI * 2;
@@ -390,9 +416,9 @@ export function applySymmetryTransform(
 
             // 绕Y轴旋转整个轨道平面
             results.push({
-                x: p1x * cos + p1z * sin,
-                y: p1y,
-                z: -p1x * sin + p1z * cos
+                x: p2x * cos + p2z * sin,
+                y: p2y,
+                z: -p2x * sin + p2z * cos
             });
         }
     }
@@ -1550,20 +1576,24 @@ function applySymmetryToPath(
 
     if (symmetryMode === 'radial') {
         // 径向对称：简单旋转复制
+        const phaseOffset = ((params?.radialPhaseOffset ?? 0) / 180) * Math.PI;
+        const scaleVariation = params?.radialScaleVariation ?? 0;
         for (let div = 0; div < divisions; div++) {
-            const angle = (div / divisions) * Math.PI * 2;
+            const angle = (div / divisions) * Math.PI * 2 + phaseOffset;
             const cos = Math.cos(angle);
             const sin = Math.sin(angle);
+            const scale = 1.0 + (div % 2 === 0 ? scaleVariation : -scaleVariation);
 
             const rotatedPath = basePath.map(p => ({
-                x: p.x * cos - p.y * sin,
-                y: p.x * sin + p.y * cos,
+                x: (p.x * cos - p.y * sin) * scale,
+                y: (p.x * sin + p.y * cos) * scale,
                 pressure: p.pressure
             }));
             allPaths.push(rotatedPath);
         }
     } else if (symmetryMode === 'kaleidoscope') {
         // 万花筒模式：旋转+镜像
+        const mirrorAngle = ((params?.kaleidoscopeMirrorAngle ?? 0) / 180) * Math.PI;
         for (let div = 0; div < divisions; div++) {
             const angle = (div / divisions) * Math.PI * 2;
             const cos = Math.cos(angle);
@@ -1576,20 +1606,28 @@ function applySymmetryToPath(
             }));
             allPaths.push(rotatedPath);
 
-            // Kaleidoscope模式添加镜像
-            const mirroredPath = basePath.map(p => ({
-                x: -(p.x * cos - p.y * sin),
-                y: p.x * sin + p.y * cos,
-                pressure: p.pressure
-            }));
+            // Kaleidoscope模式添加镜像（基于镜像轴角度）
+            const cosM = Math.cos(mirrorAngle * 2);
+            const sinM = Math.sin(mirrorAngle * 2);
+            const mirroredPath = basePath.map(p => {
+                const rx = p.x * cos - p.y * sin;
+                const ry = p.x * sin + p.y * cos;
+                // 应用镜像轴旋转
+                return {
+                    x: rx * cosM + ry * sinM,
+                    y: rx * sinM - ry * cosM,
+                    pressure: p.pressure
+                };
+            });
             allPaths.push(mirroredPath);
         }
     } else if (symmetryMode === 'starburst') {
         // 星芒模式：奇数分割向外延伸，偶数分割向内收缩
         const innerScale = params?.starburstInnerScale ?? 0.5;
         const outerScale = params?.starburstOuterScale ?? 1.3;
+        const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
         for (let div = 0; div < divisions; div++) {
-            const angle = (div / divisions) * Math.PI * 2;
+            const angle = (div / divisions) * Math.PI * 2 + phaseOffset;
             const cos = Math.cos(angle);
             const sin = Math.sin(angle);
             const scale = (div % 2 === 0) ? outerScale : innerScale;
@@ -1605,12 +1643,15 @@ function applySymmetryToPath(
         // 漩涡模式：随半径旋转扭曲
         const twistFactor = params?.vortexTwistFactor ?? 2.0;
         const twistDecay = params?.vortexTwistDecay ?? 3.0;
+        const direction = params?.vortexDirection ?? 1;
+        const centerOffset = params?.vortexCenterOffset ?? 0;
         for (let div = 0; div < divisions; div++) {
             const angleOffset = (div / divisions) * Math.PI * 2;
 
             const twistedPath = basePath.map(p => {
                 const radius = Math.sqrt(p.x * p.x + p.y * p.y);
-                const twistAngle = twistFactor * Math.max(0, 1.0 - radius * twistDecay);
+                const adjustedRadius = Math.max(0.001, radius - centerOffset);
+                const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
                 const angle = angleOffset + twistAngle;
                 const cos = Math.cos(angle);
                 const sin = Math.sin(angle);
@@ -1626,14 +1667,16 @@ function applySymmetryToPath(
     } else if (symmetryMode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
         const R = params?.sphereRadius ?? 0.5;
+        const latScale = params?.sphereLatScale ?? 1.0;
+        const lonScale = params?.sphereLonScale ?? 1.0;
         for (let div = 0; div < divisions; div++) {
             const rotAngle = (div / divisions) * Math.PI * 2;
             const cos = Math.cos(rotAngle);
             const sin = Math.sin(rotAngle);
 
             const spherePath = basePath.map(p => {
-                const lat = p.y * Math.PI;
-                const lon = p.x * Math.PI * 2;
+                const lat = p.y * Math.PI * latScale;
+                const lon = p.x * Math.PI * 2 * lonScale;
 
                 const bx = R * Math.cos(lat) * Math.sin(lon);
                 const by = R * Math.sin(lat);
@@ -1652,8 +1695,14 @@ function applySymmetryToPath(
         // 轨道环模式：多轴旋转形成的原子轨道效果
         const tiltDegrees = params?.orbitalTiltAngle ?? 60;
         const tiltAngle = (tiltDegrees / 180) * Math.PI;
+        const secondaryTiltDeg = params?.orbitalSecondaryTilt ?? 0;
+        const secondaryTilt = (secondaryTiltDeg / 180) * Math.PI;
+        const radiusScale = params?.orbitalRadiusScale ?? 1.0;
+
         const cosTilt = Math.cos(tiltAngle);
         const sinTilt = Math.sin(tiltAngle);
+        const cosSecond = Math.cos(secondaryTilt);
+        const sinSecond = Math.sin(secondaryTilt);
 
         for (let div = 0; div < divisions; div++) {
             const orbitAngle = (div / divisions) * Math.PI * 2;
@@ -1661,14 +1710,22 @@ function applySymmetryToPath(
             const sin = Math.sin(orbitAngle);
 
             const orbitalPath = basePath.map(p => {
-                const p1x = p.x;
-                const p1y = p.y * cosTilt;
-                const p1z = p.y * sinTilt;
+                const scaledX = p.x * radiusScale;
+                const scaledY = p.y * radiusScale;
+
+                const p1x = scaledX;
+                const p1y = scaledY * cosTilt;
+                const p1z = scaledY * sinTilt;
+
+                // 二级倾斜
+                const p2x = p1x * cosSecond - p1y * sinSecond;
+                const p2y = p1x * sinSecond + p1y * cosSecond;
+                const p2z = p1z;
 
                 return {
-                    x: p1x * cos + p1z * sin,
-                    y: p1y,
-                    z: -p1x * sin + p1z * cos,
+                    x: p2x * cos + p2z * sin,
+                    y: p2y,
+                    z: -p2x * sin + p2z * cos,
                     pressure: p.pressure
                 };
             });

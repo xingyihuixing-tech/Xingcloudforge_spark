@@ -282,6 +282,57 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 <span className="text-xs text-white w-8 text-center">{symmetryDivisions}</span>
                             </div>
 
+                            {/* ========== 径向参数 ========== */}
+                            {symmetryMode === 'radial' && (
+                                <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">起始相位</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={360}
+                                            step={5}
+                                            value={symmetryParams?.radialPhaseOffset ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, radialPhaseOffset: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.radialPhaseOffset ?? 0}°</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">缩放变化</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={0.5}
+                                            step={0.05}
+                                            value={symmetryParams?.radialScaleVariation ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, radialScaleVariation: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.radialScaleVariation ?? 0).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ========== 万花筒参数 ========== */}
+                            {symmetryMode === 'kaleidoscope' && (
+                                <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">镜像轴角</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={180}
+                                            step={5}
+                                            value={symmetryParams?.kaleidoscopeMirrorAngle ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, kaleidoscopeMirrorAngle: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.kaleidoscopeMirrorAngle ?? 0}°</span>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* ========== 星芒参数 ========== */}
                             {symmetryMode === 'starburst' && (
                                 <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
@@ -310,6 +361,19 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                         />
                                         <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstOuterScale ?? 1.3).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">相位偏移</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={360}
+                                            step={5}
+                                            value={symmetryParams?.starburstPhaseOffset ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstPhaseOffset: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstPhaseOffset ?? 0}°</span>
                                     </div>
                                 </div>
                             )}
@@ -343,6 +407,28 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                         />
                                         <span className="text-xs text-white w-8 text-center">{(symmetryParams?.vortexTwistDecay ?? 3.0).toFixed(1)}</span>
                                     </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">旋转方向</span>
+                                        <button
+                                            onClick={() => onUpdateSymmetryParams({ ...symmetryParams, vortexDirection: (symmetryParams?.vortexDirection ?? 1) * -1 })}
+                                            className="flex-1 px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-white"
+                                        >
+                                            {(symmetryParams?.vortexDirection ?? 1) > 0 ? '逆时针 ↺' : '顺时针 ↻'}
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">中心偏移</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={0.3}
+                                            step={0.02}
+                                            value={symmetryParams?.vortexCenterOffset ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, vortexCenterOffset: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.vortexCenterOffset ?? 0).toFixed(2)}</span>
+                                    </div>
                                 </div>
                             )}
 
@@ -362,6 +448,32 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                         />
                                         <span className="text-xs text-white w-8 text-center">{(symmetryParams?.sphereRadius ?? 0.5).toFixed(2)}</span>
                                     </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">纬度缩放</span>
+                                        <input
+                                            type="range"
+                                            min={0.5}
+                                            max={2.0}
+                                            step={0.1}
+                                            value={symmetryParams?.sphereLatScale ?? 1.0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, sphereLatScale: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.sphereLatScale ?? 1.0).toFixed(1)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">经度缩放</span>
+                                        <input
+                                            type="range"
+                                            min={0.5}
+                                            max={2.0}
+                                            step={0.1}
+                                            value={symmetryParams?.sphereLonScale ?? 1.0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, sphereLonScale: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.sphereLonScale ?? 1.0).toFixed(1)}</span>
+                                    </div>
                                 </div>
                             )}
 
@@ -369,7 +481,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                             {symmetryMode === 'orbital' && (
                                 <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">轨道倾角</span>
+                                        <span className="text-xs text-gray-400 w-16">主轨道倾角</span>
                                         <input
                                             type="range"
                                             min={0}
@@ -380,6 +492,32 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
                                         />
                                         <span className="text-xs text-white w-8 text-center">{symmetryParams?.orbitalTiltAngle ?? 60}°</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">二级倾斜</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={90}
+                                            step={1}
+                                            value={symmetryParams?.orbitalSecondaryTilt ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalSecondaryTilt: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.orbitalSecondaryTilt ?? 0}°</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">半径缩放</span>
+                                        <input
+                                            type="range"
+                                            min={0.5}
+                                            max={2.0}
+                                            step={0.1}
+                                            value={symmetryParams?.orbitalRadiusScale ?? 1.0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalRadiusScale: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.orbitalRadiusScale ?? 1.0).toFixed(1)}</span>
                                     </div>
                                 </div>
                             )}
