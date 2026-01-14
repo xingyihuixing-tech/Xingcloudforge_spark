@@ -109,7 +109,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 }
 
-// 获取用户配置
+// 获取用户配置（优化：使用 Pipeline 合并 Redis 命令，减少网络往返）
 async function getConfig(req: VercelRequest, res: VercelResponse) {
     const userId = req.query.userId as string;
 
@@ -117,13 +117,18 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: '用户ID不能为空' });
     }
 
-    // 验证用户是否存在
-    const exists = await redis!.sismember('users', userId);
+    // 使用 Pipeline 合并 sismember 和 get 命令
+    const pipeline = redis!.pipeline();
+    pipeline.sismember('users', userId);
+    pipeline.get(`config:${userId}`);
+    const results = await pipeline.exec();
+
+    const exists = results[0] as number;
+    const config = results[1] as UserConfig | null;
+
     if (!exists) {
         return res.status(404).json({ error: '用户不存在' });
     }
-
-    const config = await redis!.get(`config:${userId}`) as UserConfig | null;
 
     if (!config) {
         // 返回空配置
@@ -152,7 +157,7 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ config });
 }
 
-// 保存用户配置
+// 保存用户配置（优化：使用 Pipeline 合并 Redis 命令，减少网络往返）
 async function saveConfig(req: VercelRequest, res: VercelResponse) {
     const { userId, config } = req.body;
 
@@ -160,14 +165,18 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         return res.status(400).json({ error: '用户ID不能为空' });
     }
 
-    // 验证用户是否存在
-    const exists = await redis!.sismember('users', userId);
+    // 使用 Pipeline 合并 sismember 和 get 命令
+    const pipeline = redis!.pipeline();
+    pipeline.sismember('users', userId);
+    pipeline.get(`config:${userId}`);
+    const results = await pipeline.exec();
+
+    const exists = results[0] as number;
+    const existingConfig = results[1] as UserConfig | null;
+
     if (!exists) {
         return res.status(404).json({ error: '用户不存在' });
     }
-
-    // 获取现有配置并合并
-    const existingConfig = await redis!.get(`config:${userId}`) as UserConfig | null;
 
     const newConfig: UserConfig = {
         version: (existingConfig?.version || 0) + 1,

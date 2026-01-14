@@ -1133,7 +1133,11 @@ const HeadTextureSelect: React.FC<{
   const [editingPresetId, setEditingPresetId] = useState<string | null>(null);
   const [editingPresetName, setEditingPresetName] = useState('');
 
+  // 云端预设：使用 ref 跟踪是否已加载，避免重复请求（优化Redis命令消耗）
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     loadCloudConfig().then(config => {
       if (config?.headTexturePresets) {
         setCloudPresets(config.headTexturePresets);
@@ -1141,18 +1145,15 @@ const HeadTextureSelect: React.FC<{
     });
   }, [loadCloudConfig]);
 
-  // 重命名预设
+  // 重命名预设（优化：直接使用本地状态，避免重复调用loadCloudConfig）
   const handleRename = async (presetId: string, newName: string) => {
     if (!newName.trim()) { setEditingPresetId(null); return; }
     try {
-      const config = await loadCloudConfig();
-      if (config) {
-        const updated = (config.headTexturePresets || []).map((p: any) =>
-          p.id === presetId ? { ...p, name: newName.trim() } : p
-        );
-        await saveCloudConfig({ ...config, headTexturePresets: updated });
-        setCloudPresets(updated);
-      }
+      const updated = cloudPresets.map((p) =>
+        p.id === presetId ? { ...p, name: newName.trim() } : p
+      );
+      await saveCloudConfig({ headTexturePresets: updated });
+      setCloudPresets(updated);
     } catch (err) {
       console.error('Rename preset failed:', err);
     } finally {
@@ -1161,20 +1162,17 @@ const HeadTextureSelect: React.FC<{
     }
   };
 
-  // 删除预设
+  // 删除预设（优化：直接使用本地状态，避免重复调用loadCloudConfig）
   const handleDelete = async () => {
     if (!deleteConfirm) return;
     setIsDeleting(true);
     try {
       // 1. 删除 Blob 文件
       await fetch(`/api/upload?url=${encodeURIComponent(deleteConfirm.url)}`, { method: 'DELETE' });
-      // 2. 更新云配置
-      const config = await loadCloudConfig();
-      if (config) {
-        const updated = (config.headTexturePresets || []).filter((p: any) => p.id !== deleteConfirm.id);
-        await saveCloudConfig({ ...config, headTexturePresets: updated });
-        setCloudPresets(updated);
-      }
+      // 2. 直接使用本地状态更新
+      const updated = cloudPresets.filter((p) => p.id !== deleteConfirm.id);
+      await saveCloudConfig({ headTexturePresets: updated });
+      setCloudPresets(updated);
       // 3. 如果当前选中的被删除，清空选择
       if (value === deleteConfirm.url) {
         onChange('');
@@ -1314,7 +1312,11 @@ const ImageSelectDropdown: React.FC<{
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string; url: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 云端预设：使用 ref 跟踪是否已加载，避免重复请求（优化Redis命令消耗）
+  const hasLoadedRef = useRef(false);
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
     loadCloudConfig().then(config => {
       if (config?.magicCircleTexturePresets) {
         setCloudPresets(config.magicCircleTexturePresets);
@@ -1322,18 +1324,15 @@ const ImageSelectDropdown: React.FC<{
     });
   }, [loadCloudConfig]);
 
-  // 删除预设
+  // 删除预设（优化：直接使用本地状态，避免重复调用loadCloudConfig）
   const handleDeletePreset = async () => {
     if (!deleteConfirm) return;
     setIsDeleting(true);
     try {
       await fetch(`/api/upload?url=${encodeURIComponent(deleteConfirm.url)}`, { method: 'DELETE' });
-      const config = await loadCloudConfig();
-      if (config) {
-        const updated = (config.magicCircleTexturePresets || []).filter((p: any) => p.id !== deleteConfirm.id);
-        await saveCloudConfig({ ...config, magicCircleTexturePresets: updated });
-        setCloudPresets(updated);
-      }
+      const updated = cloudPresets.filter((p) => p.id !== deleteConfirm.id);
+      await saveCloudConfig({ magicCircleTexturePresets: updated });
+      setCloudPresets(updated);
       if (value === deleteConfirm.url) {
         onChange('');
       }

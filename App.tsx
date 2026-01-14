@@ -430,6 +430,10 @@ const App: React.FC = () => {
   // 追踪已加载云配置的用户ID，防止重复hydration
   const hasLoadedUserIdRef = useRef<string | null>(null);
 
+  // 分片 hash：按模块追踪上次保存的哈希值（优化：只上传变化的模块）
+  const lastSavedHashesRef = useRef<Record<string, string>>({});
+
+
   // 监听用户切换，从本地存储重新加载该用户的数据
   useEffect(() => {
     const userId = currentUser?.id || null;
@@ -584,6 +588,7 @@ const App: React.FC = () => {
   }, [currentUser, loadCloudConfig]);
 
   // Cloud Sync: Auto-save when settings change (Debounced)
+  // 优化：延长防抖时间到5秒 + 版本比对避免重复保存（减少Redis命令消耗）
   useEffect(() => {
     const handler = setTimeout(() => {
       // Always save to local storage (User Scoped)
@@ -644,11 +649,11 @@ const App: React.FC = () => {
           }
         });
 
-        saveCloudConfig({
-          settings: settingsForCloud as any,
-          planetScene: planetSettings as any,
+        // 构建各模块数据
+        const modules = {
+          settings: settingsForCloud,
+          planetScene: planetSettings,
           theme: {
-
             themeConfig: {
               activeSchemeId: themeConfig.activeSchemeId,
               activeColors: themeConfig.activeColors,
@@ -659,16 +664,39 @@ const App: React.FC = () => {
             userMaterialPresets,
             xingConfig
           },
-          presets: presetsForCloud as any[],
-          // 额外保存xingSparkConfig(API期望的字段名)，确保云端加载时能正确识别
-          xingSparkConfig: xingConfig as any,
-          // 模块预设
+          presets: presetsForCloud,
+          xingSparkConfig: xingConfig,
           modulePresets,
-          // 自定义法阵绘制
           customMagicCircles
+        };
+
+        // 分片 hash 比对：只找出变化的模块
+        const changedModules: Record<string, any> = {};
+        const newHashes: Record<string, string> = {};
+
+        for (const [key, value] of Object.entries(modules)) {
+          const hash = JSON.stringify(value);
+          newHashes[key] = hash;
+
+          if (hash !== lastSavedHashesRef.current[key]) {
+            changedModules[key] = value;
+          }
+        }
+
+        // 如果没有变化，跳过保存
+        if (Object.keys(changedModules).length === 0) {
+          return;
+        }
+
+        // 只上传变化的模块（增量 patch）
+        saveCloudConfig(changedModules).then(success => {
+          // 关键：只有保存成功后才更新 hash，避免假阳性
+          if (success) {
+            lastSavedHashesRef.current = { ...lastSavedHashesRef.current, ...newHashes };
+          }
         });
       }
-    }, 1000); // 1 second debounce
+    }, 5000); // 5 second debounce - 减少云端API调用频率
 
     return () => clearTimeout(handler);
   }, [settings, planetSettings, themeConfig, materialSettings, userMaterialPresets, xingConfig, nebulaPresets, customMagicCircles, currentUser, hasHydratedFromCloud, saveCloudConfig]);

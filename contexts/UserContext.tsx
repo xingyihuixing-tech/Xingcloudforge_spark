@@ -8,7 +8,7 @@
  * 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 
 // ============ 类型定义 ============
 
@@ -77,6 +77,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
     const [configVersion, setConfigVersion] = useState(0); // 用于触发云配置刷新
+
+    // 请求去重和 TTL 缓存（优化 Redis 命令消耗）
+    const loadConfigPromiseRef = useRef<Promise<UserConfig | null> | null>(null);
+    const configCacheRef = useRef<{ data: UserConfig | null; timestamp: number; userId: string } | null>(null);
+    const CONFIG_CACHE_TTL = 15000; // 15秒 TTL
 
     // 初始化加载
     useEffect(() => {
@@ -406,27 +411,58 @@ export function UserProvider({ children }: { children: ReactNode }) {
         }
     };
 
+    // 加载云端配置（优化：请求去重 + TTL 缓存，减少 Redis 命令消耗）
     const loadCloudConfig = useCallback(async () => {
         if (!currentUser) return null;
 
-        const cacheKey = OFFLINE_CONFIG_PREFIX + currentUser.id;
+        const userId = currentUser.id;
+        const now = Date.now();
+
+        // 1. 检查 TTL 缓存：如果缓存未过期，直接返回
+        if (configCacheRef.current &&
+            configCacheRef.current.userId === userId &&
+            now - configCacheRef.current.timestamp < CONFIG_CACHE_TTL) {
+            return configCacheRef.current.data;
+        }
+
+        // 2. 请求去重：如果已有 in-flight 请求，复用同一个 Promise
+        if (loadConfigPromiseRef.current) {
+            return loadConfigPromiseRef.current;
+        }
+
+        const cacheKey = OFFLINE_CONFIG_PREFIX + userId;
         const cached = localStorage.getItem(cacheKey);
         let config: UserConfig | null = cached ? JSON.parse(cached) : null;
 
         if (isOnline) {
-            try {
-                const res = await fetch(`/api/config?userId=${currentUser.id}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.config) {
-                        config = data.config;
-                        localStorage.setItem(cacheKey, JSON.stringify(config));
+            // 3. 创建新的请求 Promise 并保存引用
+            const fetchPromise = (async () => {
+                try {
+                    const res = await fetch(`/api/config?userId=${userId}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.config) {
+                            config = data.config;
+                            localStorage.setItem(cacheKey, JSON.stringify(config));
+                        }
                     }
+                } catch (e) {
+                    console.warn('Failed to load cloud config', e);
+                } finally {
+                    // 4. 请求完成后清除 in-flight 引用
+                    loadConfigPromiseRef.current = null;
                 }
-            } catch (e) {
-                console.warn('Failed to load cloud config', e);
-            }
+                // 5. 更新 TTL 缓存
+                configCacheRef.current = { data: config, timestamp: Date.now(), userId };
+                return config;
+            })();
+
+            loadConfigPromiseRef.current = fetchPromise;
+            return fetchPromise;
         }
+
+        // 离线模式：返回本地缓存
+        configCacheRef.current = { data: config, timestamp: now, userId };
         return config;
     }, [currentUser?.id, isOnline, configVersion]);
 
