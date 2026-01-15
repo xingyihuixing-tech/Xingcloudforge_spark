@@ -1934,11 +1934,7 @@ export interface MaterialPreset {
 // - kaleidoscope: 万花筒（旋转+镜像）
 // - vortex: 漩涡（随半径变化的旋转扭曲）
 // - sphere: 球面（2D映射到3D球体表面）
-// - orbital: 轨道环（多平面旋转形成的原子轨道效果）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'vortex' | 'sphere' | 'orbital';
-
-// 轨道环倾斜模式
-export type OrbitalTiltMode = 'uniform' | 'progressive' | 'alternate';
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'vortex' | 'sphere';
 
 // 对称模式可调参数
 export interface SymmetryParams {
@@ -1959,22 +1955,6 @@ export interface SymmetryParams {
   sphereRadius?: number;           // 球体半径, 0.2-1.0, 默认0.5
   sphereLatScale?: number;         // 纬度映射缩放, 0.5-2.0, 默认1.0
   sphereLonScale?: number;         // 经度映射缩放, 0.5-2.0, 默认1.0
-
-  // ========== 轨道环参数 ==========
-  // 倾斜控制
-  orbitalTiltAngle?: number;       // 最大倾角, 0-90°, 默认60
-  orbitalTiltMode?: OrbitalTiltMode; // 倾斜模式: uniform/progressive/alternate, 默认uniform
-  orbitalTiltOffset?: number;      // 倾斜偏移, -90~90°, 默认0
-  // 旋转分布
-  orbitalSpreadAngle?: number;     // 分布角度, 0-360°, 默认360
-  orbitalPhaseOffset?: number;     // 相位偏移, 0-360°, 默认0
-  orbitalPhaseRandom?: number;     // 相位随机, 0-1, 默认0
-  // 缩放控制
-  orbitalBaseScale?: number;       // 基础缩放, 0.5-2.0, 默认1.0
-  orbitalScaleVariation?: number;  // 缩放变化, 0-0.5, 默认0
-  orbitalScaleDecay?: number;      // 缩放衰减, 0-0.5, 默认0
-  // 动画效果
-  orbitalSelfRotate?: number;      // 自转速度, 0-5, 默认0
 }
 
 // 画笔类型
