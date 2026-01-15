@@ -88,12 +88,11 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
     const currentCircle = customMagicCircles.find(c => c.id === currentCircleId);
     const layers = currentCircle?.layers || [];
 
-    // 对称模式选项（已移除棱镜和绽放）
+    // 对称模式选项（已移除星芒）
     const symmetryModes: { mode: SymmetryMode; label: string }[] = [
         { mode: 'none', label: '无' },
         { mode: 'radial', label: '径向' },
         { mode: 'kaleidoscope', label: '万花筒' },
-        { mode: 'starburst', label: '星芒' },
         { mode: 'vortex', label: '漩涡' },
         { mode: 'sphere', label: '球面' },
         { mode: 'orbital', label: '轨道环' }
@@ -333,51 +332,6 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 </div>
                             )}
 
-                            {/* ========== 星芒参数 ========== */}
-                            {symmetryMode === 'starburst' && (
-                                <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">内缩比例</span>
-                                        <input
-                                            type="range"
-                                            min={0.1}
-                                            max={1.0}
-                                            step={0.05}
-                                            value={symmetryParams?.starburstInnerScale ?? 0.5}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstInnerScale: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstInnerScale ?? 0.5).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">外延比例</span>
-                                        <input
-                                            type="range"
-                                            min={1.0}
-                                            max={2.0}
-                                            step={0.05}
-                                            value={symmetryParams?.starburstOuterScale ?? 1.3}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstOuterScale: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstOuterScale ?? 1.3).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">相位偏移</span>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={360}
-                                            step={5}
-                                            value={symmetryParams?.starburstPhaseOffset ?? 0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstPhaseOffset: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstPhaseOffset ?? 0}°</span>
-                                    </div>
-                                </div>
-                            )}
-
                             {/* ========== 漩涡参数 ========== */}
                             {symmetryMode === 'vortex' && (
                                 <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
@@ -477,11 +431,13 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 </div>
                             )}
 
-                            {/* ========== 轨道环参数 ========== */}
+                            {/* ========== 轨道环参数 (全新设计) ========== */}
                             {symmetryMode === 'orbital' && (
                                 <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
+                                    {/* 倾斜控制 */}
+                                    <div className="text-xs text-gray-500 font-medium">倾斜控制</div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">主轨道倾角</span>
+                                        <span className="text-xs text-gray-400 w-16">最大倾角</span>
                                         <input
                                             type="range"
                                             min={0}
@@ -494,30 +450,131 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                         <span className="text-xs text-white w-8 text-center">{symmetryParams?.orbitalTiltAngle ?? 60}°</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">二级倾斜</span>
+                                        <span className="text-xs text-gray-400 w-16">倾斜模式</span>
+                                        <div className="flex-1 flex gap-1">
+                                            {(['uniform', 'progressive', 'alternate'] as const).map(mode => (
+                                                <button
+                                                    key={mode}
+                                                    onClick={() => onUpdateSymmetryParams({ ...symmetryParams, orbitalTiltMode: mode })}
+                                                    className={`flex-1 px-1 py-1 text-xs rounded ${(symmetryParams?.orbitalTiltMode ?? 'uniform') === mode ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                                                >
+                                                    {mode === 'uniform' ? '均匀' : mode === 'progressive' ? '渐进' : '交替'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">倾斜偏移</span>
+                                        <input
+                                            type="range"
+                                            min={-90}
+                                            max={90}
+                                            step={5}
+                                            value={symmetryParams?.orbitalTiltOffset ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalTiltOffset: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.orbitalTiltOffset ?? 0}°</span>
+                                    </div>
+
+                                    {/* 旋转分布 */}
+                                    <div className="text-xs text-gray-500 font-medium mt-2">旋转分布</div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">分布角度</span>
                                         <input
                                             type="range"
                                             min={0}
-                                            max={90}
-                                            step={1}
-                                            value={symmetryParams?.orbitalSecondaryTilt ?? 0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalSecondaryTilt: Number(e.target.value) })}
+                                            max={360}
+                                            step={10}
+                                            value={symmetryParams?.orbitalSpreadAngle ?? 360}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalSpreadAngle: Number(e.target.value) })}
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
                                         />
-                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.orbitalSecondaryTilt ?? 0}°</span>
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.orbitalSpreadAngle ?? 360}°</span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">半径缩放</span>
+                                        <span className="text-xs text-gray-400 w-16">相位偏移</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={360}
+                                            step={10}
+                                            value={symmetryParams?.orbitalPhaseOffset ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalPhaseOffset: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.orbitalPhaseOffset ?? 0}°</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">相位随机</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={1}
+                                            step={0.1}
+                                            value={symmetryParams?.orbitalPhaseRandom ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalPhaseRandom: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.orbitalPhaseRandom ?? 0).toFixed(1)}</span>
+                                    </div>
+
+                                    {/* 缩放控制 */}
+                                    <div className="text-xs text-gray-500 font-medium mt-2">缩放控制</div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">基础缩放</span>
                                         <input
                                             type="range"
                                             min={0.5}
                                             max={2.0}
                                             step={0.1}
-                                            value={symmetryParams?.orbitalRadiusScale ?? 1.0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalRadiusScale: Number(e.target.value) })}
+                                            value={symmetryParams?.orbitalBaseScale ?? 1.0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalBaseScale: Number(e.target.value) })}
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
                                         />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.orbitalRadiusScale ?? 1.0).toFixed(1)}</span>
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.orbitalBaseScale ?? 1.0).toFixed(1)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">缩放变化</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={0.5}
+                                            step={0.05}
+                                            value={symmetryParams?.orbitalScaleVariation ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalScaleVariation: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.orbitalScaleVariation ?? 0).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">缩放衰减</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={0.5}
+                                            step={0.05}
+                                            value={symmetryParams?.orbitalScaleDecay ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalScaleDecay: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.orbitalScaleDecay ?? 0).toFixed(2)}</span>
+                                    </div>
+
+                                    {/* 动画效果 */}
+                                    <div className="text-xs text-gray-500 font-medium mt-2">动画效果</div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">自转速度</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={5}
+                                            step={0.1}
+                                            value={symmetryParams?.orbitalSelfRotate ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, orbitalSelfRotate: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-orange-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.orbitalSelfRotate ?? 0).toFixed(1)}</span>
                                     </div>
                                 </div>
                             )}

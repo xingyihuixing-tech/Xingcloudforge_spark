@@ -1932,11 +1932,13 @@ export interface MaterialPreset {
 // - none: 无对称
 // - radial: 径向旋转对称
 // - kaleidoscope: 万花筒（旋转+镜像）
-// - starburst: 星芒（奇偶分割交替缩放）
 // - vortex: 漩涡（随半径变化的旋转扭曲）
 // - sphere: 球面（2D映射到3D球体表面）
-// - orbital: 轨道环（多轴旋转形成的原子轨道效果）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'vortex' | 'sphere' | 'orbital';
+// - orbital: 轨道环（多平面旋转形成的原子轨道效果）
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'vortex' | 'sphere' | 'orbital';
+
+// 轨道环倾斜模式
+export type OrbitalTiltMode = 'uniform' | 'progressive' | 'alternate';
 
 // 对称模式可调参数
 export interface SymmetryParams {
@@ -1946,13 +1948,6 @@ export interface SymmetryParams {
 
   // ========== 万花筒参数 ==========
   kaleidoscopeMirrorAngle?: number; // 镜像轴角度, 0-180°, 默认0
-
-  // ========== 星芒参数 ==========
-  starburstInnerScale?: number;    // 内缩比例, 0.1-1.0, 默认0.5
-  starburstOuterScale?: number;    // 外延比例, 1.0-2.0, 默认1.3
-  starburstPhaseOffset?: number;   // 相位偏移角度, 0-360°, 默认0
-
-
 
   // ========== 漩涡参数 ==========
   vortexTwistFactor?: number;      // 扭曲强度, 0-5, 默认2.0
@@ -1966,9 +1961,20 @@ export interface SymmetryParams {
   sphereLonScale?: number;         // 经度映射缩放, 0.5-2.0, 默认1.0
 
   // ========== 轨道环参数 ==========
-  orbitalTiltAngle?: number;       // 主轨道倾角, 0-90°, 默认60
-  orbitalSecondaryTilt?: number;   // 二级倾斜角, 0-90°, 默认0
-  orbitalRadiusScale?: number;     // 轨道半径缩放, 0.5-2.0, 默认1.0
+  // 倾斜控制
+  orbitalTiltAngle?: number;       // 最大倾角, 0-90°, 默认60
+  orbitalTiltMode?: OrbitalTiltMode; // 倾斜模式: uniform/progressive/alternate, 默认uniform
+  orbitalTiltOffset?: number;      // 倾斜偏移, -90~90°, 默认0
+  // 旋转分布
+  orbitalSpreadAngle?: number;     // 分布角度, 0-360°, 默认360
+  orbitalPhaseOffset?: number;     // 相位偏移, 0-360°, 默认0
+  orbitalPhaseRandom?: number;     // 相位随机, 0-1, 默认0
+  // 缩放控制
+  orbitalBaseScale?: number;       // 基础缩放, 0.5-2.0, 默认1.0
+  orbitalScaleVariation?: number;  // 缩放变化, 0-0.5, 默认0
+  orbitalScaleDecay?: number;      // 缩放衰减, 0-0.5, 默认0
+  // 动画效果
+  orbitalSelfRotate?: number;      // 自转速度, 0-5, 默认0
 }
 
 // 画笔类型
