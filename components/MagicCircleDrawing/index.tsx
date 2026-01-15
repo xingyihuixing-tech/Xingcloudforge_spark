@@ -496,7 +496,13 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 strokesGroup.add(mesh);
             }
         }
-    }, [isActive, currentCircle, soloLayerId]);
+        // 添加图层对称参数的JSON字符串作为依赖，确保参数变化时触发重渲染
+    }, [isActive, currentCircle, soloLayerId, JSON.stringify(currentCircle?.layers.map(l => ({
+        id: l.id,
+        symmetryMode: l.symmetryMode,
+        symmetryDivisions: l.symmetryDivisions,
+        symmetryParams: l.symmetryParams
+    })))]);
 
     // 渲染器和画布 ref（创建在第一个 useEffect 中）
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
