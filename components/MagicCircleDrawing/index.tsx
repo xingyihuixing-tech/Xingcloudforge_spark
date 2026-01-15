@@ -335,6 +335,19 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 }
             }
 
+            // 更新图层自转动画
+            if (refs.strokesGroup) {
+                const deltaTime = 1 / 60; // 约60FPS
+                refs.strokesGroup.children.forEach((child) => {
+                    if (child instanceof THREE.Group && child.userData.rotationSpeed !== undefined) {
+                        const speed = child.userData.rotationSpeed as number;
+                        if (speed !== 0) {
+                            child.rotation.z += speed * deltaTime * 0.5; // 缩放速度使动画更平滑
+                        }
+                    }
+                });
+            }
+
             renderer.render(refs.scene, refs.camera);
         };
 
@@ -450,6 +463,11 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             : currentCircle.layers.filter(l => l.visible !== false);
 
         for (const layer of layersToRender) {
+            // 为每个图层创建一个Group，用于图层级别的旋转
+            const layerGroup = new THREE.Group();
+            layerGroup.userData.layerId = layer.id;
+            layerGroup.userData.rotationSpeed = layer.rotationSpeed ?? 0;
+
             for (const stroke of layer.strokes) {
                 let mesh: THREE.Object3D;
                 // 画布渲染使用默认参数（无法阵级别调节，脉冲关闭，粒子大小缩放）
@@ -493,15 +511,17 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         layer.symmetryParams
                     );
                 }
-                strokesGroup.add(mesh);
+                layerGroup.add(mesh);
             }
+            strokesGroup.add(layerGroup);
         }
         // 添加图层对称参数的JSON字符串作为依赖，确保参数变化时触发重渲染
     }, [isActive, currentCircle, soloLayerId, JSON.stringify(currentCircle?.layers.map(l => ({
         id: l.id,
         symmetryMode: l.symmetryMode,
         symmetryDivisions: l.symmetryDivisions,
-        symmetryParams: l.symmetryParams
+        symmetryParams: l.symmetryParams,
+        rotationSpeed: l.rotationSpeed
     })))]);
 
     // 渲染器和画布 ref（创建在第一个 useEffect 中）
