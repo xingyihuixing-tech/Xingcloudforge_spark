@@ -1932,9 +1932,10 @@ export interface MaterialPreset {
 // - none: 无对称
 // - radial: 径向旋转对称
 // - kaleidoscope: 万花筒（旋转+镜像）
+// - starburst: 星芒（奇偶分割缩放+分形）
 // - vortex: 漩涡（随半径变化的旋转扭曲）
 // - sphere: 球面（2D映射到3D球体表面）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'vortex' | 'sphere';
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'vortex' | 'sphere';
 
 // 对称模式可调参数
 export interface SymmetryParams {
@@ -1944,6 +1945,14 @@ export interface SymmetryParams {
 
   // ========== 万花筒参数 ==========
   kaleidoscopeMirrorAngle?: number; // 镜像轴角度, 0-180°, 默认0
+
+  // ========== 星芒参数 ==========
+  starburstInnerScale?: number;    // 内缩比例, 0.1-1.0, 默认0.5
+  starburstOuterScale?: number;    // 外延比例, 1.0-2.0, 默认1.3
+  starburstPhaseOffset?: number;   // 相位偏移, 0-360°, 默认0
+  starburstFractalLevels?: number; // 分形层数, 1-4, 默认1
+  starburstFractalScale?: number;  // 分形缩放, 0.3-0.8, 默认0.5
+  starburstFractalAngle?: number;  // 分形角度偏移, 0-45°, 默认0
 
   // ========== 漩涡参数 ==========
   vortexTwistFactor?: number;      // 扭曲强度, 0-5, 默认2.0
@@ -1990,6 +1999,7 @@ export interface MagicCircleLayer {
   symmetryMode: SymmetryMode;
   symmetryDivisions: number;  // 3-36
   symmetryParams?: SymmetryParams;  // 对称模式可调参数
+  rotationSpeed?: number;  // 图层自转速度, -5~5, 默认0
   strokes: MagicCircleStroke[];
 }
 

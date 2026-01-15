@@ -334,6 +334,46 @@ export function applySymmetryTransform(
                 y: radius * Math.sin(mirroredAngle)
             });
         }
+    } else if (mode === 'starburst') {
+        // 星芒模式：奇偶分割缩放 + 分形
+        const innerScale = params?.starburstInnerScale ?? 0.5;
+        const outerScale = params?.starburstOuterScale ?? 1.3;
+        const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
+        const fractalLevels = params?.starburstFractalLevels ?? 1;
+        const fractalScale = params?.starburstFractalScale ?? 0.5;
+        const fractalAngle = ((params?.starburstFractalAngle ?? 0) / 180) * Math.PI;
+
+        // 递归生成分形点
+        function generateFractalPoints(
+            cx: number, cy: number,
+            baseRadius: number,
+            level: number,
+            parentAngle: number
+        ): void {
+            for (let i = 0; i < divisions; i++) {
+                const angle = parentAngle + angleStep * i + phaseOffset;
+                const scale = (i % 2 === 0) ? outerScale : innerScale;
+                const scaledRadius = baseRadius * scale;
+
+                const px = cx + scaledRadius * Math.cos(angle);
+                const py = cy + scaledRadius * Math.sin(angle);
+
+                // 第一层第一个点保持原始位置
+                if (level === 1 && i === 0) {
+                    results.push({ x: dx, y: dy });
+                } else {
+                    results.push({ x: px, y: py });
+                }
+
+                // 递归生成子层（仅在外延点上生成）
+                if (level < fractalLevels && (i % 2 === 0)) {
+                    const childRadius = scaledRadius * fractalScale;
+                    generateFractalPoints(px, py, childRadius, level + 1, angle + fractalAngle);
+                }
+            }
+        }
+
+        generateFractalPoints(0, 0, radius, 1, baseAngle);
     } else if (mode === 'vortex') {
         // 漩涡模式：随半径旋转扭曲
         const twistFactor = params?.vortexTwistFactor ?? 2.0;
@@ -1594,6 +1634,53 @@ function applySymmetryToPath(
             });
             allPaths.push(mirroredPath);
         }
+    } else if (symmetryMode === 'starburst') {
+        // 星芒模式：奇偶分割缩放 + 分形
+        const innerScale = params?.starburstInnerScale ?? 0.5;
+        const outerScale = params?.starburstOuterScale ?? 1.3;
+        const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
+        const fractalLevels = params?.starburstFractalLevels ?? 1;
+        const fractalScale = params?.starburstFractalScale ?? 0.5;
+        const fractalAngle = ((params?.starburstFractalAngle ?? 0) / 180) * Math.PI;
+        const angleStep = (Math.PI * 2) / divisions;
+
+        // 递归生成分形路径
+        function generateFractalPaths(
+            cx: number, cy: number,
+            baseScale: number,
+            level: number,
+            parentAngle: number
+        ): void {
+            for (let i = 0; i < divisions; i++) {
+                const angle = parentAngle + angleStep * i + phaseOffset;
+                const scale = (i % 2 === 0) ? outerScale : innerScale;
+                const totalScale = baseScale * scale;
+                const cosA = Math.cos(angle);
+                const sinA = Math.sin(angle);
+
+                // 第一层第一个保持原始路径
+                if (level === 1 && i === 0) {
+                    allPaths.push(basePath.map(p => ({ x: p.x, y: p.y, pressure: p.pressure })));
+                } else {
+                    const transformedPath = basePath.map(p => ({
+                        x: cx + (p.x * cosA - p.y * sinA) * totalScale,
+                        y: cy + (p.x * sinA + p.y * cosA) * totalScale,
+                        pressure: p.pressure
+                    }));
+                    allPaths.push(transformedPath);
+                }
+
+                // 递归生成子层（仅在外延位置）
+                if (level < fractalLevels && (i % 2 === 0)) {
+                    const childCx = cx + totalScale * 0.3 * cosA; // 子层中心偏移
+                    const childCy = cy + totalScale * 0.3 * sinA;
+                    const childScale = totalScale * fractalScale;
+                    generateFractalPaths(childCx, childCy, childScale, level + 1, angle + fractalAngle);
+                }
+            }
+        }
+
+        generateFractalPaths(0, 0, 1.0, 1, 0);
     } else if (symmetryMode === 'vortex') {
         // 漩涡模式：随半径旋转扭曲
         const twistFactor = params?.vortexTwistFactor ?? 2.0;

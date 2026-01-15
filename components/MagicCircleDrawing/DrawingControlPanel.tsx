@@ -23,7 +23,8 @@ import {
     EditIcon,
     MagicCircleIcon,
     LayerIcon,
-    SymmetryIcon
+    SymmetryIcon,
+    CopyIcon
 } from './Icons';
 
 // ==================== Props 接口 ====================
@@ -52,6 +53,10 @@ interface DrawingControlPanelProps {
     symmetryParams?: SymmetryParams;
     onUpdateSymmetry: (mode: SymmetryMode, divisions: number) => void;
     onUpdateSymmetryParams: (params: SymmetryParams) => void;
+    onUpdateRotationSpeed: (speed: number) => void;
+
+    // 图层操作
+    onCopyLayer: (id: string) => void;
 
     // 关闭
     onClose: () => void;
@@ -79,6 +84,8 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
     symmetryParams,
     onUpdateSymmetry,
     onUpdateSymmetryParams,
+    onUpdateRotationSpeed,
+    onCopyLayer,
     onClose
 }) => {
     const [editingCircleName, setEditingCircleName] = useState<string | null>(null);
@@ -87,12 +94,14 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
 
     const currentCircle = customMagicCircles.find(c => c.id === currentCircleId);
     const layers = currentCircle?.layers || [];
+    const currentLayer = layers.find(l => l.id === currentLayerId);
 
-    // 对称模式选项（已移除星芒、轨道环）
+    // 对称模式选项
     const symmetryModes: { mode: SymmetryMode; label: string }[] = [
         { mode: 'none', label: '无' },
         { mode: 'radial', label: '径向' },
         { mode: 'kaleidoscope', label: '万花筒' },
+        { mode: 'starburst', label: '星芒' },
         { mode: 'vortex', label: '漩涡' },
         { mode: 'sphere', label: '球面' }
     ];
@@ -280,6 +289,21 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 <span className="text-xs text-white w-8 text-center">{symmetryDivisions}</span>
                             </div>
 
+                            {/* ========== 图层自转速度 ========== */}
+                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
+                                <span className="text-xs text-gray-400 w-16">自转速度</span>
+                                <input
+                                    type="range"
+                                    min={-5}
+                                    max={5}
+                                    step={0.1}
+                                    value={currentLayer?.rotationSpeed ?? 0}
+                                    onChange={(e) => onUpdateRotationSpeed(Number(e.target.value))}
+                                    className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                />
+                                <span className="text-xs text-white w-8 text-center">{(currentLayer?.rotationSpeed ?? 0).toFixed(1)}</span>
+                            </div>
+
                             {/* ========== 径向参数 ========== */}
                             {symmetryMode === 'radial' && (
                                 <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
@@ -327,6 +351,91 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-pink-500"
                                         />
                                         <span className="text-xs text-white w-8 text-center">{symmetryParams?.kaleidoscopeMirrorAngle ?? 0}°</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ========== 星芒参数 ========== */}
+                            {symmetryMode === 'starburst' && (
+                                <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">内缩比例</span>
+                                        <input
+                                            type="range"
+                                            min={0.1}
+                                            max={1.0}
+                                            step={0.05}
+                                            value={symmetryParams?.starburstInnerScale ?? 0.5}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstInnerScale: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstInnerScale ?? 0.5).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">外延比例</span>
+                                        <input
+                                            type="range"
+                                            min={1.0}
+                                            max={2.0}
+                                            step={0.05}
+                                            value={symmetryParams?.starburstOuterScale ?? 1.3}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstOuterScale: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstOuterScale ?? 1.3).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">相位偏移</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={360}
+                                            step={5}
+                                            value={symmetryParams?.starburstPhaseOffset ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstPhaseOffset: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstPhaseOffset ?? 0}°</span>
+                                    </div>
+                                    <div className="text-xs text-gray-500 font-medium mt-2">分形设置</div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">分形层数</span>
+                                        <input
+                                            type="range"
+                                            min={1}
+                                            max={4}
+                                            step={1}
+                                            value={symmetryParams?.starburstFractalLevels ?? 1}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstFractalLevels: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstFractalLevels ?? 1}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">分形缩放</span>
+                                        <input
+                                            type="range"
+                                            min={0.3}
+                                            max={0.8}
+                                            step={0.05}
+                                            value={symmetryParams?.starburstFractalScale ?? 0.5}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstFractalScale: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstFractalScale ?? 0.5).toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-400 w-16">分形角度</span>
+                                        <input
+                                            type="range"
+                                            min={0}
+                                            max={45}
+                                            step={5}
+                                            value={symmetryParams?.starburstFractalAngle ?? 0}
+                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstFractalAngle: Number(e.target.value) })}
+                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                                        />
+                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstFractalAngle ?? 0}°</span>
                                     </div>
                                 </div>
                             )}
@@ -497,6 +606,18 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                         title={isSolo ? '取消 Solo' : 'Solo 此图层'}
                                     >
                                         <SoloIcon size={12} />
+                                    </button>
+
+                                    {/* 复制按钮 */}
+                                    <button
+                                        onClick={e => {
+                                            e.stopPropagation();
+                                            onCopyLayer(layer.id);
+                                        }}
+                                        className="p-0.5 rounded text-gray-500 hover:text-blue-400 transition-colors"
+                                        title="复制图层"
+                                    >
+                                        <CopyIcon size={12} />
                                     </button>
 
                                     {/* 删除按钮 */}

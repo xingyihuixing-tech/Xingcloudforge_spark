@@ -888,6 +888,53 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         setSoloLayerId(prev => prev === layerId ? null : layerId);
     }, []);
 
+    // 复制图层
+    const handleCopyLayer = useCallback((layerId: string) => {
+        if (!currentCircle) return;
+
+        const sourceLayer = currentCircle.layers.find(l => l.id === layerId);
+        if (!sourceLayer) return;
+
+        const newLayer = {
+            ...sourceLayer,
+            id: Date.now().toString(),
+            name: `${sourceLayer.name} 副本`,
+            strokes: sourceLayer.strokes.map(s => ({
+                ...s,
+                id: `${s.id}-copy-${Date.now()}`
+            }))
+        };
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: [...c.layers, newLayer]
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+        setCurrentLayerId(newLayer.id);
+    }, [currentCircle, customMagicCircles, onUpdateCircles]);
+
+    // 更新图层自转速度
+    const handleUpdateRotationSpeed = useCallback((speed: number) => {
+        if (!currentCircle || !currentLayerId) return;
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: c.layers.map(l => {
+                    if (l.id !== currentLayerId) return l;
+                    return { ...l, rotationSpeed: speed };
+                })
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+    }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
+
     // 创建新法阵
     const handleCreateCircle = useCallback(() => {
         const circleCount = customMagicCircles.length;
@@ -1942,6 +1989,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 symmetryParams={symmetryParams}
                 onUpdateSymmetry={handleUpdateSymmetry}
                 onUpdateSymmetryParams={handleUpdateSymmetryParams}
+                onUpdateRotationSpeed={handleUpdateRotationSpeed}
+                onCopyLayer={handleCopyLayer}
                 onClose={onClose}
             />
         </div >
