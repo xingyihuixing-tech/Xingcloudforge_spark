@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useUser } from '../contexts/UserContext';
+import { Paintbrush, X, Palette, Gem, Image, Check, ChevronDown, Save, Plus, Trash2 } from 'lucide-react';
 
 import { AppSettings, PlanetSceneSettings, ThemeConfig, MaterialSettings, MaterialPreset, ButtonMaterialConfig, MaterialType } from '../types';
 import { BACKGROUND_IMAGES, DEFAULT_COLOR_SCHEMES, createDefaultMaterialConfig, BUILT_IN_MATERIAL_PRESETS } from '../constants';
@@ -146,11 +147,11 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-white/5 bg-white/5">
                     <h2 className="text-lg font-medium text-white flex items-center gap-2">
-                        <i className="fas fa-paint-brush text-cyan-400" />
+                        <Paintbrush className="text-cyan-400" size={18} />
                         主题设置
                     </h2>
                     <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
-                        <i className="fas fa-times" />
+                        <X size={18} />
                     </button>
                 </div>
 
@@ -158,9 +159,9 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                 <div className="flex flex-1 overflow-hidden">
                     {/* Sidebar Tabs */}
                     <div className="w-32 bg-black/20 border-r border-white/5 flex flex-col py-4 gap-1">
-                        <TabButton active={activeTab === 'theme'} onClick={() => setActiveTab('theme')} icon="palette" label="配色方案" />
-                        <TabButton active={activeTab === 'material'} onClick={() => setActiveTab('material')} icon="gem" label="按键材质" />
-                        <TabButton active={activeTab === 'background'} onClick={() => setActiveTab('background')} icon="image" label="背景设置" />
+                        <TabButton active={activeTab === 'theme'} onClick={() => setActiveTab('theme')} icon={<Palette size={14} />} label="配色方案" />
+                        <TabButton active={activeTab === 'material'} onClick={() => setActiveTab('material')} icon={<Gem size={14} />} label="按键材质" />
+                        <TabButton active={activeTab === 'background'} onClick={() => setActiveTab('background')} icon={<Image size={14} />} label="背景设置" />
                     </div>
 
                     {/* Main Content */}
@@ -227,7 +228,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                         </div>
                                                         {currentBg?.panoramaUrl === img.value && (
                                                             <div className="absolute top-1 right-1 w-4 h-4 bg-cyan-500 rounded-full flex items-center justify-center">
-                                                                <i className="fas fa-check text-[8px] text-white" />
+                                                                <Check size={8} className="text-white" />
                                                             </div>
                                                         )}
                                                     </button>
@@ -282,7 +283,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                                 </div>
                                                                 {currentBg?.panoramaUrl === preset.url && (
                                                                     <div className="absolute top-1 left-1 w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center">
-                                                                        <i className="fas fa-check text-[8px] text-white" />
+                                                                        <Check size={8} className="text-white" />
                                                                     </div>
                                                                 )}
                                                             </button>
@@ -396,7 +397,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                                         className="absolute top-0.5 right-0.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500/0 hover:bg-red-500/80 text-white/30 hover:text-white opacity-0 group-hover:opacity-100 transition-all"
                                                         title={scheme.isSystem ? "删除系统方案" : "删除此方案"}
                                                     >
-                                                        <i className="fas fa-times text-[10px]" />
+                                                        <X size={10} />
                                                     </button>
                                                 )}
                                             </button>
@@ -467,7 +468,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                             }}
                                             className="flex-1 py-2 px-3 rounded-lg bg-cyan-500/20 text-cyan-400 text-xs font-medium hover:bg-cyan-500/30 transition-colors"
                                         >
-                                            <i className="fas fa-save mr-1" /> 保存到 {themeConfig?.schemes[themeConfig.activeSchemeId]?.name || '当前方案'}
+                                            <Save size={12} className="mr-1" /> 保存到 {themeConfig?.schemes[themeConfig.activeSchemeId]?.name || '当前方案'}
                                         </button>
                                         <button
                                             onClick={() => {
@@ -495,7 +496,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                             }}
                                             className="px-4 py-2 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/20 transition-colors"
                                         >
-                                            <i className="fas fa-plus mr-1" /> 另存为
+                                            <Plus size={12} className="mr-1" /> 另存为
                                         </button>
                                     </div>
                                 </div>
@@ -655,7 +656,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
                                             }}
                                             className="text-xs text-cyan-400 hover:text-cyan-300"
                                         >
-                                            <i className="fas fa-plus mr-1" /> 保存当前
+                                            <Plus size={12} className="mr-1" /> 保存当前
                                         </button>
                                     </div>
                                     {userMaterialPresets && userMaterialPresets.length > 0 ? (
@@ -785,7 +786,7 @@ export const ThemeSettingsModal: React.FC<ThemeSettingsModalProps> = ({
     );
 };
 
-const TabButton: React.FC<{ active: boolean, onClick: () => void, icon: string, label: string }> = ({ active, onClick, icon, label }) => (
+const TabButton: React.FC<{ active: boolean, onClick: () => void, icon: React.ReactNode, label: string }> = ({ active, onClick, icon, label }) => (
     <button
         onClick={onClick}
         className={`w-full text-left px-4 py-3 text-xs font-medium flex items-center gap-3 transition-all relative
@@ -793,7 +794,7 @@ const TabButton: React.FC<{ active: boolean, onClick: () => void, icon: string, 
         `}
     >
         {active && <div className="absolute left-0 top-0 bottom-0 w-1 bg-cyan-400" />}
-        <i className={`fas fa-${icon} w-4 text-center ${active ? 'text-cyan-400' : ''}`} />
+        <span className={`w-4 text-center flex justify-center ${active ? 'text-cyan-400' : ''}`}>{icon}</span>
         {label}
     </button>
 );

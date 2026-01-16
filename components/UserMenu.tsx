@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Palette, UserCog, Key, ArrowRightLeft, LogOut, ChevronDown } from 'lucide-react';
 import { useUser, User } from '../contexts/UserContext';
 import { PlanetAvatar } from './PlanetAvatar';
 import { ThemeSettingsModal } from './ThemeSettingsModal';
@@ -60,7 +61,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                 <span className="text-sm text-white/90 font-medium hidden sm:block max-w-[100px] truncate shadow-black drop-shadow-md">
                     {currentUser.name}
                 </span>
-                <i className={`fas fa-chevron-down text-xs text-white/50 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3 h-3 text-white/50 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {/* 下拉菜单 */}
@@ -84,16 +85,16 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                             <p className="text-xs text-white/30 font-mono truncate mt-0.5 opacity-60">@{currentUser.id}</p>
                         </div>
 
-                        <MenuItem icon="palette" label="Theme Settings" onClick={() => { setModalMode('theme'); setIsOpen(false); }} />
+                        <MenuItem icon={<Palette size={16} />} label="Theme Settings" onClick={() => { setModalMode('theme'); setIsOpen(false); }} />
                         <div className="h-px bg-white/10 my-1 mx-2" />
 
-                        <MenuItem icon="user-edit" label="Edit Profile" onClick={() => { setModalMode('profile'); setIsOpen(false); }} />
-                        <MenuItem icon="key" label="Change Password" onClick={() => { setModalMode('password'); setIsOpen(false); }} />
+                        <MenuItem icon={<UserCog size={16} />} label="Edit Profile" onClick={() => { setModalMode('profile'); setIsOpen(false); }} />
+                        <MenuItem icon={<Key size={16} />} label="Change Password" onClick={() => { setModalMode('password'); setIsOpen(false); }} />
 
                         <div className="h-px bg-white/10 my-1 mx-2" />
 
-                        <MenuItem icon="exchange-alt" label="Switch Account" onClick={handleSwitch} />
-                        <MenuItem icon="sign-out-alt" label="Log Out" variant="danger" onClick={handleLogout} />
+                        <MenuItem icon={<ArrowRightLeft size={16} />} label="Switch Account" onClick={handleSwitch} />
+                        <MenuItem icon={<LogOut size={16} />} label="Log Out" variant="danger" onClick={handleLogout} />
                     </div>
                 </>
             )}
@@ -139,7 +140,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     );
 };
 
-const MenuItem = ({ icon, label, onClick, variant = 'default' }: { icon: string, label: string, onClick: () => void, variant?: 'default' | 'danger' }) => (
+const MenuItem = ({ icon, label, onClick, variant = 'default' }: { icon: React.ReactNode, label: string, onClick: () => void, variant?: 'default' | 'danger' }) => (
     <button
         onClick={onClick}
         className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-200 ${variant === 'danger'
@@ -147,7 +148,7 @@ const MenuItem = ({ icon, label, onClick, variant = 'default' }: { icon: string,
             : 'text-white/70 hover:bg-white/5 hover:text-white'
             }`}
     >
-        <i className={`fas fa-${icon} w-4 text-center opacity-70`} />
+        <span className="w-4 flex justify-center opacity-70">{icon}</span>
         {label}
     </button>
 );

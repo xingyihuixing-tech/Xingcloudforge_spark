@@ -11,6 +11,7 @@ import React, { useState, useEffect } from 'react';
 import { useUser, SavedUser } from '../contexts/UserContext';
 import { BackgroundManager } from './BackgroundManager';
 import { PlanetAvatar } from './PlanetAvatar';
+import { AlertTriangle, X, Plus, ArrowLeft } from 'lucide-react';
 
 export function UserLogin() {
   const { savedUsers, login, register, removeSavedUser, currentUser, isLoading, isOnline } = useUser();
@@ -124,7 +125,7 @@ export function UserLogin() {
         {/* 错误提示 - 修复背景 */}
         {error && (
           <div className="mb-6 px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-200 rounded-xl backdrop-blur-md animate-in slide-in-from-top-5 max-w-md text-center shadow-lg">
-            <i className="fas fa-exclamation-triangle mr-2"></i>
+            <AlertTriangle className="mr-2 inline" size={16} />
             {error}
           </div>
         )}
@@ -153,7 +154,7 @@ export function UserLogin() {
                     }}
                     className="absolute -top-1 -right-1 w-7 h-7 bg-white/10 hover:bg-red-500/80 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md"
                   >
-                    <i className="fas fa-times text-xs" />
+                    <X size={12} />
                   </button>
                 </div>
               ))}
@@ -168,7 +169,7 @@ export function UserLogin() {
                   }}
                   className="flex flex-col items-center justify-center gap-3 w-28 h-28 md:w-32 md:h-32 rounded-full border-2 border-dashed border-white/20 text-white/40 hover:border-cyan-400/50 hover:text-cyan-300 hover:bg-white/5 transition-all duration-300"
                 >
-                  <i className="fas fa-plus text-2xl group-hover:scale-110 transition-transform" />
+                  <Plus size={24} className="group-hover:scale-110 transition-transform" />
                   <span className="text-xs font-medium tracking-wide">ADD</span>
                 </button>
                 <span className="mt-4 text-lg font-medium text-white/40 group-hover:text-cyan-300 transition-colors drop-shadow-md">
@@ -255,7 +256,7 @@ export function UserLogin() {
                     onClick={() => setViewMode('saved-list')}
                     className="text-white/40 hover:text-white transition-colors flex items-center gap-1"
                   >
-                    <i className="fas fa-arrow-left" /> Back
+                    <ArrowLeft className="inline mr-1" size={12} /> Back
                   </button>
                 )}
 

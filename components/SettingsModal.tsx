@@ -13,6 +13,8 @@ interface SettingsModalProps {
     onUploadAvatar: (file: File) => Promise<{ success: boolean; url: string }>;
 }
 
+import { X } from 'lucide-react';
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({
     isOpen, mode, user, onClose, onUpdateProfile, onChangePassword, onUploadAvatar
 }) => {
@@ -92,7 +94,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
             <div className="w-[400px] bg-[#0f1016] border border-white/10 rounded-2xl flex flex-col shadow-2xl overflow-hidden p-6 relative">
                 <button onClick={onClose} className="absolute top-4 right-4 text-white/40 hover:text-white">
-                    <i className="fas fa-times" />
+                    <X size={20} />
                 </button>
 
                 <h2 className="text-xl font-medium text-white mb-6">
