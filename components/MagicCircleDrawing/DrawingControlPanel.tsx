@@ -383,11 +383,11 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             min={0.1}
                                             max={1.0}
                                             step={0.05}
-                                            value={symmetryParams?.starburstInnerScale ?? 0.5}
+                                            value={symmetryParams?.starburstInnerScale ?? 1.0}
                                             onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstInnerScale: Number(e.target.value) })}
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                         />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstInnerScale ?? 0.5).toFixed(2)}</span>
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstInnerScale ?? 1.0).toFixed(2)}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs text-gray-400 w-16">外延比例</span>
@@ -396,11 +396,11 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             min={1.0}
                                             max={2.0}
                                             step={0.05}
-                                            value={symmetryParams?.starburstOuterScale ?? 1.3}
+                                            value={symmetryParams?.starburstOuterScale ?? 1.0}
                                             onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstOuterScale: Number(e.target.value) })}
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                         />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstOuterScale ?? 1.3).toFixed(2)}</span>
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstOuterScale ?? 1.0).toFixed(2)}</span>
                                     </div>
                                     <div className="text-xs text-gray-500 font-medium mt-2">分形设置</div>
                                     <div className="flex items-center gap-2">
@@ -455,11 +455,11 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             min={0}
                                             max={5}
                                             step={0.1}
-                                            value={symmetryParams?.vortexTwistFactor ?? 2.0}
+                                            value={symmetryParams?.vortexTwistFactor ?? 0}
                                             onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, vortexTwistFactor: Number(e.target.value) })}
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
                                         />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.vortexTwistFactor ?? 2.0).toFixed(1)}</span>
+                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.vortexTwistFactor ?? 0).toFixed(1)}</span>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs text-gray-400 w-16">衰减系数</span>

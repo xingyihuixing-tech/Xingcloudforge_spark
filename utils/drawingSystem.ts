@@ -300,35 +300,24 @@ export function applySymmetryTransform(
         const phaseOffset = ((params?.radialPhaseOffset ?? 0) / 180) * Math.PI;
         const scaleVariation = params?.radialScaleVariation ?? 0;
         for (let i = 0; i < divisions; i++) {
-            // i=0 保持原始位置
-            if (i === 0) {
-                results.push({ x: dx, y: dy });
-            } else {
-                const angle = baseAngle + angleStep * i + phaseOffset;
-                const scale = 1.0 + ((i % 2 === 0) ? scaleVariation : -scaleVariation);
-                const scaledRadius = radius * scale;
-                results.push({
-                    x: scaledRadius * Math.cos(angle),
-                    y: scaledRadius * Math.sin(angle)
-                });
-            }
+            const angle = baseAngle + angleStep * i + phaseOffset;
+            const scale = 1.0 + ((i % 2 === 0) ? scaleVariation : -scaleVariation);
+            const scaledRadius = radius * scale;
+            results.push({
+                x: scaledRadius * Math.cos(angle),
+                y: scaledRadius * Math.sin(angle)
+            });
         }
     } else if (mode === 'kaleidoscope') {
         // 万花筒模式：旋转+镜像
         const mirrorAngle = ((params?.kaleidoscopeMirrorAngle ?? 0) / 180) * Math.PI;
         for (let i = 0; i < divisions; i++) {
-            // i=0 的第一个点保持原始位置
-            if (i === 0) {
-                results.push({ x: dx, y: dy });
-            } else {
-                const angle = baseAngle + angleStep * i;
-                results.push({
-                    x: radius * Math.cos(angle),
-                    y: radius * Math.sin(angle)
-                });
-            }
-            // 每份内部镜像（基于镜像轴角度）
             const angle = baseAngle + angleStep * i;
+            results.push({
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle)
+            });
+            // 每份内部镜像（基于镜像轴角度）
             const mirroredAngle = 2 * (angleStep * i + mirrorAngle) - angle;
             results.push({
                 x: radius * Math.cos(mirroredAngle),
@@ -337,8 +326,8 @@ export function applySymmetryTransform(
         }
     } else if (mode === 'starburst') {
         // 星芒模式：奇偶分割缩放 + 分形
-        const innerScale = params?.starburstInnerScale ?? 0.5;
-        const outerScale = params?.starburstOuterScale ?? 1.3;
+        const innerScale = params?.starburstInnerScale ?? 1.0;
+        const outerScale = params?.starburstOuterScale ?? 1.0;
         const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
         const fractalLevels = params?.starburstFractalLevels ?? 1;
         const fractalScale = params?.starburstFractalScale ?? 0.5;
@@ -350,7 +339,7 @@ export function applySymmetryTransform(
             baseRadius: number,
             level: number,
             parentAngle: number
-        ): void {
+        ) {
             for (let i = 0; i < divisions; i++) {
                 const angle = parentAngle + angleStep * i + phaseOffset;
                 const scale = (i % 2 === 0) ? outerScale : innerScale;
@@ -359,12 +348,7 @@ export function applySymmetryTransform(
                 const px = cx + scaledRadius * Math.cos(angle);
                 const py = cy + scaledRadius * Math.sin(angle);
 
-                // 第一层第一个点保持原始位置
-                if (level === 1 && i === 0) {
-                    results.push({ x: dx, y: dy });
-                } else {
-                    results.push({ x: px, y: py });
-                }
+                results.push({ x: px, y: py });
 
                 // 递归生成子层（仅在外延点上生成）
                 if (level < fractalLevels && (i % 2 === 0)) {
@@ -377,24 +361,19 @@ export function applySymmetryTransform(
         generateFractalPoints(0, 0, radius, 1, baseAngle);
     } else if (mode === 'vortex') {
         // 漩涡模式：随半径旋转扭曲
-        const twistFactor = params?.vortexTwistFactor ?? 2.0;
+        const twistFactor = params?.vortexTwistFactor ?? 0;
         const twistDecay = params?.vortexTwistDecay ?? 3.0;
         const direction = params?.vortexDirection ?? 1;
         const centerOffset = params?.vortexCenterOffset ?? 0;
         for (let i = 0; i < divisions; i++) {
-            // i=0 保持原始位置
-            if (i === 0) {
-                results.push({ x: dx, y: dy });
-            } else {
-                const angleOffset = angleStep * i;
-                const adjustedRadius = Math.max(0.001, radius - centerOffset);
-                const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
-                const angle = baseAngle + angleOffset + twistAngle;
-                results.push({
-                    x: radius * Math.cos(angle),
-                    y: radius * Math.sin(angle)
-                });
-            }
+            const angleOffset = angleStep * i;
+            const adjustedRadius = Math.max(0.001, radius - centerOffset);
+            const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
+            const angle = baseAngle + angleOffset + twistAngle;
+            results.push({
+                x: radius * Math.cos(angle),
+                y: radius * Math.sin(angle)
+            });
         }
     } else if (mode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
@@ -412,19 +391,14 @@ export function applySymmetryTransform(
         const bz = R * Math.cos(lat) * Math.cos(lon);
 
         for (let i = 0; i < divisions; i++) {
-            // i=0 保持原始位置（平面投影）
-            if (i === 0) {
-                results.push({ x: dx, y: dy, z: 0 });
-            } else {
-                const rotAngle = angleStep * i;
-                const cos = Math.cos(rotAngle);
-                const sin = Math.sin(rotAngle);
-                results.push({
-                    x: bx * cos + bz * sin,
-                    y: by,
-                    z: -bx * sin + bz * cos
-                });
-            }
+            const rotAngle = angleStep * i;
+            const cos = Math.cos(rotAngle);
+            const sin = Math.sin(rotAngle);
+            results.push({
+                x: bx * cos + bz * sin,
+                y: by,
+                z: -bx * sin + bz * cos
+            });
         }
     }
 
