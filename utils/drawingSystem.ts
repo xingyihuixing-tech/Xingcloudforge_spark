@@ -2016,8 +2016,9 @@ export function createWebStrokeMesh(
 
     // 提取设置参数
     const connectionsPerFrame = settings.connectionsPerFrame ?? 3;
-    const minDistance = settings.minDistance ?? 0.005; // 归一化坐标下的距离
-    const maxDistance = settings.maxDistance ?? 0.15;
+    // 距离参数在设置中是 0-100 的值，需要除以 100 转换为归一化坐标(0-1)
+    const minDistance = (settings.minDistance ?? 0.5) / 100;
+    const maxDistance = (settings.maxDistance ?? 15) / 100;
     const lineOpacity = settings.lineOpacity ?? 0.4;
     const glowIntensity = settings.glowIntensity ?? 1.5;
     const colorMode = settings.colorMode ?? 'rainbow';
