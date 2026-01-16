@@ -1700,22 +1700,17 @@ function applySymmetryToPath(
         const phaseOffset = ((params?.radialPhaseOffset ?? 0) / 180) * Math.PI;
         const scaleVariation = params?.radialScaleVariation ?? 0;
         for (let div = 0; div < divisions; div++) {
-            // div=0 保持原始路径
-            if (div === 0) {
-                allPaths.push(basePath.map(p => ({ x: p.x, y: p.y, pressure: p.pressure })));
-            } else {
-                const angle = (div / divisions) * Math.PI * 2 + phaseOffset;
-                const cos = Math.cos(angle);
-                const sin = Math.sin(angle);
-                const scale = 1.0 + ((div % 2 === 0) ? scaleVariation : -scaleVariation);
+            const angle = (div / divisions) * Math.PI * 2 + phaseOffset;
+            const cos = Math.cos(angle);
+            const sin = Math.sin(angle);
+            const scale = 1.0 + ((div % 2 === 0) ? scaleVariation : -scaleVariation);
 
-                const rotatedPath = basePath.map(p => ({
-                    x: (p.x * cos - p.y * sin) * scale,
-                    y: (p.x * sin + p.y * cos) * scale,
-                    pressure: p.pressure
-                }));
-                allPaths.push(rotatedPath);
-            }
+            const rotatedPath = basePath.map(p => ({
+                x: (p.x * cos - p.y * sin) * scale,
+                y: (p.x * sin + p.y * cos) * scale,
+                pressure: p.pressure
+            }));
+            allPaths.push(rotatedPath);
         }
     } else if (symmetryMode === 'kaleidoscope') {
         // 万花筒模式：旋转+镜像
@@ -1725,17 +1720,12 @@ function applySymmetryToPath(
             const cos = Math.cos(angle);
             const sin = Math.sin(angle);
 
-            // div=0 保持原始路径
-            if (div === 0) {
-                allPaths.push(basePath.map(p => ({ x: p.x, y: p.y, pressure: p.pressure })));
-            } else {
-                const rotatedPath = basePath.map(p => ({
-                    x: p.x * cos - p.y * sin,
-                    y: p.x * sin + p.y * cos,
-                    pressure: p.pressure
-                }));
-                allPaths.push(rotatedPath);
-            }
+            const rotatedPath = basePath.map(p => ({
+                x: p.x * cos - p.y * sin,
+                y: p.x * sin + p.y * cos,
+                pressure: p.pressure
+            }));
+            allPaths.push(rotatedPath);
 
             // 镜像路径
             const cosM = Math.cos(mirrorAngle * 2);
@@ -1775,17 +1765,12 @@ function applySymmetryToPath(
                 const cosA = Math.cos(angle);
                 const sinA = Math.sin(angle);
 
-                // 第一层第一个保持原始路径
-                if (level === 1 && i === 0) {
-                    allPaths.push(basePath.map(p => ({ x: p.x, y: p.y, pressure: p.pressure })));
-                } else {
-                    const transformedPath = basePath.map(p => ({
-                        x: cx + (p.x * cosA - p.y * sinA) * totalScale,
-                        y: cy + (p.x * sinA + p.y * cosA) * totalScale,
-                        pressure: p.pressure
-                    }));
-                    allPaths.push(transformedPath);
-                }
+                const transformedPath = basePath.map(p => ({
+                    x: cx + (p.x * cosA - p.y * sinA) * totalScale,
+                    y: cy + (p.x * sinA + p.y * cosA) * totalScale,
+                    pressure: p.pressure
+                }));
+                allPaths.push(transformedPath);
 
                 // 递归生成子层（仅在外延位置）
                 if (level < fractalLevels && (i % 2 === 0)) {
@@ -1805,26 +1790,21 @@ function applySymmetryToPath(
         const direction = params?.vortexDirection ?? 1;
         const centerOffset = params?.vortexCenterOffset ?? 0;
         for (let div = 0; div < divisions; div++) {
-            // div=0 保持原始路径
-            if (div === 0) {
-                allPaths.push(basePath.map(p => ({ x: p.x, y: p.y, pressure: p.pressure })));
-            } else {
-                const angleOffset = (div / divisions) * Math.PI * 2;
-                const twistedPath = basePath.map(p => {
-                    const radius = Math.sqrt(p.x * p.x + p.y * p.y);
-                    const adjustedRadius = Math.max(0.001, radius - centerOffset);
-                    const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
-                    const angle = angleOffset + twistAngle;
-                    const cos = Math.cos(angle);
-                    const sin = Math.sin(angle);
-                    return {
-                        x: p.x * cos - p.y * sin,
-                        y: p.x * sin + p.y * cos,
-                        pressure: p.pressure
-                    };
-                });
-                allPaths.push(twistedPath);
-            }
+            const angleOffset = (div / divisions) * Math.PI * 2;
+            const twistedPath = basePath.map(p => {
+                const radius = Math.sqrt(p.x * p.x + p.y * p.y);
+                const adjustedRadius = Math.max(0.001, radius - centerOffset);
+                const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
+                const angle = angleOffset + twistAngle;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                return {
+                    x: p.x * cos - p.y * sin,
+                    y: p.x * sin + p.y * cos,
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(twistedPath);
         }
     } else if (symmetryMode === 'sphere') {
         // 球面模式：2D映射到3D球体表面
@@ -1832,28 +1812,23 @@ function applySymmetryToPath(
         const latScale = params?.sphereLatScale ?? 1.0;
         const lonScale = params?.sphereLonScale ?? 1.0;
         for (let div = 0; div < divisions; div++) {
-            // div=0 保持原始路径（XY平面）
-            if (div === 0) {
-                allPaths.push(basePath.map(p => ({ x: p.x, y: p.y, z: 0, pressure: p.pressure })));
-            } else {
-                const rotAngle = (div / divisions) * Math.PI * 2;
-                const cos = Math.cos(rotAngle);
-                const sin = Math.sin(rotAngle);
-                const spherePath = basePath.map(p => {
-                    const lat = p.y * Math.PI * latScale;
-                    const lon = p.x * Math.PI * 2 * lonScale;
-                    const bx = R * Math.cos(lat) * Math.sin(lon);
-                    const by = R * Math.sin(lat);
-                    const bz = R * Math.cos(lat) * Math.cos(lon);
-                    return {
-                        x: bx * cos + bz * sin,
-                        y: by,
-                        z: -bx * sin + bz * cos,
-                        pressure: p.pressure
-                    };
-                });
-                allPaths.push(spherePath);
-            }
+            const rotAngle = (div / divisions) * Math.PI * 2;
+            const cos = Math.cos(rotAngle);
+            const sin = Math.sin(rotAngle);
+            const spherePath = basePath.map(p => {
+                const lat = p.y * Math.PI * latScale;
+                const lon = p.x * Math.PI * 2 * lonScale;
+                const bx = R * Math.cos(lat) * Math.sin(lon);
+                const by = R * Math.sin(lat);
+                const bz = R * Math.cos(lat) * Math.cos(lon);
+                return {
+                    x: bx * cos + bz * sin,
+                    y: by,
+                    z: -bx * sin + bz * cos,
+                    pressure: p.pressure
+                };
+            });
+            allPaths.push(spherePath);
         }
     }
 
