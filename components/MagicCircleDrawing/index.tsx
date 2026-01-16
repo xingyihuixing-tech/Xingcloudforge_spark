@@ -832,6 +832,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return {
@@ -857,6 +858,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return {
@@ -883,6 +885,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return { ...l, strokes: [] };
@@ -906,6 +909,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: [...c.layers, newLayer]
             };
         });
@@ -922,6 +926,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return { ...l, symmetryMode: mode, symmetryDivisions: divisions };
@@ -940,6 +945,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return { ...l, symmetryParams: params };
@@ -958,6 +964,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.filter(l => l.id !== layerId)
             };
         });
@@ -983,6 +990,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== layerId) return l;
                     return { ...l, visible: l.visible === false ? true : false };
@@ -1019,6 +1027,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: [...c.layers, newLayer]
             };
         });
@@ -1035,6 +1044,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return { ...l, rotationSpeed: speed };
@@ -1053,6 +1063,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             if (c.id !== currentCircle.id) return c;
             return {
                 ...c,
+                updatedAt: Date.now(),
                 layers: c.layers.map(l => {
                     if (l.id !== currentLayerId) return l;
                     return { ...l, phaseOffset: offset };
