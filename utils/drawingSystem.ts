@@ -2284,7 +2284,12 @@ export function createWebStrokeMesh(
         }
     }
 
-    // 为每条线段应用对称变换并创建几何体
+    // ========== 性能优化：批量渲染所有线段 ==========
+    // 收集所有线段的顶点、颜色、透明度到单一数组
+    const allPositions: number[] = [];
+    const allColors: number[] = [];
+    const allOpacities: number[] = [];
+
     for (const seg of lineSegments) {
         // 获取起点和终点的对称变换结果
         const startSymmetry = applySymmetryTransform(
@@ -2300,61 +2305,70 @@ export function createWebStrokeMesh(
             symmetryParams
         );
 
-        // 为每个对称变换创建线条
+        // 为每个对称变换添加线段到批量数组
         for (let s = 0; s < startSymmetry.length; s++) {
             const sp = startSymmetry[s];
             const ep = endSymmetry[s];
 
-            const positions = new Float32Array([
-                sp.x, sp.y, sp.z ?? 0,
-                ep.x, ep.y, ep.z ?? 0
-            ]);
-            const colors = new Float32Array([
-                seg.color.r, seg.color.g, seg.color.b,
-                seg.color.r, seg.color.g, seg.color.b
-            ]);
-            const opacities = new Float32Array([seg.opacity, seg.opacity]);
+            // 添加起点和终点位置
+            allPositions.push(sp.x, sp.y, sp.z ?? 0);
+            allPositions.push(ep.x, ep.y, ep.z ?? 0);
 
-            const lineGeometry = new THREE.BufferGeometry();
-            lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            lineGeometry.setAttribute('instanceColor', new THREE.BufferAttribute(colors, 3));
-            lineGeometry.setAttribute('instanceOpacity', new THREE.BufferAttribute(opacities, 1));
+            // 添加颜色（两个顶点使用相同颜色）
+            allColors.push(seg.color.r, seg.color.g, seg.color.b);
+            allColors.push(seg.color.r, seg.color.g, seg.color.b);
 
-            const lineMaterial = new THREE.ShaderMaterial({
-                vertexShader: webBrushVertexShader,
-                fragmentShader: webBrushFragmentShader,
-                uniforms: {
-                    uTime: { value: 0 },
-                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
-                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360 },
-                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                    // 染色功能参数
-                    uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
-                    uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                    uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                    uMCColorMode: { value: mcSettings.colorMode ?? 0 },
-                    uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                    uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
-                },
-                transparent: true,
-                blending: THREE.AdditiveBlending,
-                depthWrite: false
-            });
-
-            webMaterials.push(lineMaterial);
-            const line = new THREE.Line(lineGeometry, lineMaterial);
-            group.add(line);
+            // 添加透明度
+            allOpacities.push(seg.opacity);
+            allOpacities.push(seg.opacity);
         }
     }
 
-    // 将材质列表存储到group.userData，以便在动画循环中更新uTime
-    group.userData.webMaterials = webMaterials;
+    // 如果没有线段，直接返回空组
+    if (allPositions.length === 0) {
+        return group;
+    }
+
+    // 创建单一批量几何体
+    const batchGeometry = new THREE.BufferGeometry();
+    batchGeometry.setAttribute('position', new THREE.Float32BufferAttribute(allPositions, 3));
+    batchGeometry.setAttribute('instanceColor', new THREE.Float32BufferAttribute(allColors, 3));
+    batchGeometry.setAttribute('instanceOpacity', new THREE.Float32BufferAttribute(allOpacities, 1));
+
+    // 创建单一材质（而不是每条线都创建一个）
+    const batchMaterial = new THREE.ShaderMaterial({
+        vertexShader: webBrushVertexShader,
+        fragmentShader: webBrushFragmentShader,
+        uniforms: {
+            uTime: { value: 0 },
+            uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+            uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360 },
+            uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+            uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+            uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+            uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
+            // 染色功能参数
+            uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+            uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+            uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+            uMCColorMode: { value: mcSettings.colorMode ?? 0 },
+            uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+            uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+            uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+            uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+            uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+        },
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+    });
+
+    // 使用 LineSegments 而不是多个 Line（每对顶点形成一条线段）
+    const batchLines = new THREE.LineSegments(batchGeometry, batchMaterial);
+    group.add(batchLines);
+
+    // 存储单一材质用于动画更新
+    group.userData.webMaterials = [batchMaterial];
 
     return group;
 }
