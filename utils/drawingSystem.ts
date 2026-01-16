@@ -2237,19 +2237,22 @@ export function renderStrokesToGroup(
                 layer.symmetryMode,
                 layer.symmetryDivisions
             );
-        } else if (stroke.brushType === 'web') {
+        } else if (stroke.brushType === 'web' || (stroke.webSettings && Object.keys(stroke.webSettings).length > 0)) {
+            // console.log('[DrawingSystem] Rendering Web Stroke:', stroke.id);
             strokeMesh = createWebStrokeMesh(
                 stroke.points,
                 stroke.color,
                 stroke.webSettings || {},
                 layer.symmetryMode,
                 layer.symmetryDivisions,
-                [], // 重建时使用新的历史记录（只要笔画数据完整，重建结果一致）
+                [], // 重建时使用新的历史记录
                 { value: 0 },
                 undefined,
                 layer.symmetryParams
             );
         } else {
+            // Default to LineRing (Silk)
+            // console.log('[DrawingSystem] Rendering Line/Silk Stroke:', stroke.id, stroke.brushType);
             strokeMesh = createLineStrokeMesh(
                 stroke.points,
                 stroke.color,

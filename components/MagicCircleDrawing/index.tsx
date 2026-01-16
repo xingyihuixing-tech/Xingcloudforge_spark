@@ -752,7 +752,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         }
 
         refs.strokesGroup.add(refs.currentStrokeMesh);
-    }, [brushType, brushColor, particleSettings, silkSettings, lightsaberSettings, symmetryMode, symmetryDivisions, symmetryParams]);
+    }, [brushType, brushColor, particleSettings, silkSettings, lightsaberSettings, webSettings, symmetryMode, symmetryDivisions, symmetryParams]);
 
     // 处理指针抬起
     const handlePointerUp = useCallback(() => {
@@ -802,7 +802,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             refs.strokesGroup.remove(refs.currentStrokeMesh);
             refs.currentStrokeMesh = null;
         }
-    }, [isDrawing, currentCircle, currentLayerId, brushType, particleSettings, silkSettings, lightsaberSettings, brushColor, customMagicCircles, onUpdateCircles]);
+    }, [isDrawing, currentCircle, currentLayerId, brushType, particleSettings, silkSettings, lightsaberSettings, webSettings, brushColor, customMagicCircles, onUpdateCircles]);
 
     // 撤销
     const handleUndo = useCallback(() => {
