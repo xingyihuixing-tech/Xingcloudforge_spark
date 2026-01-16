@@ -277,7 +277,114 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         };
     }, [handleDragMove, handleDragEnd]);
 
-    // XingSpark 双击处理
+    // === 触摸拖拽处理 (长按逻辑) ===
+    const touchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const touchStartPosRef = useRef({ x: 0, y: 0 });
+    const isTouchDraggingRef = useRef(false);
+
+    // 触摸移动处理
+    const handleTouchMove = useCallback((e: TouchEvent) => {
+        // 如果正在拖拽，执行移动逻辑
+        if (isTouchDraggingRef.current && panelRef.current) {
+            e.preventDefault(); // 防止滚动
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - dragRef.current.startX;
+            const deltaY = touch.clientY - dragRef.current.startY;
+            panelRef.current.style.left = `${dragRef.current.initialLeft + deltaX}px`;
+            panelRef.current.style.top = `${dragRef.current.initialTop + deltaY}px`;
+            return;
+        }
+
+        // 如果还没开始拖拽（在长按等待期），检查移动距离
+        if (touchTimerRef.current) {
+            const touch = e.touches[0];
+            const moveX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+            const moveY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+
+            // 如果移动超过 10px，取消长按判定
+            if (moveX > 10 || moveY > 10) {
+                if (touchTimerRef.current) clearTimeout(touchTimerRef.current);
+                touchTimerRef.current = null;
+            }
+        }
+    }, []);
+
+    // 触摸结束处理
+    const handleTouchEnd = useCallback(() => {
+        // 清理定时器
+        if (touchTimerRef.current) {
+            clearTimeout(touchTimerRef.current);
+            touchTimerRef.current = null;
+        }
+
+        // 移除监听
+        document.removeEventListener('touchmove', handleTouchMove);
+        document.removeEventListener('touchend', handleTouchEnd);
+        document.removeEventListener('touchcancel', handleTouchEnd);
+
+        // 如果是拖拽结束，保存位置
+        if (isTouchDraggingRef.current && panelRef.current) {
+            isTouchDraggingRef.current = false;
+            dragRef.current.isDragging = false;
+
+            // 恢复光标/样式
+            panelRef.current.style.transform = 'none'; // 移除可能的缩放反馈
+
+            const style = window.getComputedStyle(panelRef.current);
+            const newPos = {
+                x: parseInt(style.left || '0', 10),
+                y: parseInt(style.top || '0', 10)
+            };
+            setSavedPosition(newPos);
+
+            onConfigChange(prev => ({
+                ...prev,
+                panelPosition: newPos
+            }));
+        }
+    }, [handleTouchMove, onConfigChange]);
+
+    // 触摸开始处理
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+        if (!panelRef.current) return;
+
+        // 记录初始触摸信息
+        const touch = e.touches[0];
+        touchStartPosRef.current = { x: touch.clientX, y: touch.clientY };
+
+        // 记录当前面板位置，为可能的拖拽做准备
+        const style = window.getComputedStyle(panelRef.current);
+        dragRef.current = {
+            isDragging: false, // 尚未开始，等待长按
+            startX: touch.clientX,
+            startY: touch.clientY,
+            initialLeft: parseInt(style.left || '0', 10),
+            initialTop: parseInt(style.top || '0', 10)
+        };
+
+        // 设置长按定时器 (500ms)
+        touchTimerRef.current = setTimeout(() => {
+            isTouchDraggingRef.current = true;
+            dragRef.current.isDragging = true;
+
+            // 视觉反馈
+            if (panelRef.current) {
+                // 简单的缩放反馈提示已激活拖拽
+                // 注意：这里直接操作 style，不触发重渲染
+                // panelRef.current.style.transform = 'scale(1.02)';
+                // 由于 scale 可能会影响布局计算，这里仅做轻微反馈或忽略
+            }
+
+            // 震动反馈 (如果设备支持)
+            if (navigator.vibrate) navigator.vibrate(50);
+
+        }, 500);
+
+        // 添加全局监听 (passive: false 以便能 preventDefault)
+        document.addEventListener('touchmove', handleTouchMove, { passive: false });
+        document.addEventListener('touchend', handleTouchEnd);
+        document.addEventListener('touchcancel', handleTouchEnd);
+    }, [handleTouchMove, handleTouchEnd]);
     const handleLogoDoubleClick = useCallback(() => {
         const now = Date.now();
         if (logoState === 'blinking' && now - lastDoubleClickRef.current < 3000) {
@@ -680,13 +787,14 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         <>
                             <div className="ai-panel-border-top" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[0]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[2]} 80%, transparent 100%)` }}></div>
                             <div className="ai-panel-border-bottom" style={{ background: `linear-gradient(90deg, transparent 0%, ${xingConfig.gradient.colors[2]} 20%, ${xingConfig.gradient.colors[1]} 50%, ${xingConfig.gradient.colors[0]} 80%, transparent 100%)` }}></div>
-                            <div className="ai-panel-border-left" style={{ background: `linear-gradient(to bottom, ${xingConfig.gradient.colors[0]}80 0%, ${xingConfig.gradient.colors[1]}80 50%, transparent 100%)` }}></div>
-                            <div className="ai-panel-border-right" style={{ background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
+                            <div className="ai-panel-border-left" style={{ top: '12px', background: `linear-gradient(to bottom, ${xingConfig.gradient.colors[0]}80 0%, ${xingConfig.gradient.colors[1]}80 50%, transparent 100%)` }}></div>
+                            <div className="ai-panel-border-right" style={{ bottom: '12px', background: `linear-gradient(to bottom, transparent 0%, ${xingConfig.gradient.colors[1]}80 50%, ${xingConfig.gradient.colors[0]}80 100%)` }}></div>
 
                             {/* 标题栏 (Drag Handle) */}
                             <div
-                                className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5"
+                                className="drag-handle flex items-center justify-between px-4 py-3 cursor-move border-b border-white/5 touch-none"
                                 onMouseDown={handleDragStart}
+                                onTouchStart={handleTouchStart}
                             >
                                 <div className="flex items-center gap-2 relative">
                                     {/* XingSpark Logo */}
@@ -848,8 +956,9 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 {/* 子模式选择 (放在输入框上方，左对齐，圆角长方形) */}
                                 {/* 最小化时：整行可拖动（点击空白处拖动） */}
                                 <div
-                                    className={`flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar items-center ${isMinimized ? 'cursor-move' : ''}`}
+                                    className={`flex gap-2 mb-2 px-1 overflow-x-auto no-scrollbar items-center ${isMinimized ? 'cursor-move touch-none' : ''}`}
                                     onMouseDown={isMinimized ? handleDragStart : undefined}
+                                    onTouchStart={isMinimized ? handleTouchStart : undefined}
                                 >
 
                                     {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => (
