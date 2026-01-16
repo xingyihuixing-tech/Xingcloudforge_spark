@@ -521,6 +521,18 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         defaultMcSettings,
                         layer.symmetryParams
                     );
+                } else if (stroke.brushType === 'web' || (stroke.webSettings && Object.keys(stroke.webSettings).length > 0)) {
+                    mesh = createWebStrokeMesh(
+                        stroke.points,
+                        stroke.color,
+                        stroke.webSettings || {},
+                        layer.symmetryMode,
+                        layer.symmetryDivisions,
+                        [], // 重建时使用新的历史记录
+                        { value: 0 },
+                        defaultMcSettings,
+                        layer.symmetryParams
+                    );
                 } else {
                     mesh = createLineStrokeMesh(
                         stroke.points,
