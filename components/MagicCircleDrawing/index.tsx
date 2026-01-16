@@ -610,6 +610,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         // 重置网格画笔状态
         webHistoryRef.current = [];
         lastProcessedPointIndexRef.current = 0;
+        webHueRef.current.value = 0;
 
         // 捕获指针
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
