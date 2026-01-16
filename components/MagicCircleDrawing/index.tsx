@@ -4,6 +4,7 @@
  * pos: Main React component for custom magic circle drawing system
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，支持核心/光晕双色、核心宽度、光晕强度/衰减、脉冲效果、压感模式
+ * 2026-01-16: 粒子画笔参数范围调整(粒子大小0-20、密度1-60、亮度0.1-5)，新增handleUpdatePhaseOffset图层相位偏移处理
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -19,6 +20,7 @@ import {
     ParticleRingSettings,
     SilkRingSettings,
     LightsaberSettings,
+    WebBrushSettings,
     BrushPreset
 } from '../../types';
 import {
@@ -28,6 +30,7 @@ import {
     createParticleStrokeMesh,
     createLineStrokeMesh,
     createLightsaberStrokeMesh,
+    createWebStrokeMesh,
     renderStrokesToGroup,
     createNewCircle,
     createNewLayer,
@@ -82,6 +85,18 @@ const defaultLightsaberSettings: Partial<LightsaberSettings> = {
     pulseIntensity: 0.2,     // 脉冲强度 0-0.5
     pressureMode: 'none',
     smoothness: 0.5          // 笔迹平滑 0-3
+};
+
+const defaultWebSettings: Partial<WebBrushSettings> = {
+    historyLimit: 20,        // 历史点数量上限 10-50
+    connectionsPerFrame: 3,  // 每帧连接数 1-8
+    minDistance: 0.5,        // 最小连接距离（实际值为此值/100）
+    maxDistance: 15,         // 最大连接距离（实际值为此值/100）
+    lineOpacity: 0.4,        // 线条透明度 0.1-1
+    glowIntensity: 1.5,      // 发光强度 0.1-5
+    colorMode: 'rainbow',    // 颜色模式
+    rainbowSpeed: 1,         // 彩虹速度 0.5-5
+    pressureMode: 'none'
 };
 
 // ==================== Props 接口 ====================
@@ -140,7 +155,13 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     const [particleSettings, setParticleSettings] = useState<Partial<ParticleRingSettings>>(defaultParticleSettings);
     const [silkSettings, setSilkSettings] = useState<Partial<SilkRingSettings>>(defaultSilkSettings);
     const [lightsaberSettings, setLightsaberSettings] = useState<Partial<LightsaberSettings>>(defaultLightsaberSettings);
+    const [webSettings, setWebSettings] = useState<Partial<WebBrushSettings>>(defaultWebSettings);
     const [brushColor, setBrushColor] = useState('#ffaa00');
+
+    // 网格画笔历史点缓存
+    const webHistoryRef = useRef<THREE.Vector3[]>([]);
+    const webHueRef = useRef<{ value: number }>({ value: 0 });
+    const lastProcessedPointIndexRef = useRef<number>(0);
 
     // 对称设置 (从当前图层读取)
     const symmetryMode = currentLayer?.symmetryMode || 'radial';
@@ -574,6 +595,10 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             timestamp: Date.now()
         }];
 
+        // 重置网格画笔状态
+        webHistoryRef.current = [];
+        lastProcessedPointIndexRef.current = 0;
+
         // 捕获指针
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
     }, [viewMode, currentCircle, currentLayer]);
@@ -618,6 +643,52 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         const refs = refsRef.current;
         if (!refs.strokesGroup) return;
 
+        // 特殊处理 Web 画笔：增量更新
+        if (brushType === 'web') {
+            if (!refs.currentStrokeMesh) {
+                const group = new THREE.Group();
+                refs.currentStrokeMesh = group;
+                refs.strokesGroup.add(group);
+            }
+
+            // 确保是Group类型（防御性清理）
+            if (!(refs.currentStrokeMesh instanceof THREE.Group)) {
+                refs.strokesGroup.remove(refs.currentStrokeMesh);
+                const group = new THREE.Group();
+                refs.currentStrokeMesh = group;
+                refs.strokesGroup.add(group);
+            }
+
+            const currentGroup = refs.currentStrokeMesh as THREE.Group;
+            const allPoints = currentStrokeRef.current;
+            const newPoints = allPoints.slice(lastProcessedPointIndexRef.current);
+
+            // 至少有2个点才能开始连接，或者有历史点
+            if (newPoints.length > 0) {
+                const newMeshPart = createWebStrokeMesh(
+                    newPoints,
+                    brushColor,
+                    webSettings,
+                    symmetryMode,
+                    symmetryDivisions,
+                    webHistoryRef.current, // 传入并修改历史点
+                    webHueRef.current,
+                    undefined,
+                    symmetryParams,
+                    lastProcessedPointIndexRef.current // 传入起始索引以保持伪随机一致性
+                );
+
+                // 将新生成的线条移动到预览Group中
+                while (newMeshPart.children.length > 0) {
+                    currentGroup.add(newMeshPart.children[0]);
+                }
+
+                lastProcessedPointIndexRef.current = allPoints.length;
+            }
+            return;
+        }
+
+        // 非 Web 画笔：全量重建预览
         // 移除旧的预览
         if (refs.currentStrokeMesh) {
             refs.strokesGroup.remove(refs.currentStrokeMesh);
@@ -697,6 +768,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 particleRingSettings: brushType === 'particle' ? { ...particleSettings } : undefined,
                 silkRingSettings: brushType === 'lineRing' ? { ...silkSettings } : undefined,
                 lightsaberSettings: brushType === 'lightsaber' ? { ...lightsaberSettings } : undefined,
+                webSettings: brushType === 'web' ? { ...webSettings } : undefined,
                 color: brushColor,
                 points: [...points]
             };
@@ -955,6 +1027,24 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         onUpdateCircles(updatedCircles);
     }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
 
+    // 更新图层相位偏移
+    const handleUpdatePhaseOffset = useCallback((offset: number) => {
+        if (!currentCircle || !currentLayerId) return;
+
+        const updatedCircles = customMagicCircles.map(c => {
+            if (c.id !== currentCircle.id) return c;
+            return {
+                ...c,
+                layers: c.layers.map(l => {
+                    if (l.id !== currentLayerId) return l;
+                    return { ...l, phaseOffset: offset };
+                })
+            };
+        });
+
+        onUpdateCircles(updatedCircles);
+    }, [currentCircle, currentLayerId, customMagicCircles, onUpdateCircles]);
+
     // 创建新法阵
     const handleCreateCircle = useCallback(() => {
         const circleCount = customMagicCircles.length;
@@ -1131,10 +1221,16 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
                 {/* 画笔类型 - 固定 */}
                 <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexShrink: 0 }}>
-                    {(['particle', 'lineRing', 'lightsaber'] as DrawingBrushType[]).map(type => (
+                    {(['particle', 'lineRing', 'lightsaber', 'web'] as DrawingBrushType[]).map(type => (
                         <button
                             key={type}
-                            onClick={() => setBrushType(type)}
+                            onClick={() => {
+                                setBrushType(type);
+                                // 切换到网格画笔时清空历史（新笔画）
+                                if (type === 'web') {
+                                    webHistoryRef.current = [];
+                                }
+                            }}
                             className={brushType === type ? 'drawing-btn-active' : 'drawing-btn-ghost'}
                             style={{
                                 flex: 1,
@@ -1143,7 +1239,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 cursor: 'pointer'
                             }}
                         >
-                            {type === 'particle' ? '粒子' : type === 'lightsaber' ? '光剑' : '丝环'}
+                            {type === 'particle' ? '粒子' : type === 'lightsaber' ? '光剑' : type === 'web' ? '网格' : '丝环'}
                         </button>
                     ))}
                 </div>
@@ -1215,9 +1311,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={50}
-                                    max={300}
-                                    step={10}
+                                    min={0}
+                                    max={20}
+                                    step={0.1}
                                     value={particleSettings.particleSize || 2}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleSize: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
@@ -1227,14 +1323,14 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
                                     <span>粒子密度</span>
-                                    <span style={{ color: '#ffffff' }}>{(particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 300).toFixed(0)}</span>
+                                    <span style={{ color: '#ffffff' }}>{(particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 30).toFixed(1)}</span>
                                 </div>
                                 <input
                                     type="range"
-                                    min={100}
-                                    max={800}
-                                    step={10}
-                                    value={particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 300}
+                                    min={1}
+                                    max={60}
+                                    step={0.1}
+                                    value={particleSettings.particleDensity ?? defaultParticleSettings.particleDensity ?? 30}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, particleDensity: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
@@ -1247,9 +1343,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 </div>
                                 <input
                                     type="range"
-                                    min={1}
-                                    max={10}
-                                    step={0.5}
+                                    min={0.1}
+                                    max={5}
+                                    step={0.1}
                                     value={particleSettings.brightness || 2}
                                     onChange={(e) => setParticleSettings(prev => ({ ...prev, brightness: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
@@ -1814,8 +1910,167 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                             </div>
                         </>
                     )}
-                    {/* 颜色选择 - 在滚动区域内（光剑模式下隐藏，因为光剑有独立双色选择） */}
-                    {brushType !== 'lightsaber' && (
+                    {/* ========== 网格画笔参数 ========== */}
+                    {brushType === 'web' && (
+                        <>
+                            {/* 颜色模式 */}
+                            <div style={{ marginBottom: 12 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                                    <span>颜色模式</span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        onClick={() => setWebSettings(prev => ({ ...prev, colorMode: 'rainbow' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: 'transparent',
+                                            border: (webSettings.colorMode ?? 'rainbow') === 'rainbow' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
+                                            borderRadius: 6,
+                                            color: (webSettings.colorMode ?? 'rainbow') === 'rainbow' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        彩虹
+                                    </button>
+                                    <button
+                                        onClick={() => setWebSettings(prev => ({ ...prev, colorMode: 'fixed' }))}
+                                        style={{
+                                            flex: 1,
+                                            padding: '6px 0',
+                                            background: 'transparent',
+                                            border: (webSettings.colorMode ?? 'rainbow') === 'fixed' ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.2)',
+                                            borderRadius: 6,
+                                            color: (webSettings.colorMode ?? 'rainbow') === 'fixed' ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.6)',
+                                            fontSize: 12,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        固定
+                                    </button>
+                                </div>
+                            </div>
+                            {/* 彩虹速度 (仅彩虹模式) */}
+                            {(webSettings.colorMode ?? 'rainbow') === 'rainbow' && (
+                                <div style={{ marginBottom: 10 }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                        <span>彩虹速度</span>
+                                        <span style={{ color: '#ffffff' }}>{(webSettings.rainbowSpeed ?? 1).toFixed(1)}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min={0.5}
+                                        max={5}
+                                        step={0.1}
+                                        value={webSettings.rainbowSpeed ?? 1}
+                                        onChange={(e) => setWebSettings(prev => ({ ...prev, rainbowSpeed: Number(e.target.value) }))}
+                                        style={{ width: '100%' }}
+                                    />
+                                </div>
+                            )}
+                            {/* 历史点数量 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>历史点数量</span>
+                                    <span style={{ color: '#ffffff' }}>{webSettings.historyLimit ?? 20}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={10}
+                                    max={50}
+                                    step={5}
+                                    value={webSettings.historyLimit ?? 20}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, historyLimit: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 每帧连接数 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>每帧连接数</span>
+                                    <span style={{ color: '#ffffff' }}>{webSettings.connectionsPerFrame ?? 3}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={1}
+                                    max={8}
+                                    step={1}
+                                    value={webSettings.connectionsPerFrame ?? 3}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, connectionsPerFrame: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 最小连接距离 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>最小距离</span>
+                                    <span style={{ color: '#ffffff' }}>{(webSettings.minDistance ?? 0.5).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={5}
+                                    step={0.1}
+                                    value={webSettings.minDistance ?? 0.5}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, minDistance: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 最大连接距离 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>最大距离</span>
+                                    <span style={{ color: '#ffffff' }}>{(webSettings.maxDistance ?? 15).toFixed(0)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={5}
+                                    max={30}
+                                    step={1}
+                                    value={webSettings.maxDistance ?? 15}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, maxDistance: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 线条透明度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>线条透明度</span>
+                                    <span style={{ color: '#ffffff' }}>{(webSettings.lineOpacity ?? 0.4).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.1}
+                                    max={1}
+                                    step={0.1}
+                                    value={webSettings.lineOpacity ?? 0.4}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, lineOpacity: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 发光强度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>发光强度</span>
+                                    <span style={{ color: '#ffffff' }}>{(webSettings.glowIntensity ?? 1.5).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.1}
+                                    max={5}
+                                    step={0.1}
+                                    value={webSettings.glowIntensity ?? 1.5}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, glowIntensity: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                        </>
+                    )}
+                    {/* 颜色选择 - 在滚动区域内（光剑模式下隐藏，因为光剑有独立双色选择；网格彩虹模式下也隐藏） */}
+                    {brushType !== 'lightsaber' && !(brushType === 'web' && (webSettings.colorMode ?? 'rainbow') === 'rainbow') && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                             <span style={{ fontSize: 12, color: '#ffffff' }}>颜色</span>
                             <input
@@ -2010,6 +2265,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 onUpdateSymmetry={handleUpdateSymmetry}
                 onUpdateSymmetryParams={handleUpdateSymmetryParams}
                 onUpdateRotationSpeed={handleUpdateRotationSpeed}
+                onUpdatePhaseOffset={handleUpdatePhaseOffset}
                 onCopyLayer={handleCopyLayer}
                 onClose={onClose}
             />

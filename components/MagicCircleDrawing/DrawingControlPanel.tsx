@@ -3,6 +3,7 @@
  * output: Drawing mode control panel UI with circle list, layer management, symmetry controls
  * pos: Right-side control panel replacement when drawing mode is active
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
+ * 2026-01-16: 添加通用相位偏移控件(phaseOffset)，删除分割线，调整控件顺序(分割数→相位偏移→自转速度)
  */
 
 import React, { useState } from 'react';
@@ -54,6 +55,7 @@ interface DrawingControlPanelProps {
     onUpdateSymmetry: (mode: SymmetryMode, divisions: number) => void;
     onUpdateSymmetryParams: (params: SymmetryParams) => void;
     onUpdateRotationSpeed: (speed: number) => void;
+    onUpdatePhaseOffset: (offset: number) => void;
 
     // 图层操作
     onCopyLayer: (id: string) => void;
@@ -85,6 +87,7 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
     onUpdateSymmetry,
     onUpdateSymmetryParams,
     onUpdateRotationSpeed,
+    onUpdatePhaseOffset,
     onCopyLayer,
     onClose
 }) => {
@@ -289,8 +292,23 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 <span className="text-xs text-white w-8 text-center">{symmetryDivisions}</span>
                             </div>
 
+                            {/* ========== 相位偏移（通用） ========== */}
+                            <div className="flex items-center gap-2 mt-2">
+                                <span className="text-xs text-gray-400 w-16">相位偏移</span>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={360}
+                                    step={5}
+                                    value={currentLayer?.phaseOffset ?? 0}
+                                    onChange={(e) => onUpdatePhaseOffset(Number(e.target.value))}
+                                    className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                />
+                                <span className="text-xs text-white w-8 text-center">{currentLayer?.phaseOffset ?? 0}°</span>
+                            </div>
+
                             {/* ========== 图层自转速度 ========== */}
-                            <div className="flex items-center gap-2 mt-2 pt-2 border-t border-white/10">
+                            <div className="flex items-center gap-2 mt-2">
                                 <span className="text-xs text-gray-400 w-16">自转速度</span>
                                 <input
                                     type="range"
@@ -383,19 +401,6 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                             className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
                                         />
                                         <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstOuterScale ?? 1.3).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">相位偏移</span>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={360}
-                                            step={5}
-                                            value={symmetryParams?.starburstPhaseOffset ?? 0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstPhaseOffset: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstPhaseOffset ?? 0}°</span>
                                     </div>
                                     <div className="text-xs text-gray-500 font-medium mt-2">分形设置</div>
                                     <div className="flex items-center gap-2">

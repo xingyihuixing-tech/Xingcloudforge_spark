@@ -1983,6 +1983,168 @@ export function createLineStrokeMesh(
     return group;
 }
 
+// ==================== 创建网格画笔笔画 (Web/Plexus效果) ====================
+
+export function createWebStrokeMesh(
+    points: StrokePoint[],
+    color: string,
+    settings: {
+        historyLimit?: number;
+        connectionsPerFrame?: number;
+        minDistance?: number;
+        maxDistance?: number;
+        lineOpacity?: number;
+        glowIntensity?: number;
+        colorMode?: 'rainbow' | 'fixed';
+        rainbowSpeed?: number;
+        pressureMode?: 'none' | 'opacity' | 'density';
+    },
+    symmetryMode: SymmetryMode,
+    symmetryDivisions: number,
+    historyPoints: THREE.Vector3[],
+    hueRef: { value: number },
+    magicCircleSettings?: {
+        opacity?: number;
+        brightness?: number;
+    },
+    symmetryParams?: SymmetryParams,
+    globalStartIndex: number = 0
+): THREE.Group {
+    const group = new THREE.Group();
+
+    if (points.length < 1) return group;
+
+    // 提取设置参数
+    const connectionsPerFrame = settings.connectionsPerFrame ?? 3;
+    const minDistance = settings.minDistance ?? 0.005; // 归一化坐标下的距离
+    const maxDistance = settings.maxDistance ?? 0.15;
+    const lineOpacity = settings.lineOpacity ?? 0.4;
+    const glowIntensity = settings.glowIntensity ?? 1.5;
+    const colorMode = settings.colorMode ?? 'rainbow';
+    const rainbowSpeed = settings.rainbowSpeed ?? 1;
+    const pressureMode = settings.pressureMode ?? 'none';
+    const mcOpacity = magicCircleSettings?.opacity ?? 1.0;
+    const mcBrightness = magicCircleSettings?.brightness ?? 1.0;
+
+    // 将当前笔画点转换为 THREE.Vector3 并添加到历史
+    const currentPoints: THREE.Vector3[] = [];
+    for (const pt of points) {
+        // 坐标归一化：从(0,1)转换为(-0.5, 0.5)
+        const x = pt.x - 0.5;
+        const y = 0.5 - pt.y; // Y轴翻转
+        currentPoints.push(new THREE.Vector3(x, y, 0));
+    }
+
+    // 收集所有需要绘制的线段
+    const lineSegments: { start: THREE.Vector3; end: THREE.Vector3; opacity: number; color: THREE.Color }[] = [];
+
+    // 对每个当前点
+    for (let i = 0; i < currentPoints.length; i++) {
+        const currentPoint = currentPoints[i];
+        const pressure = points[i].pressure;
+
+        // 更新色相（彩虹模式）
+        if (colorMode === 'rainbow') {
+            hueRef.value = (hueRef.value + rainbowSpeed) % 360;
+        }
+
+        // 计算颜色
+        let lineColor: THREE.Color;
+        if (colorMode === 'rainbow') {
+            lineColor = new THREE.Color().setHSL(hueRef.value / 360, 1, 0.6);
+        } else {
+            lineColor = new THREE.Color(color);
+        }
+
+        // 应用亮度
+        lineColor.multiplyScalar(mcBrightness * glowIntensity * 0.5);
+
+        // 从历史点中随机选择连接目标
+        const connectionCount = Math.min(connectionsPerFrame, historyPoints.length);
+
+        for (let c = 0; c < connectionCount; c++) {
+            if (historyPoints.length === 0) break;
+
+            // 随机选择一个历史点 (使用确定性随机以防止闪烁)
+            const globalIndex = globalStartIndex + i;
+            const seed = globalIndex * 997 + c * 331 + historyPoints.length * 13;
+            // 伪随机：sin(seed)的小数部分
+            let rand = Math.sin(seed) * 10000;
+            rand = rand - Math.floor(rand);
+
+            const targetIndex = Math.floor(rand * historyPoints.length);
+            const targetPoint = historyPoints[targetIndex];
+
+            // 计算距离
+            const dist = currentPoint.distanceTo(targetPoint);
+
+            // 只在距离范围内建立连接
+            if (dist >= minDistance && dist <= maxDistance) {
+                // 计算透明度（压感影响）
+                let opacity = lineOpacity * mcOpacity;
+                if (pressureMode === 'opacity') {
+                    opacity *= 0.3 + pressure * 0.7;
+                }
+
+                // 距离衰减
+                const distFactor = 1 - (dist - minDistance) / (maxDistance - minDistance);
+                opacity *= distFactor * distFactor;
+
+                lineSegments.push({
+                    start: currentPoint.clone(),
+                    end: targetPoint.clone(),
+                    opacity: opacity,
+                    color: lineColor.clone()
+                });
+            }
+        }
+
+        // 将当前点添加到历史
+        historyPoints.push(currentPoint.clone());
+    }
+
+    // 为每条线段应用对称变换并创建几何体
+    for (const seg of lineSegments) {
+        // 获取起点和终点的对称变换结果
+        const startSymmetry = applySymmetryTransform(
+            { x: seg.start.x, y: seg.start.y },
+            symmetryMode,
+            symmetryDivisions,
+            symmetryParams
+        );
+        const endSymmetry = applySymmetryTransform(
+            { x: seg.end.x, y: seg.end.y },
+            symmetryMode,
+            symmetryDivisions,
+            symmetryParams
+        );
+
+        // 为每个对称变换创建线条
+        for (let s = 0; s < startSymmetry.length; s++) {
+            const sp = startSymmetry[s];
+            const ep = endSymmetry[s];
+
+            const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(sp.x, sp.y, sp.z ?? 0),
+                new THREE.Vector3(ep.x, ep.y, ep.z ?? 0)
+            ]);
+
+            const lineMaterial = new THREE.LineBasicMaterial({
+                color: seg.color,
+                transparent: true,
+                opacity: seg.opacity,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+
+            const line = new THREE.Line(lineGeometry, lineMaterial);
+            group.add(line);
+        }
+    }
+
+    return group;
+}
+
 // ==================== 清理绘图资源 ====================
 
 export function disposeDrawingResources(refs: DrawingSystemRefs): void {
@@ -2073,6 +2235,18 @@ export function renderStrokesToGroup(
                 stroke.lightsaberSettings || {},
                 layer.symmetryMode,
                 layer.symmetryDivisions
+            );
+        } else if (stroke.brushType === 'web') {
+            strokeMesh = createWebStrokeMesh(
+                stroke.points,
+                stroke.color,
+                stroke.webSettings || {},
+                layer.symmetryMode,
+                layer.symmetryDivisions,
+                [], // 重建时使用新的历史记录（只要笔画数据完整，重建结果一致）
+                { value: 0 },
+                undefined,
+                layer.symmetryParams
             );
         } else {
             strokeMesh = createLineStrokeMesh(

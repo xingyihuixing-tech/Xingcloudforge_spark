@@ -3,6 +3,7 @@
  * output: TypeScript types used across the app
  * pos: Central type definitions
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
+ * 2026-01-16: MagicCircleLayer添加phaseOffset字段(图层相位偏移)
  */
 
 export enum DepthMode {
@@ -1966,8 +1967,21 @@ export interface SymmetryParams {
   sphereLonScale?: number;         // 经度映射缩放, 0.5-2.0, 默认1.0
 }
 
+// 网格画笔设置
+export interface WebBrushSettings {
+  historyLimit: number;        // 历史点数量上限, 10-50, 默认20
+  connectionsPerFrame: number; // 每帧连接数, 1-8, 默认3
+  minDistance: number;         // 最小连接距离, 0-5, 默认0.1
+  maxDistance: number;         // 最大连接距离, 5-30, 默认15
+  lineOpacity: number;         // 线条透明度, 0.1-1, 默认0.4
+  glowIntensity: number;       // 发光强度, 0.1-5, 默认1.5
+  colorMode: 'rainbow' | 'fixed'; // 颜色模式
+  rainbowSpeed: number;        // 彩虹色相变化速度, 0.5-5, 默认1
+  pressureMode: 'none' | 'opacity' | 'density'; // 压感模式
+}
+
 // 画笔类型
-export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber';
+export type DrawingBrushType = 'particle' | 'lineRing' | 'lightsaber' | 'web';
 
 // 采样点 (支持压感)
 export interface StrokePoint {
@@ -1985,6 +1999,7 @@ export interface MagicCircleStroke {
   particleRingSettings?: Partial<ParticleRingSettings>;
   silkRingSettings?: Partial<SilkRingSettings>;
   lightsaberSettings?: Partial<LightsaberSettings>;
+  webSettings?: Partial<WebBrushSettings>;
   color: string;  // 主色调（覆盖 settings 中的 color）
   points: StrokePoint[];
 }
@@ -2000,6 +2015,7 @@ export interface MagicCircleLayer {
   symmetryDivisions: number;  // 3-36
   symmetryParams?: SymmetryParams;  // 对称模式可调参数
   rotationSpeed?: number;  // 图层自转速度, -5~5, 默认0
+  phaseOffset?: number;    // 图层相位偏移（角度偏移）, 0-360, 默认0
   strokes: MagicCircleStroke[];
 }
 

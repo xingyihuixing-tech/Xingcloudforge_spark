@@ -3,6 +3,7 @@
  * output: 渲染 Planet 场景；互通模式（Interop）下接管星云实例渲染与相关 uniforms 同步
  * pos: 互通模式渲染的权威入口，负责“星球 + 星云叠加”整体画面与特效即时生效；并在运行时同步自定义法阵各笔刷材质（包含 lightsaber 的 uMC* 命名）uniforms
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
+ * 2026-01-16: 粒子环混色模式改为基准色+色相偏移逻辑（proceduralIntensity控制色相跨度，blendStrength控制边界清晰度）
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -8542,10 +8543,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
                             let axis = 0;
                             if (gc.proceduralAxis === 'radial') axis = 0;
                             else if (gc.proceduralAxis === 'y') axis = 2; // Vertical
-                            else if (gc.proceduralAxis === 'angle') axis = 1; // Not in CP? CP has x, y, z, radial.
-                            // CP has x, y, z.
-                            // If user picks 'x' or 'z', maybe we just use Angle for now (horizontal plane)?
-                            else axis = 1;
+                            else axis = 1; // x, z, custom -> Angle (1)
 
                             material.uniforms.uProceduralAxis.value = axis;
                           }
@@ -12737,7 +12735,11 @@ void main() {
         finalG = dg + (tg - dg) * blendWeight;
         finalB = db + (tb - db) * blendWeight;
       } else if (colorMode === 'procedural') {
-        // 混色模式使用proceduralAxis计算gradientT
+        // 混色模式：从基准色出发进行色相偏移
+        // proceduralIntensity: 渐变强度 - 控制色相跨度范围
+        // blendStrength: 过渡强度 - 控制边界清晰度 (0=硬边界, 1=平滑过渡)
+
+        // 计算位置参数 proceduralT (0-1)
         let proceduralT = 0.5;
         if (proceduralAxis === 'x') {
           proceduralT = (x / radius + 1) * 0.5;
@@ -12755,37 +12757,36 @@ void main() {
         }
         proceduralT = Math.max(0, Math.min(1, proceduralT));
 
-        // 使用三色混合，应用proceduralIntensity和blendStrength
-        const [h1, s1, v1] = rgbToHsv(color1[0], color1[1], color1[2]);
-        const [h2, s2, v2] = rgbToHsv(color2[0], color2[1], color2[2]);
-        const [h3, s3, v3] = rgbToHsv(color3[0], color3[1], color3[2]);
+        // 从基准色 ring.color 获取 HSV
+        const [baseH, baseS, baseV] = rgbToHsv(baseR, baseG, baseB);
 
-        // 混合色相，应用blendStrength控制过渡
-        let t = proceduralT * proceduralIntensity;
-        t = Math.max(0, Math.min(1, t));
-
-        // 应用blendStrength使过渡更硬或更软
+        // 应用过渡强度 (blendStrength) 控制边界清晰度
+        let t = proceduralT;
         if (blendStrength < 0.99) {
-          const segments = 3;
+          // 将 t 分段量化以创建硬边界效果
+          const segments = Math.max(2, Math.round(proceduralIntensity * 3)); // 渐变强度影响分段数
           const segmentIndex = Math.floor(t * segments);
           const segmentT = (t * segments) - segmentIndex;
+          // blendStrength 越低，边界越硬
           const sharpT = segmentT < 0.5 ? 0 : 1;
           t = (segmentIndex + (sharpT * (1 - blendStrength) + segmentT * blendStrength)) / segments;
         }
 
-        let newH, newS, newV;
-        if (t < 0.5) {
-          const localT = t * 2;
-          newH = h1 + (h2 - h1) * localT;
-          newS = s1 + (s2 - s1) * localT;
-          newV = v1 + (v2 - v1) * localT;
-        } else {
-          const localT = (t - 0.5) * 2;
-          newH = h2 + (h3 - h2) * localT;
-          newS = s2 + (s3 - s2) * localT;
-          newV = v2 + (v3 - v2) * localT;
-        }
-        [finalR, finalG, finalB] = hsvToRgb(newH, newS, newV);
+        // 根据渐变强度计算色相偏移范围 (proceduralIntensity 控制跨越的色相)
+        // proceduralIntensity = 1 表示跨越 0.33 色相 (120°)
+        // proceduralIntensity = 3 表示跨越整个色环 (360°)
+        const hueRange = proceduralIntensity * 0.33; // 每单位强度跨越 1/3 色环
+
+        // 计算新色相：从基准色出发，根据位置偏移
+        // t 从 0 到 1，色相偏移从 -hueRange/2 到 +hueRange/2
+        const hueOffset = (t - 0.5) * hueRange;
+        let newH = baseH + hueOffset;
+        // 确保色相在 0-1 范围内循环
+        if (newH < 0) newH += 1;
+        if (newH > 1) newH -= 1;
+
+        // 保持饱和度和明度，只改变色相
+        [finalR, finalG, finalB] = hsvToRgb(newH, baseS, baseV);
       }
 
       // 瞍拇間���

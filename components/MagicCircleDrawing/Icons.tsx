@@ -145,3 +145,28 @@ export const CopyIcon: React.FC<IconProps> = ({ size = 16, className, style }) =
         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
     </svg>
 );
+
+// 网格/网状图标 - 用于Web画笔
+export const WebIcon: React.FC<IconProps> = ({ size = 16, className, style }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}>
+        {/* 中心点 */}
+        <circle cx="12" cy="12" r="2" />
+        {/* 外围连接点 */}
+        <circle cx="4" cy="8" r="1.5" />
+        <circle cx="20" cy="8" r="1.5" />
+        <circle cx="4" cy="16" r="1.5" />
+        <circle cx="20" cy="16" r="1.5" />
+        <circle cx="12" cy="4" r="1.5" />
+        <circle cx="12" cy="20" r="1.5" />
+        {/* 连接线 */}
+        <line x1="12" y1="10" x2="12" y2="5.5" />
+        <line x1="12" y1="14" x2="12" y2="18.5" />
+        <line x1="10" y1="12" x2="5.5" y2="8" />
+        <line x1="14" y1="12" x2="18.5" y2="8" />
+        <line x1="10" y1="12" x2="5.5" y2="16" />
+        <line x1="14" y1="12" x2="18.5" y2="16" />
+        {/* 外围交叉连接 */}
+        <line x1="5.5" y1="8" x2="10.5" y2="4" />
+        <line x1="18.5" y1="8" x2="13.5" y2="4" />
+    </svg>
+);
