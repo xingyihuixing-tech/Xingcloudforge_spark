@@ -12961,10 +12961,10 @@ void main() {
               baseSaturation: gc?.baseSaturation ?? 1.0,
               saturationBoost: settings.saturation ?? 1.0,
               colorMode: colorMode,
-              color1: gc?.color1 ? parseHexToVec3(gc.color1) : new THREE.Vector3(1, 1, 1),
-              color2: gc?.color2 ? parseHexToVec3(gc.color2) : new THREE.Vector3(1, 1, 1),
-              color3: gc?.color3 ? parseHexToVec3(gc.color3) : new THREE.Vector3(1, 1, 1),
-              colorMidPos: gc?.midPosition ?? 0.5,
+              color1: gc?.colors?.[0] ? parseHexToVec3(gc.colors[0]) : new THREE.Vector3(1, 1, 1),
+              color2: gc?.colors?.[1] ? parseHexToVec3(gc.colors[1]) : new THREE.Vector3(1, 1, 1),
+              color3: gc?.colors?.[2] ? parseHexToVec3(gc.colors[2]) : new THREE.Vector3(1, 1, 1),
+              colorMidPos: gc?.colorMidPosition ?? 0.5,
               proceduralIntensity: gc?.proceduralIntensity ?? 1.0
             };
             if (stroke.brushType === 'particle') {

@@ -1219,15 +1219,8 @@ void main() {
   vColor = instanceColor;
   vOpacity = instanceOpacity;
   
-  vec3 pos = position;
-  
-  // 脉冲呼吸效果 (微幅位移)
-  if (uMCPulseEnabled > 0.5) {
-    float pulse = sin(uTime * uMCPulseSpeed * 3.14159) * uMCPulseIntensity * 0.02;
-    pos *= 1.0 + pulse;
-  }
-  
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+  // 脉冲效果在片元着色器中通过亮度实现，而不是在顶点着色器中缩放位置
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
 
