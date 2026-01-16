@@ -4,6 +4,7 @@
  * pos: Drawing system utilities for PlanetScene integration
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，包含lightsaberVertexShader/lightsaberFragmentShader、createLightsaberStrokeMesh函数、AdditiveBlending混合模式
+ * 2026-01-16: 统一粒子画笔与粒子环效果：移除0.05大小系数、随机范围改为1~3、应用brightness参数、光晕采用pow模型、uGlowIntensity默认3
  */
 
 import * as THREE from 'three';
@@ -596,19 +597,25 @@ export function createParticleStrokeMesh(
                 const radialDist = Math.sqrt(px * px + py * py) * 2;
                 particleRadialDists.push(Math.min(1, radialDist));
 
-                // 粒子大小 = 基础大小 × 压感 × 随机变化
-                const sizeVariation = 0.7 + Math.random() * 0.6;
+                // 粒子大小 = 基础大小 × 压感 × 随机变化 (与粒子环一致: 1~3随机)
+                const sizeVariation = 1 + Math.random() * 2;  // 1~3 与粒子环一致
                 const sizePressureScale = pressureMode === 'none'
                     ? 1.0
                     : (pressureMode === 'brightness'
-                        ? (0.85 + 0.45 * pe)
-                        : (0.25 + 2.75 * pe));  // 书法压感：粒子大小变化约11倍
-                particleSizes.push(particleSize * sizePressureScale * sizeVariation * 0.05);
+                        ? (0.7 + 0.6 * pe)   // 亮度压感: 0.7~1.3倍
+                        : (0.3 + 1.4 * pe)); // 书法压感: 0.3~1.7倍
+                particleSizes.push(particleSize * sizePressureScale * sizeVariation);
 
+                // 颜色 = 基色 × 压感调制 × brightness参数 (与粒子环一致)
+                const brightnessParam = settings.brightness ?? 1.0;
                 const colorMult = pressureMode === 'none'
                     ? 1.0
                     : (pressureMode === 'brightness' ? (0.7 + 1.2 * pe) : (0.95 + 0.25 * pe));
-                particleColors.push(colorObj.r * colorMult, colorObj.g * colorMult, colorObj.b * colorMult);
+                particleColors.push(
+                    colorObj.r * colorMult * brightnessParam,
+                    colorObj.g * colorMult * brightnessParam,
+                    colorObj.b * colorMult * brightnessParam
+                );
 
                 const alphaPressure = pressureMode === 'none'
                     ? 0.85
@@ -632,9 +639,7 @@ export function createParticleStrokeMesh(
     const material = new THREE.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 },
-            uGlowIntensity: { value: settings.brightness ?? 2.0 },
-            uEmissive: { value: 0.9 },
-            uCoreBrightness: { value: 1.4 },
+            uGlowIntensity: { value: settings.brightness ?? 3.0 },  // 与粒子环一致，默认3
             uPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
             uPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
             uPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
@@ -695,8 +700,6 @@ void main() {
 precision highp float;
 
 uniform float uGlowIntensity;
-uniform float uEmissive;
-uniform float uCoreBrightness;
 uniform float uTime;
 uniform float uMCOpacity;
 uniform float uMCHueShift;
@@ -796,17 +799,9 @@ void main() {
   float dist = length(uv);
   if (dist > 0.5) discard;
   
-  // 核心亮度 (中心更亮)
-  float core = 1.0 - smoothstep(0.0, 0.10, dist);
-  
-  // 光晕衰减 (收紧范围)
-  float glow = 1.0 - smoothstep(0.0, 0.22, dist);
-  
-  // 外层光晕 (更紧凑)
-  float outerGlow = 1.0 - smoothstep(0.18, 0.28, dist);
-  
-  // 合成亮度 (大幅降低光晕系数，避免场景中法阵过亮)
-  float brightness = core * uCoreBrightness + glow * uEmissive * 0.12 + outerGlow * 0.04;
+  // 统一使用粒子环的光晕模型: smoothstep + pow
+  float baseAlpha = smoothstep(0.5, 0.0, dist);
+  float glowAlpha = pow(baseAlpha, 1.0 / uGlowIntensity);
   
   // 应用染色功能
   vec3 dyedColor = getDyeColor(vColor, vRadialDist);
@@ -816,8 +811,8 @@ void main() {
   hsl.y = clamp(hsl.y * uSaturationBoost, 0.0, 1.0);
   dyedColor = hsl2rgb(hsl);
   
-  // 最终颜色 - 应用发光
-  vec3 finalColor = dyedColor * brightness;
+  // 最终颜色 - 应用发光 (与粒子环一致)
+  vec3 finalColor = dyedColor * (1.0 + glowAlpha * 0.5);
   
   // 应用法阵级别色相偏移
   if (uMCHueShift > 0.001 || uMCHueShift < -0.001) {
@@ -829,8 +824,8 @@ void main() {
   // 应用法阵级别亮度
   finalColor *= uMCBrightness;
   
-  // Alpha - 应用法阵级别透明度
-  float alpha = glow * vAlpha * uMCOpacity;
+  // Alpha - 结合光晕、压感alpha和法阵透明度
+  float alpha = glowAlpha * vAlpha * uMCOpacity;
   
   gl_FragColor = vec4(finalColor, alpha);
 }
