@@ -161,6 +161,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     // 网格画笔历史点缓存
     const webHistoryRef = useRef<THREE.Vector3[]>([]);
     const webHueRef = useRef<{ value: number }>({ value: 0 });
+    const strokeStartHueRef = useRef<number>(0); // 记录每笔开始时的色相
     const lastProcessedPointIndexRef = useRef<number>(0);
 
     // 对称设置 (从当前图层读取)
@@ -531,7 +532,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                         [], // 重建时使用新的历史记录
                         { value: 0 },
                         defaultMcSettings,
-                        layer.symmetryParams
+                        layer.symmetryParams,
+                        0, // globalStartIndex
+                        stroke.startHue // 使用保存的起始色相
                     );
                 } else {
                     mesh = createLineStrokeMesh(
@@ -610,7 +613,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
         // 重置网格画笔状态
         webHistoryRef.current = [];
         lastProcessedPointIndexRef.current = 0;
-        webHueRef.current.value = 0;
+        // 记录当前色相作为这一笔的起始值（不重置，保持全局连续）
+        strokeStartHueRef.current = webHueRef.current.value;
 
         // 捕获指针
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
@@ -782,6 +786,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                 silkRingSettings: brushType === 'lineRing' ? { ...silkSettings } : undefined,
                 lightsaberSettings: brushType === 'lightsaber' ? { ...lightsaberSettings } : undefined,
                 webSettings: brushType === 'web' ? { ...webSettings } : undefined,
+                startHue: brushType === 'web' ? strokeStartHueRef.current : undefined, // 保存起始色相
                 color: brushColor,
                 points: [...points]
             };
@@ -2077,6 +2082,38 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                     step={0.1}
                                     value={webSettings.glowIntensity ?? 1.5}
                                     onChange={(e) => setWebSettings(prev => ({ ...prev, glowIntensity: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 距离衰减 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>距离衰减</span>
+                                    <span style={{ color: '#ffffff' }}>{(webSettings.distanceFade ?? 1).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={2}
+                                    step={0.1}
+                                    value={webSettings.distanceFade ?? 1}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, distanceFade: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 亮度 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>亮度</span>
+                                    <span style={{ color: '#ffffff' }}>{(webSettings.brightness ?? 1).toFixed(1)}</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0.1}
+                                    max={3}
+                                    step={0.1}
+                                    value={webSettings.brightness ?? 1}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, brightness: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>

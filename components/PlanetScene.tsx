@@ -9319,7 +9319,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
               const colorMode = gc?.enabled ? (colorModeMap[gc.mode] || 0) : 0;
 
               circleData.mesh.traverse((child: THREE.Object3D) => {
-                if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
+                // 包含 Points、Mesh 和 Line（网格画笔使用 Line）
+                if (child instanceof THREE.Points || child instanceof THREE.Mesh || child instanceof THREE.Line) {
                   const mat = (child as any).material as THREE.ShaderMaterial;
                   if (mat?.uniforms) {
                     // 更新时间
@@ -12978,9 +12979,11 @@ void main() {
                 layer.symmetryMode,
                 layer.symmetryDivisions,
                 [], // history
-                { value: 0 }, // hueRef (reset)
+                { value: 0 }, // hueRef
                 mcSettings,
-                layer.symmetryParams
+                layer.symmetryParams,
+                0, // globalStartIndex
+                stroke.startHue // 使用保存的起始色相
               );
             } else {
               strokeMesh = createLineStrokeMesh(stroke.points, stroke.color, stroke.silkRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);

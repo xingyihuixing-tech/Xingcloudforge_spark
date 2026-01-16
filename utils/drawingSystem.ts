@@ -1199,6 +1199,161 @@ void main() {
 }
 `;
 
+// ==================== 网格画笔着色器 ====================
+
+const webBrushVertexShader = `
+precision highp float;
+
+attribute vec3 instanceColor;
+attribute float instanceOpacity;
+
+varying vec3 vColor;
+varying float vOpacity;
+
+uniform float uTime;
+uniform float uMCPulseEnabled;
+uniform float uMCPulseSpeed;
+uniform float uMCPulseIntensity;
+
+void main() {
+  vColor = instanceColor;
+  vOpacity = instanceOpacity;
+  
+  vec3 pos = position;
+  
+  // 脉冲呼吸效果 (微幅位移)
+  if (uMCPulseEnabled > 0.5) {
+    float pulse = sin(uTime * uMCPulseSpeed * 3.14159) * uMCPulseIntensity * 0.02;
+    pos *= 1.0 + pulse;
+  }
+  
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+}
+`;
+
+const webBrushFragmentShader = `
+precision highp float;
+
+varying vec3 vColor;
+varying float vOpacity;
+
+uniform float uTime;
+uniform float uMCOpacity;
+uniform float uMCHueShift;
+uniform float uMCBrightness;
+uniform float uMCPulseEnabled;
+uniform float uMCPulseSpeed;
+uniform float uMCPulseIntensity;
+
+// 染色功能参数
+uniform float uMCBaseHue;
+uniform float uMCBaseSaturation;
+uniform float uMCSaturationBoost;
+uniform float uMCColorMode;
+uniform vec3 uMCColor1;
+uniform vec3 uMCColor2;
+uniform vec3 uMCColor3;
+uniform float uMCColorMidPos;
+uniform float uMCProceduralIntensity;
+
+// HSL转RGB辅助函数
+vec3 hsl2rgb(vec3 hsl) {
+    float h = hsl.x;
+    float s = hsl.y;
+    float l = hsl.z;
+    float c = (1.0 - abs(2.0 * l - 1.0)) * s;
+    float x = c * (1.0 - abs(mod(h * 6.0, 2.0) - 1.0));
+    float m = l - c / 2.0;
+    vec3 rgb;
+    if (h < 1.0/6.0) rgb = vec3(c, x, 0.0);
+    else if (h < 2.0/6.0) rgb = vec3(x, c, 0.0);
+    else if (h < 3.0/6.0) rgb = vec3(0.0, c, x);
+    else if (h < 4.0/6.0) rgb = vec3(0.0, x, c);
+    else if (h < 5.0/6.0) rgb = vec3(x, 0.0, c);
+    else rgb = vec3(c, 0.0, x);
+    return rgb + m;
+}
+
+// RGB转HSL
+vec3 rgb2hsl(vec3 rgb) {
+    float maxC = max(max(rgb.r, rgb.g), rgb.b);
+    float minC = min(min(rgb.r, rgb.g), rgb.b);
+    float l = (maxC + minC) / 2.0;
+    float s = 0.0;
+    float h = 0.0;
+    if (maxC != minC) {
+        float d = maxC - minC;
+        s = l > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC);
+        if (maxC == rgb.r) h = (rgb.g - rgb.b) / d + (rgb.g < rgb.b ? 6.0 : 0.0);
+        else if (maxC == rgb.g) h = (rgb.b - rgb.r) / d + 2.0;
+        else h = (rgb.r - rgb.g) / d + 4.0;
+        h /= 6.0;
+    }
+    return vec3(h, s, l);
+}
+
+void main() {
+  vec3 finalColor = vColor;
+  float alpha = vOpacity;
+  
+  // 脉冲亮度效果
+  if (uMCPulseEnabled > 0.5) {
+    float pulse = sin(uTime * uMCPulseSpeed * 3.14159) * 0.5 + 0.5;
+    finalColor *= 1.0 + pulse * uMCPulseIntensity * 0.5;
+    alpha *= 1.0 + pulse * uMCPulseIntensity * 0.3;
+  }
+  
+  // 染色模式处理
+  int colorMode = int(uMCColorMode);
+  if (colorMode == 4) {
+    // single: 使用基础色相重新染色
+    vec3 hsl = rgb2hsl(finalColor);
+    float newHue = uMCBaseHue / 360.0;
+    float newSat = clamp(hsl.y * uMCBaseSaturation, 0.0, 1.0);
+    finalColor = hsl2rgb(vec3(newHue, newSat, hsl.z));
+  } else if (colorMode == 1) {
+    // twoColor: 双色渐变
+    float t = rgb2hsl(finalColor).z; // 使用亮度作为混合因子
+    finalColor = mix(uMCColor1, uMCColor2, t);
+  } else if (colorMode == 2) {
+    // threeColor: 三色渐变
+    float t = rgb2hsl(finalColor).z;
+    if (t < uMCColorMidPos) {
+      finalColor = mix(uMCColor1, uMCColor2, t / uMCColorMidPos);
+    } else {
+      finalColor = mix(uMCColor2, uMCColor3, (t - uMCColorMidPos) / (1.0 - uMCColorMidPos));
+    }
+  } else if (colorMode == 3) {
+    // procedural: 程序化渐变
+    float t = rgb2hsl(finalColor).z;
+    float hue = mod(uMCBaseHue / 360.0 + t * uMCProceduralIntensity * 0.3, 1.0);
+    finalColor = hsl2rgb(vec3(hue, 0.8, 0.6)) * uMCProceduralIntensity;
+  }
+  
+  // 应用法阵级别色相偏移
+  if (abs(uMCHueShift) > 0.001) {
+    vec3 hsl = rgb2hsl(finalColor);
+    hsl.x = mod(hsl.x + uMCHueShift, 1.0);
+    finalColor = hsl2rgb(hsl);
+  }
+  
+  // 应用饱和度调整
+  if (uMCSaturationBoost > 0.001 && uMCSaturationBoost < 1.999) {
+    vec3 hsl = rgb2hsl(finalColor);
+    hsl.y = clamp(hsl.y * uMCSaturationBoost, 0.0, 1.0);
+    finalColor = hsl2rgb(hsl);
+  }
+  
+  // 应用法阵级别亮度
+  finalColor *= uMCBrightness;
+  
+  // 应用法阵级别透明度
+  alpha *= uMCOpacity;
+  
+  gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+
 // ==================== 创建光剑画笔笔画 ====================
 
 export function createLightsaberStrokeMesh(
@@ -1998,6 +2153,8 @@ export function createWebStrokeMesh(
         colorMode?: 'rainbow' | 'fixed';
         rainbowSpeed?: number;
         pressureMode?: 'none' | 'opacity' | 'density';
+        distanceFade?: number;
+        brightness?: number;
     },
     symmetryMode: SymmetryMode,
     symmetryDivisions: number,
@@ -2005,10 +2162,25 @@ export function createWebStrokeMesh(
     hueRef: { value: number },
     magicCircleSettings?: {
         opacity?: number;
+        hueShift?: number;
         brightness?: number;
+        pulseEnabled?: boolean;
+        pulseSpeed?: number;
+        pulseIntensity?: number;
+        // 染色功能参数
+        baseHue?: number;
+        baseSaturation?: number;
+        saturationBoost?: number;
+        colorMode?: number;  // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
+        color1?: THREE.Vector3;
+        color2?: THREE.Vector3;
+        color3?: THREE.Vector3;
+        colorMidPos?: number;
+        proceduralIntensity?: number;
     },
     symmetryParams?: SymmetryParams,
-    globalStartIndex: number = 0
+    globalStartIndex: number = 0,
+    startHue?: number
 ): THREE.Group {
     const group = new THREE.Group();
 
@@ -2024,8 +2196,18 @@ export function createWebStrokeMesh(
     const colorMode = settings.colorMode ?? 'rainbow';
     const rainbowSpeed = settings.rainbowSpeed ?? 1;
     const pressureMode = settings.pressureMode ?? 'none';
+    const historyLimit = settings.historyLimit ?? 20; // 滑动窗口大小
+    const distanceFade = settings.distanceFade ?? 1.0; // 距离衰减强度
+    const lineBrightness = settings.brightness ?? 1.0; // 线条亮度
     const mcOpacity = magicCircleSettings?.opacity ?? 1.0;
     const mcBrightness = magicCircleSettings?.brightness ?? 1.0;
+    const mcSettings = magicCircleSettings || {};
+    const webMaterials: THREE.ShaderMaterial[] = [];
+
+    // 如果提供了 startHue，从该值开始计算色相
+    if (startHue !== undefined) {
+        hueRef.value = startHue;
+    }
 
     // 将当前笔画点转换为 THREE.Vector3 并添加到历史
     const currentPoints: THREE.Vector3[] = [];
@@ -2058,7 +2240,7 @@ export function createWebStrokeMesh(
         }
 
         // 应用亮度
-        lineColor.multiplyScalar(mcBrightness * glowIntensity * 0.5);
+        lineColor.multiplyScalar(mcBrightness * lineBrightness * glowIntensity * 0.5);
 
         // 从历史点中随机选择连接目标
         const connectionCount = Math.min(connectionsPerFrame, historyPoints.length);
@@ -2087,9 +2269,9 @@ export function createWebStrokeMesh(
                     opacity *= 0.3 + pressure * 0.7;
                 }
 
-                // 距离衰减
+                // 距离衰减 (使用 distanceFade 参数)
                 const distFactor = 1 - (dist - minDistance) / (maxDistance - minDistance);
-                opacity *= distFactor * distFactor;
+                opacity *= Math.pow(distFactor, distanceFade * 2);
 
                 lineSegments.push({
                     start: currentPoint.clone(),
@@ -2102,6 +2284,11 @@ export function createWebStrokeMesh(
 
         // 将当前点添加到历史
         historyPoints.push(currentPoint.clone());
+
+        // 应用滑动窗口限制
+        while (historyPoints.length > historyLimit) {
+            historyPoints.shift();
+        }
     }
 
     // 为每条线段应用对称变换并创建几何体
@@ -2125,23 +2312,56 @@ export function createWebStrokeMesh(
             const sp = startSymmetry[s];
             const ep = endSymmetry[s];
 
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(sp.x, sp.y, sp.z ?? 0),
-                new THREE.Vector3(ep.x, ep.y, ep.z ?? 0)
+            const positions = new Float32Array([
+                sp.x, sp.y, sp.z ?? 0,
+                ep.x, ep.y, ep.z ?? 0
             ]);
+            const colors = new Float32Array([
+                seg.color.r, seg.color.g, seg.color.b,
+                seg.color.r, seg.color.g, seg.color.b
+            ]);
+            const opacities = new Float32Array([seg.opacity, seg.opacity]);
 
-            const lineMaterial = new THREE.LineBasicMaterial({
-                color: seg.color,
+            const lineGeometry = new THREE.BufferGeometry();
+            lineGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            lineGeometry.setAttribute('instanceColor', new THREE.BufferAttribute(colors, 3));
+            lineGeometry.setAttribute('instanceOpacity', new THREE.BufferAttribute(opacities, 1));
+
+            const lineMaterial = new THREE.ShaderMaterial({
+                vertexShader: webBrushVertexShader,
+                fragmentShader: webBrushFragmentShader,
+                uniforms: {
+                    uTime: { value: 0 },
+                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360 },
+                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
+                    // 染色功能参数
+                    uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+                    uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+                    uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+                    uMCColorMode: { value: mcSettings.colorMode ?? 0 },
+                    uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+                    uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+                    uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+                    uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+                    uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+                },
                 transparent: true,
-                opacity: seg.opacity,
                 blending: THREE.AdditiveBlending,
                 depthWrite: false
             });
 
+            webMaterials.push(lineMaterial);
             const line = new THREE.Line(lineGeometry, lineMaterial);
             group.add(line);
         }
     }
+
+    // 将材质列表存储到group.userData，以便在动画循环中更新uTime
+    group.userData.webMaterials = webMaterials;
 
     return group;
 }
@@ -2248,7 +2468,9 @@ export function renderStrokesToGroup(
                 [], // 重建时使用新的历史记录
                 { value: 0 },
                 undefined,
-                layer.symmetryParams
+                layer.symmetryParams,
+                0, // globalStartIndex
+                stroke.startHue // 使用保存的起始色相
             );
         } else {
             // Default to LineRing (Silk)

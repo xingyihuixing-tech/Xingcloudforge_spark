@@ -1978,6 +1978,8 @@ export interface WebBrushSettings {
   colorMode: 'rainbow' | 'fixed'; // 颜色模式
   rainbowSpeed: number;        // 彩虹色相变化速度, 0.5-5, 默认1
   pressureMode: 'none' | 'opacity' | 'density'; // 压感模式
+  distanceFade: number;          // 距离衰减强度, 0-2, 默认1, 步进0.1
+  brightness: number;            // 亮度, 0.1-3, 默认1, 步进0.1
 }
 
 // 画笔类型
@@ -2000,6 +2002,7 @@ export interface MagicCircleStroke {
   silkRingSettings?: Partial<SilkRingSettings>;
   lightsaberSettings?: Partial<LightsaberSettings>;
   webSettings?: Partial<WebBrushSettings>;
+  startHue?: number;  // 网格画笔彩虹模式起始色相
   color: string;  // 主色调（覆盖 settings 中的 color）
   points: StrokePoint[];
 }
