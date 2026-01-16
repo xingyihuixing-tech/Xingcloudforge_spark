@@ -7689,22 +7689,38 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       });
 
       // 更新自定义法阵笔画的 uTime
+      // 更新自定义法阵笔画的 uTime 和 层旋转
       if (customMagicCirclesGroupRef.current) {
+        // 先处理 uTime
         customMagicCirclesGroupRef.current.traverse((child) => {
-          if (child instanceof THREE.Points || child instanceof THREE.Mesh) {
+          if (child instanceof THREE.Points || child instanceof THREE.Mesh || child instanceof THREE.LineSegments) {
             const material = child.material as THREE.ShaderMaterial;
             if (material?.uniforms?.uTime) {
               material.uniforms.uTime.value = time;
             }
           }
-          // 处理 Group 中的子物体（丝环画笔）
-          if (child instanceof THREE.Group) {
-            child.children.forEach((subChild) => {
-              if (subChild instanceof THREE.Mesh) {
-                const subMat = subChild.material as THREE.ShaderMaterial;
-                if (subMat?.uniforms?.uTime) {
-                  subMat.uniforms.uTime.value = time;
-                }
+        });
+
+        // 单独处理每一层的自转
+        customMagicCirclesGroupRef.current.children.forEach((magicCircleGroup) => {
+          if (!magicCircleGroup.userData.isCustomDrawn) return;
+
+          const layerGroups = magicCircleGroup.userData.layerGroups as THREE.Group[] | undefined;
+          if (layerGroups) {
+            layerGroups.forEach((layerGroup) => {
+              const userData = layerGroup.userData;
+              const rotSpeed = userData.rotationSpeed || 0;
+
+              if (Math.abs(rotSpeed) > 0.001) {
+                // deltaTime 是毫秒，转为秒
+                const deltaSeconds = deltaTime / 1000;
+                // 更新累计旋转
+                userData.totalRotation = (userData.totalRotation || 0) + rotSpeed * deltaSeconds;
+
+                // 应用旋转 (初始相位 + 累计旋转)
+                // 必须重新计算 phaseOffset 弧度，因为它只在初始化时计算了一次
+                const phaseRad = THREE.MathUtils.degToRad(userData.phaseOffset || 0);
+                layerGroup.rotation.z = phaseRad + userData.totalRotation;
               }
             });
           }
@@ -12945,7 +12961,7 @@ void main() {
       if (customCircle && customCircle.layers) {
         const group = new THREE.Group();
         group.userData = { circleId: settings.id, isCustomDrawn: true, layerGroups: [] as THREE.Group[] };
-        customCircle.layers.forEach((layer: MagicCircleLayer) => {
+        customCircle.layers.forEach((layer: MagicCircleLayer, layerIndex: number) => {
           // 注意：layer.visible 仅控制画布预览，场景中始终渲染所有图层
           if (!layer.strokes) return;
 
@@ -13018,6 +13034,17 @@ void main() {
             }
             strokeMesh.scale.setScalar(settings.radius);
             layerGroup.add(strokeMesh);  // 添加到图层组而不是根组
+          });
+
+          // 每一层稍微偏移Z轴，避免 Z-fighting (iPad闪烁问题核心修复)
+          // 法阵默认旋转 -90度 X，Local Z 对应法线方向
+          // 增加偏移量到0.5，iPad精度较低需要更大间隔
+          layerGroup.position.z = layerIndex * 0.5;
+          // 每层设置不同的renderOrder，确保渲染顺序正确
+          layerGroup.traverse((child) => {
+            if (child instanceof THREE.Object3D) {
+              child.renderOrder = 50 + layerIndex;
+            }
           });
 
           group.add(layerGroup);
