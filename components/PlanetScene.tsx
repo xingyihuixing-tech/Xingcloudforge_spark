@@ -9377,6 +9377,21 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
                   }
                 }
               });
+
+              // 更新图层自转（使用存储的 layerGroups）
+              const layerGroups = circleData.mesh.userData.layerGroups as THREE.Group[] | undefined;
+              if (layerGroups) {
+                layerGroups.forEach((layerGroup: THREE.Group) => {
+                  const rotSpeed = layerGroup.userData.rotationSpeed ?? 0;
+                  if (rotSpeed !== 0) {
+                    // 累加旋转角度（deltaTime 约 0.016 秒）
+                    layerGroup.userData.totalRotation = (layerGroup.userData.totalRotation || 0) + rotSpeed * 0.016;
+                    // 应用初始相位偏移 + 累计旋转
+                    const phaseOffset = THREE.MathUtils.degToRad(layerGroup.userData.phaseOffset ?? 0);
+                    layerGroup.rotation.z = phaseOffset + layerGroup.userData.totalRotation;
+                  }
+                });
+              }
             }
           });
         }
@@ -12929,10 +12944,23 @@ void main() {
       const customCircle = customCirclesData.find((c: CustomMagicCircle) => c.id === settings.customCircleId);
       if (customCircle && customCircle.layers) {
         const group = new THREE.Group();
-        group.userData = { circleId: settings.id, isCustomDrawn: true };
+        group.userData = { circleId: settings.id, isCustomDrawn: true, layerGroups: [] as THREE.Group[] };
         customCircle.layers.forEach((layer: MagicCircleLayer) => {
           // 注意：layer.visible 仅控制画布预览，场景中始终渲染所有图层
           if (!layer.strokes) return;
+
+          // 为每个图层创建独立的 Group
+          const layerGroup = new THREE.Group();
+          layerGroup.userData = {
+            layerId: layer.id,
+            rotationSpeed: layer.rotationSpeed ?? 0,
+            phaseOffset: layer.phaseOffset ?? 0,
+            totalRotation: 0  // 累计旋转角度
+          };
+
+          // 应用初始相位偏移（Z轴旋转）
+          layerGroup.rotation.z = THREE.MathUtils.degToRad(layer.phaseOffset ?? 0);
+
           layer.strokes.forEach((stroke: MagicCircleStroke) => {
             if (!stroke.points || stroke.points.length < 2) return;
             let strokeMesh: THREE.Object3D;
@@ -12989,8 +13017,11 @@ void main() {
               strokeMesh = createLineStrokeMesh(stroke.points, stroke.color, stroke.silkRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
             }
             strokeMesh.scale.setScalar(settings.radius);
-            group.add(strokeMesh);
+            layerGroup.add(strokeMesh);  // 添加到图层组而不是根组
           });
+
+          group.add(layerGroup);
+          (group.userData.layerGroups as THREE.Group[]).push(layerGroup);
         });
         const tiltAngles = getTiltAngles(settings.tilt ?? DEFAULT_TILT_SETTINGS);
         group.rotation.x = -Math.PI / 2 + THREE.MathUtils.degToRad(tiltAngles.x);
