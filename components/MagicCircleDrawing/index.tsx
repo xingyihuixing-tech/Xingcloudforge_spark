@@ -489,6 +489,8 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
             const layerGroup = new THREE.Group();
             layerGroup.userData.layerId = layer.id;
             layerGroup.userData.rotationSpeed = layer.rotationSpeed ?? 0;
+            // 应用相位偏移
+            layerGroup.rotation.z = THREE.MathUtils.degToRad(layer.phaseOffset ?? 0);
 
             for (const stroke of layer.strokes) {
                 let mesh: THREE.Object3D;
@@ -1230,7 +1232,7 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                             ) : (
                                                 <>
                                                     <span style={{ fontSize: 11, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{preset.name}</span>
-                                                    <span style={{ fontSize: 9, color: '#666', flexShrink: 0 }}>{preset.brushType === 'particle' ? '粒子' : preset.brushType === 'lightsaber' ? '光剑' : '丝环'}</span>
+                                                    <span style={{ fontSize: 9, color: '#666', flexShrink: 0 }}>{preset.brushType === 'particle' ? '粒子' : preset.brushType === 'lightsaber' ? '光剑' : preset.brushType === 'web' ? '网格' : '丝环'}</span>
                                                 </>
                                             )}
                                         </div>
