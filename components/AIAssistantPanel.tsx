@@ -9,12 +9,13 @@
 
 import React, { useState, useRef, useEffect, useCallback, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Sparkles, Send, X, Save } from 'lucide-react';
+import { Sparkles, Send, X, Save, Play, RotateCcw, Code, Check, Archive, Power, Trash2, Copy } from 'lucide-react';
 
 // 工具导入
 import { CHAT_MODELS, IMAGE_MODELS, DEFAULT_CHAT_MODEL, DEFAULT_IMAGE_MODEL } from '../utils/ai/modelConfig';
 import { INSPIRATION_MODE_INFO, InspirationSubMode } from '../utils/ai/refineTemplates';
 import { XingSparkSettingsPanel, XingSparkConfig, DEFAULT_XING_CONFIG, CHAT_FONT_OPTIONS } from './XingSparkSettings';
+import { useUser } from '../contexts/UserContext';
 
 // ============================================
 // 类型定义
@@ -151,6 +152,15 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     const fileInputRef = useRef<HTMLInputElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+    // === 消息队列 ===
+    interface QueuedMessage {
+        id: string;
+        content: string;
+        uploadedImage?: string | null;
+    }
+    const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([]);
+    const abortControllerRef = useRef<AbortController | null>(null);
+
     // === 聊天状态 (初始为空) ===
     const [messages, setMessages] = useState<ChatMessage[]>([]);
 
@@ -160,6 +170,34 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // === 保存状态 ===
     const [editingName, setEditingName] = useState<{ id: string; name: string } | null>(null);
     const [savingId, setSavingId] = useState<string | null>(null);
+
+    // 创造模式对象历史
+    const [createdObjectsHistory, setCreatedObjectsHistory] = useState<Map<string, any[]>>(new Map());
+
+    // 场景对象管理器 (Saved Effects)
+    // 本地运行时的对象引用（不序列化）
+    interface SavedEffect {
+        id: string;
+        name: string;
+        code: string;
+        objects: any[]; // Three.js 对象引用，仅存在于内存
+        isActive: boolean;
+    }
+    // 云端存储的数据结构（不包含 objects）
+    interface CloudSavedEffect {
+        id: string;
+        name: string;
+        code: string;
+        isActive: boolean;
+        createdAt: number;
+    }
+    const [savedEffects, setSavedEffects] = useState<SavedEffect[]>([]);
+    const [showArchive, setShowArchive] = useState(false);
+    const [effectsLoaded, setEffectsLoaded] = useState(false); // 防止重复加载
+    const lastSyncedEffectsRef = useRef<string>('[]'); // 初始化为空数组，防止误覆盖云端数据
+
+    // 云同步 hooks
+    const { loadCloudConfig, saveCloudConfig } = useUser();
 
     // === XingSpark 设置 ===
     const [showSettings, setShowSettings] = useState(false);
@@ -497,7 +535,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 body: JSON.stringify({
                     prompt: inputValue.trim(),
                     mode: 'inspiration',
-                    subMode: inspirationSubMode,
+                    subMode: inspirationSubMode === 'creation' ? 'creation_refine' : inspirationSubMode, // 创造模式使用专用润色
                     imageBase64: uploadedImage || undefined,
                     model: chatModel
                 })
@@ -527,10 +565,23 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
     // === 发送 ===
     const handleSend = useCallback(async () => {
-        if (!inputValue.trim() || isGenerating) return;
+        if (!inputValue.trim()) return;
 
         const prompt = normalizeLineBreaks(inputValue);
-        const currentAttachedImage = uploadedImage; // 保存当前附图
+        const currentAttachedImage = uploadedImage;
+
+        // 如果正在生成，加入队列
+        if (isGenerating) {
+            const queuedMsg: QueuedMessage = {
+                id: generateId(),
+                content: prompt,
+                uploadedImage: currentAttachedImage
+            };
+            setMessageQueue(prev => [...prev, queuedMsg]);
+            setInputValue('');
+            clearUploadedImage();
+            return;
+        }
 
         // 添加用户消息
         const userMsg: ChatMessage = {
@@ -600,54 +651,102 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                     }
                 }
             } else {
-                // 灵感模式：生成图片 (原有逻辑)
-                const res = await fetch('/api/ai/image', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        prompt: prompt,
-                        model: imageModel,
-                        subMode: inspirationSubMode,
-                        imageBase64: currentAttachedImage || undefined
-                    })
-                });
-                const data = await res.json();
+                // 创造模式：生成代码 (使用 Refine API)
+                if (inspirationSubMode === 'creation') {
+                    // [上下文记忆] 构建完整上下文
+                    let contextHistory = '';
 
-                if (data.url) {
-                    // 获取 AI 命名
-                    let suggestedName = 'AI生成';
-                    try {
-                        const nameRes = await fetch('/api/ai/name', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                imageUrl: data.url,
-                                subMode: inspirationSubMode
-                            })
-                        });
-                        const nameData = await nameRes.json();
-                        suggestedName = nameData.name || suggestedName;
-                    } catch (e) {
-                        console.error('Name API error:', e);
+                    // 1. 添加最近 6 轮对话历史（12 条消息），完整内容
+                    const recentMessages = messages.slice(-12);
+                    if (recentMessages.length > 0) {
+                        const historyText = recentMessages.map(m => {
+                            const role = m.role === 'user' ? '用户' : 'AI';
+                            // 完整内容，不压缩
+                            return `${role}: ${m.content}`;
+                        }).join('\n');
+                        contextHistory += `\n\n【对话历史】\n${historyText}`;
                     }
 
-                    setMessages(prev => [...prev, {
-                        id: generateId(),
-                        role: 'assistant',
-                        content: `✨ 生成完成`,
-                        type: 'image',
-                        imageUrl: data.url,
-                        subMode: inspirationSubMode,
-                        suggestedName
-                    }]);
+                    // 2. 添加已保存效果摘要
+                    if (savedEffects.length > 0) {
+                        const effectsSummary = savedEffects.slice(-3).map(e => `- ${e.name}`).join('\n');
+                        contextHistory += `\n\n【已创建并保存的对象】\n${effectsSummary}\n\n用户可能会引用上述历史内容或对象。`;
+                    }
 
-                    clearUploadedImage();
-
-                    // 通知外部生成完成
-                    if (onGenerationComplete) onGenerationComplete();
-
+                    const res = await fetch('/api/ai/refine', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt: prompt + contextHistory,
+                            mode: 'inspiration',
+                            subMode: 'creation_generate', // 创造模式使用专用生成
+                            model: chatModel
+                        })
+                    });
+                    const data = await res.json();
+                    if (data.refined) {
+                        setMessages(prev => [...prev, {
+                            id: generateId(),
+                            role: 'assistant',
+                            content: data.refined,
+                            subMode: 'creation', // 标记为 creation 模式，触发 CodeCard 渲染
+                            type: 'text'
+                        }]);
+                        // 通知外部生成完成
+                        if (onGenerationComplete) onGenerationComplete();
+                    } else {
+                        throw new Error(data.error || '代码生成失败');
+                    }
                 } else {
-                    throw new Error(data.error || '图片生成失败');
+                    // 灵感模式：生成图片 (原有逻辑)
+                    const res = await fetch('/api/ai/image', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            prompt: prompt,
+                            model: imageModel,
+                            subMode: inspirationSubMode,
+                            imageBase64: currentAttachedImage || undefined
+                        })
+                    });
+                    const data = await res.json();
+
+                    if (data.url) {
+                        // 获取 AI 命名
+                        let suggestedName = 'AI生成';
+                        try {
+                            const nameRes = await fetch('/api/ai/name', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    imageUrl: data.url,
+                                    subMode: inspirationSubMode
+                                })
+                            });
+                            const nameData = await nameRes.json();
+                            suggestedName = nameData.name || suggestedName;
+                        } catch (e) {
+                            console.error('Name API error:', e);
+                        }
+
+                        setMessages(prev => [...prev, {
+                            id: generateId(),
+                            role: 'assistant',
+                            content: `✨ 生成完成`,
+                            type: 'image',
+                            imageUrl: data.url,
+                            subMode: inspirationSubMode,
+                            suggestedName
+                        }]);
+
+                        clearUploadedImage();
+
+                        // 通知外部生成完成
+                        if (onGenerationComplete) onGenerationComplete();
+
+                    } else {
+                        throw new Error(data.error || '图片生成失败');
+                    }
                 }
             }
         } catch (err: any) {
@@ -659,8 +758,373 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             }]);
         } finally {
             setIsGenerating(false);
+            abortControllerRef.current = null;
         }
     }, [inputValue, inspirationSubMode, imageModel, chatModel, freeChatModelType, uploadedImage, isGenerating, clearUploadedImage, messages]);
+
+    // === 处理队列中的下一条消息 ===
+    const processNextInQueue = useCallback(() => {
+        setMessageQueue(prev => {
+            if (prev.length === 0) return prev;
+            const [next, ...rest] = prev;
+            // 延迟处理，确保状态更新完成
+            setTimeout(() => {
+                setInputValue(next.content);
+                if (next.uploadedImage) {
+                    setUploadedImage(next.uploadedImage);
+                }
+                // 需要手动触发发送
+            }, 100);
+            return rest;
+        });
+    }, []);
+
+    // 当生成完成且队列非空时，自动处理下一条
+    useEffect(() => {
+        if (!isGenerating && messageQueue.length > 0) {
+            const next = messageQueue[0];
+            setMessageQueue(prev => prev.slice(1));
+            // 直接设置输入并自动发送
+            setInputValue(next.content);
+            if (next.uploadedImage) {
+                setUploadedImage(next.uploadedImage);
+            }
+            // 延迟发送
+            setTimeout(() => {
+                const sendBtn = document.querySelector('[data-send-btn]') as HTMLButtonElement;
+                if (sendBtn) sendBtn.click();
+            }, 200);
+        }
+    }, [isGenerating, messageQueue]);
+
+    // === 停止生成 ===
+    const handleStop = useCallback(() => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        setIsGenerating(false);
+    }, []);
+
+    // === 创造模式逻辑 ===
+    const handleRunCode = useCallback((code: string, messageId: string) => {
+        try {
+            // 使用主场景
+            const context = (window as any).xingPlanetScene;
+            if (!context) throw new Error("场景上下文未找到 (请确保在星球场景中)");
+
+            const {
+                scene, THREE, camera, renderer, controls,
+                registerUpdate, unregisterUpdate,
+                bloomPass, setBloom, setFog
+            } = context;
+
+            // 记录执行前的场景子对象
+            const childrenBefore = new Set(scene.children);
+
+            // 清理代码块标记
+            const cleanCode = code.replace(/```javascript|```/g, '').trim();
+
+            // 构造执行函数（传入 document 以支持纹理创建）
+            const func = new Function(
+                'scene', 'THREE', 'camera', 'renderer', 'controls',
+                'registerUpdate', 'unregisterUpdate',
+                'bloomPass', 'setBloom', 'setFog',
+                'document',
+                cleanCode
+            );
+
+            // 执行
+            const result = func(
+                scene, THREE, camera, renderer, controls,
+                registerUpdate, unregisterUpdate,
+                bloomPass, setBloom, setFog,
+                document
+            );
+
+            // 查找新增的对象（对比执行前后场景子对象）
+            const newObjects: any[] = [];
+            scene.children.forEach((child: any) => {
+                if (!childrenBefore.has(child)) {
+                    newObjects.push(child);
+                }
+            });
+
+            // 如果有明确 return 的对象，也加入（防止重复）
+            if (result && result.isObject3D && !newObjects.includes(result)) {
+                newObjects.push(result);
+            }
+
+            // 追踪创建的对象
+            if (newObjects.length > 0) {
+                setCreatedObjectsHistory(prev => {
+                    const next = new Map(prev);
+                    next.set(messageId, newObjects);
+                    return next;
+                });
+                console.log(`[Creation Mode] Tracked ${newObjects.length} new object(s)`);
+            } else {
+                console.warn('[Creation Mode] No new objects detected after code execution');
+            }
+
+        } catch (e: any) {
+            console.error('[Creation Mode] Execution error:', e);
+        }
+    }, []);
+
+    const handleUndo = useCallback((messageId: string) => {
+        const objects = createdObjectsHistory.get(messageId);
+        if (objects) {
+            // 优先使用独立画布
+            const context = (window as any).xingPlanetScene;
+            if (context) {
+                objects.forEach((obj: any) => context.scene.remove(obj));
+            }
+            setCreatedObjectsHistory(prev => {
+                const next = new Map(prev);
+                next.delete(messageId);
+                return next;
+            });
+        }
+    }, [createdObjectsHistory]);
+
+    // === 保存效果到管理器 ===
+    const handleSaveEffect = useCallback((code: string, messageId: string) => {
+        const objects = createdObjectsHistory.get(messageId);
+        if (!objects || objects.length === 0) return;
+
+        const newEffect: SavedEffect = {
+            id: generateId(),
+            name: `效果 ${savedEffects.length + 1}`,
+            code: code.replace(/```javascript|```/g, '').trim(),
+            objects: objects,
+            isActive: true
+        };
+        setSavedEffects(prev => [...prev, newEffect]);
+
+        // 从历史中移除，现在由管理器控制
+        setCreatedObjectsHistory(prev => {
+            const next = new Map(prev);
+            next.delete(messageId);
+            return next;
+        });
+    }, [createdObjectsHistory, savedEffects.length]);
+
+    // === 切换效果开关 ===
+    const handleToggleEffect = useCallback((effectId: string) => {
+        setSavedEffects(prev => prev.map(e => {
+            if (e.id === effectId) {
+                const context = (window as any).xingPlanetScene;
+                if (context) {
+                    if (e.isActive) {
+                        // 关闭：从场景移除
+                        e.objects.forEach(obj => context.scene.remove(obj));
+                        return { ...e, isActive: false };
+                    } else {
+                        // 开启：检查 objects 是否为空
+                        let objectsToAdd = e.objects;
+
+                        if (objectsToAdd.length === 0 && e.code) {
+                            // objects 为空，需要重新执行代码创建对象
+                            try {
+                                const {
+                                    scene, THREE, camera, renderer, controls,
+                                    registerUpdate, unregisterUpdate,
+                                    bloomPass, setBloom, setFog
+                                } = context;
+                                const childrenBefore = new Set(scene.children);
+
+                                const cleanCode = e.code.replace(/```javascript|```/g, '').trim();
+                                const func = new Function(
+                                    'scene', 'THREE', 'camera', 'renderer', 'controls',
+                                    'registerUpdate', 'unregisterUpdate',
+                                    'bloomPass', 'setBloom', 'setFog',
+                                    'document',
+                                    cleanCode
+                                );
+                                const result = func(
+                                    scene, THREE, camera, renderer, controls,
+                                    registerUpdate, unregisterUpdate,
+                                    bloomPass, setBloom, setFog,
+                                    document
+                                );
+
+                                const newObjects: any[] = [];
+                                scene.children.forEach((child: any) => {
+                                    if (!childrenBefore.has(child)) {
+                                        newObjects.push(child);
+                                    }
+                                });
+                                if (result && result.isObject3D && !newObjects.includes(result)) {
+                                    newObjects.push(result);
+                                }
+                                objectsToAdd = newObjects;
+                                console.log('[Creation Mode] Re-executed code, created', newObjects.length, 'objects');
+                            } catch (err) {
+                                console.error('[Creation Mode] Failed to re-execute code:', err);
+                            }
+                        } else {
+                            // objects 不为空，直接添加回场景
+                            objectsToAdd.forEach(obj => context.scene.add(obj));
+                        }
+
+                        return { ...e, objects: objectsToAdd, isActive: true };
+                    }
+                }
+                return { ...e, isActive: !e.isActive };
+            }
+            return e;
+        }));
+    }, []);
+
+    // === 删除效果 ===
+    const handleDeleteEffect = useCallback((effectId: string) => {
+        setSavedEffects(prev => {
+            const effect = prev.find(e => e.id === effectId);
+            if (effect) {
+                // 优先使用独立画布
+                const context = (window as any).xingPlanetScene;
+                if (context && effect.isActive) {
+                    effect.objects.forEach(obj => context.scene.remove(obj));
+                }
+            }
+            return prev.filter(e => e.id !== effectId);
+        });
+    }, []);
+
+    // === 云同步：从云端加载效果并重新执行代码 ===
+    useEffect(() => {
+        if (effectsLoaded || !userId) return;
+
+        const loadEffectsFromCloud = async () => {
+            try {
+                const config = await loadCloudConfig();
+                if (config?.creationEffects && config.creationEffects.length > 0) {
+                    console.log('[Creation Mode] Loading', config.creationEffects.length, 'effects from cloud');
+
+                    // 等待场景初始化（最多 10 秒）
+                    let context = (window as any).xingPlanetScene;
+                    let waitTime = 0;
+                    while (!context && waitTime < 10000) {
+                        await new Promise(r => setTimeout(r, 500));
+                        waitTime += 500;
+                        context = (window as any).xingPlanetScene;
+                    }
+
+                    if (!context) {
+                        console.warn('[Creation Mode] Scene not ready after 10s, skipping effect restoration');
+                        setEffectsLoaded(true);
+                        return;
+                    }
+
+                    const restoredEffects: SavedEffect[] = [];
+
+                    for (const cloudEffect of config.creationEffects) {
+                        try {
+                            // 重新执行代码来恢复对象
+                            const newObjects: any[] = [];
+                            if (context && cloudEffect.isActive) {
+                                const {
+                                    scene, THREE, camera, renderer, controls,
+                                    registerUpdate, unregisterUpdate,
+                                    bloomPass, setBloom, setFog
+                                } = context;
+                                const childrenBefore = new Set(scene.children);
+
+                                const func = new Function(
+                                    'scene', 'THREE', 'camera', 'renderer', 'controls',
+                                    'registerUpdate', 'unregisterUpdate',
+                                    'bloomPass', 'setBloom', 'setFog',
+                                    'document',
+                                    cloudEffect.code
+                                );
+                                const result = func(
+                                    scene, THREE, camera, renderer, controls,
+                                    registerUpdate, unregisterUpdate,
+                                    bloomPass, setBloom, setFog,
+                                    document
+                                );
+
+                                scene.children.forEach((child: any) => {
+                                    if (!childrenBefore.has(child)) {
+                                        newObjects.push(child);
+                                    }
+                                });
+                                if (result && result.isObject3D && !newObjects.includes(result)) {
+                                    newObjects.push(result);
+                                }
+                            }
+
+                            restoredEffects.push({
+                                id: cloudEffect.id,
+                                name: cloudEffect.name,
+                                code: cloudEffect.code,
+                                objects: newObjects,
+                                isActive: cloudEffect.isActive
+                            });
+                        } catch (e) {
+                            console.error('[Creation Mode] Failed to restore effect:', cloudEffect.name, e);
+                            // 仍然添加到列表，但没有对象
+                            restoredEffects.push({
+                                id: cloudEffect.id,
+                                name: cloudEffect.name,
+                                code: cloudEffect.code,
+                                objects: [],
+                                isActive: false
+                            });
+                        }
+                    }
+
+                    setSavedEffects(restoredEffects);
+                    // 更新同步记录，防止立即触发保存覆盖云端数据
+                    lastSyncedEffectsRef.current = JSON.stringify(
+                        restoredEffects.map(e => ({ id: e.id, name: e.name, code: e.code, isActive: e.isActive }))
+                    );
+                    console.log('[Creation Mode] Restored', restoredEffects.length, 'effects');
+                }
+            } catch (e) {
+                console.error('[Creation Mode] Failed to load effects from cloud:', e);
+            }
+            setEffectsLoaded(true);
+        };
+
+        // 延迟加载，确保场景已初始化
+        const timer = setTimeout(loadEffectsFromCloud, 2000);
+        return () => clearTimeout(timer);
+    }, [userId, effectsLoaded, loadCloudConfig]);
+
+    // === 云同步：保存效果到云端 ===
+    useEffect(() => {
+        if (!effectsLoaded || !userId) return;
+
+        // 序列化当前效果（不包含 objects 和 createdAt）
+        const currentEffectsStr = JSON.stringify(
+            savedEffects.map(e => ({ id: e.id, name: e.name, code: e.code, isActive: e.isActive }))
+        );
+
+        // 内容相同则跳过保存
+        if (currentEffectsStr === lastSyncedEffectsRef.current) {
+            return;
+        }
+
+        const syncToCloud = async () => {
+            const cloudEffects: CloudSavedEffect[] = savedEffects.map(e => ({
+                id: e.id,
+                name: e.name,
+                code: e.code,
+                isActive: e.isActive,
+                createdAt: Date.now()
+            }));
+
+            await saveCloudConfig({ creationEffects: cloudEffects });
+            lastSyncedEffectsRef.current = currentEffectsStr; // 更新记录
+            console.log('[Creation Mode] Synced', cloudEffects.length, 'effects to cloud');
+        };
+
+        // 使用 5 秒防抖，避免频繁保存
+        const timer = setTimeout(syncToCloud, 5000);
+        return () => clearTimeout(timer);
+    }, [savedEffects, effectsLoaded, userId, saveCloudConfig]);
 
     // === 保存预设 ===
     const handleSavePreset = useCallback(async (msg: ChatMessage, customName?: string) => {
@@ -677,7 +1141,10 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 particleShape: 'headTexture',
                 background: 'background',
                 magicCircle: 'magicCircleTexture',
-                freeChat: 'chat'
+                freeChat: 'chat',
+                creation: 'chat',
+                creation_refine: 'chat',
+                creation_generate: 'chat'
             };
             const fileType = typeMap[msg.subMode || 'magicCircle'];
 
@@ -740,14 +1207,20 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         particleShape: '生成粒子形状图案...',
         background: '生成宇宙背景图...',
         magicCircle: '生成魔法阵图案...',
-        freeChat: '输入任何内容...'
+        freeChat: '输入任何内容...',
+        creation: '创造一个红色立方体...',
+        creation_refine: '创造一个红色立方体...',
+        creation_generate: '创造一个红色立方体...'
     };
 
     const saveButtonText: Record<InspirationSubMode, string> = {
         particleShape: '保存到头部',
         background: '保存到背景',
         magicCircle: '保存到法阵',
-        freeChat: '保存预设'
+        freeChat: '保存预设',
+        creation: '保存对象',
+        creation_refine: '保存对象',
+        creation_generate: '保存对象'
     };
 
     return createPortal(
@@ -856,7 +1329,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
                     {/* 消息列表 - When expanded & not in settings */}
                     {!isMinimized && !showSettings && (
-                        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 custom-scrollbar pointer-events-auto">
+                        <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 visible-scrollbar pointer-events-auto">
                             {messages.map(msg => (
                                 <div className={`max-w-[90%] ${msg.role === 'user' ? 'text-right' : 'text-left'
                                     }`}>
@@ -882,9 +1355,65 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                 </div>
                                             )}
                                         </div>
+                                    ) : msg.subMode === 'creation' && msg.role === 'assistant' ? (
+                                        <div className="bg-[#1e1e1e] rounded-lg border border-white/10 overflow-hidden text-left w-full max-w-full">
+                                            {/* Header */}
+                                            <div className="flex items-center justify-between px-3 py-2 bg-white/5 border-b border-white/5">
+                                                <div className="flex items-center gap-2 text-xs text-blue-400">
+                                                    <Code size={14} />
+                                                    <span>生成代码</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    {/* 复制按钮 - 始终显示 */}
+                                                    <button
+                                                        onClick={() => {
+                                                            const cleanCode = msg.content.replace(/```javascript|```/g, '').trim();
+                                                            navigator.clipboard.writeText(cleanCode);
+                                                        }}
+                                                        className="flex items-center gap-1 px-2 py-1 hover:bg-white/10 text-white/50 hover:text-white/80 rounded text-xs transition-colors"
+                                                        title="复制代码"
+                                                    >
+                                                        <Copy size={12} />
+                                                    </button>
+                                                    {createdObjectsHistory.has(msg.id) ? (
+                                                        <>
+                                                            <button
+                                                                onClick={() => handleSaveEffect(msg.content, msg.id)}
+                                                                className="flex items-center gap-1 px-2 py-1 hover:bg-white/10 rounded text-xs text-blue-400 transition-colors"
+                                                                title="保存到管理器"
+                                                            >
+                                                                <Save size={12} />
+                                                                保存
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleUndo(msg.id)}
+                                                                className="flex items-center gap-1 px-2 py-1 hover:bg-white/10 rounded text-xs text-red-400 transition-colors"
+                                                                title="撤销生成的对象"
+                                                            >
+                                                                <RotateCcw size={12} />
+                                                                撤销
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => handleRunCode(msg.content, msg.id)}
+                                                            className="flex items-center gap-1 px-2 py-1 hover:bg-white/10 text-green-400 rounded text-xs transition-colors"
+                                                            title="立即运行代码"
+                                                        >
+                                                            <Play size={12} />
+                                                            运行
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            {/* Code Preview - 允许选中复制 */}
+                                            <div className="p-3 font-mono text-xs text-white/70 overflow-x-auto whitespace-pre-wrap max-h-[200px] custom-scrollbar select-text">
+                                                {msg.content.replace(/```javascript|```/g, '').trim()}
+                                            </div>
+                                        </div>
                                     ) : (
                                         <div
-                                            className={`inline-block px-3 py-2 rounded-xl ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
+                                            className={`inline-block px-3 py-2 rounded-xl relative group select-text ${msg.role === 'user' ? '' : 'bg-white/5 text-white/80'}`}
                                             style={{
                                                 // 应用对话字体和字号
                                                 fontFamily: CHAT_FONT_OPTIONS.find(f => f.id === xingConfig.theme?.chatFont)?.family || CHAT_FONT_OPTIONS[0].family,
@@ -913,6 +1442,17 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                 />
                                             )}
                                             {msg.content}
+                                            {/* 复制按钮 - 浮动在右下角 */}
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    navigator.clipboard.writeText(msg.content);
+                                                }}
+                                                className="absolute bottom-1 right-1 p-1 rounded hover:bg-white/10 text-white/30 hover:text-white/70 transition-colors opacity-0 group-hover:opacity-100"
+                                                title="复制消息"
+                                            >
+                                                <Copy size={12} />
+                                            </button>
                                         </div>
                                     )}
                                 </div>
@@ -961,18 +1501,20 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                     onTouchStart={isMinimized ? handleTouchStart : undefined}
                                 >
 
-                                    {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[]).map(subMode => (
-                                        <button
-                                            key={subMode}
-                                            onClick={() => setInspirationSubMode(subMode)}
-                                            className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 border ${inspirationSubMode === subMode
-                                                ? 'bg-white/10 border-white/20 text-white shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
-                                                : 'bg-transparent border-transparent text-white/40 hover:bg-white/5 hover:text-white/70'
-                                                }`}
-                                        >
-                                            {INSPIRATION_MODE_INFO[subMode].name}
-                                        </button>
-                                    ))}
+                                    {(Object.keys(INSPIRATION_MODE_INFO) as InspirationSubMode[])
+                                        .filter(m => m !== 'creation_refine' && m !== 'creation_generate') // 过滤内部模式
+                                        .map(subMode => (
+                                            <button
+                                                key={subMode}
+                                                onClick={() => setInspirationSubMode(subMode)}
+                                                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all duration-200 border ${inspirationSubMode === subMode
+                                                    ? 'bg-white/10 border-white/20 text-white shadow-[0_2px_8px_rgba(0,0,0,0.2)]'
+                                                    : 'bg-transparent border-transparent text-white/40 hover:bg-white/5 hover:text-white/70'
+                                                    }`}
+                                            >
+                                                {INSPIRATION_MODE_INFO[subMode].name}
+                                            </button>
+                                        ))}
 
                                     {/* 最小化状态下的展开按钮 (放在最右侧) */}
                                     {isMinimized && (
@@ -1016,7 +1558,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                             }}
                                             onPaste={handlePaste}
                                             placeholder="输入描述..."
-                                            className="flex-1 bg-transparent text-white/90 placeholder-white/20 text-sm py-2 px-2 focus:outline-none resize-none overflow-hidden min-h-[40px]"
+                                            className="flex-1 bg-transparent text-white/90 placeholder-white/20 text-sm py-2 px-2 focus:outline-none resize-none overflow-y-auto min-h-[40px] max-h-[120px]"
                                             rows={2}
                                         />
                                         {/* 右侧按钮 - 固定正方形，上下居中 */}
@@ -1033,14 +1575,32 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                     <Sparkles size={18} strokeWidth={1.5} />
                                                 </button>
                                             )}
+                                            {/* 停止按钮（生成中显示） */}
+                                            {isGenerating && (
+                                                <button
+                                                    onClick={handleStop}
+                                                    className="w-8 h-8 flex items-center justify-center rounded-lg transition-all bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                                                    title="停止生成"
+                                                >
+                                                    <div className="w-3 h-3 bg-red-400 rounded-sm" />
+                                                </button>
+                                            )}
+                                            {/* 发送按钮（支持队列） */}
                                             <button
+                                                data-send-btn
                                                 onClick={handleSend}
-                                                disabled={isGenerating || !inputValue.trim()}
-                                                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all disabled:opacity-30 text-white/90 hover:bg-white/10"
-                                                title="发送"
+                                                disabled={!inputValue.trim()}
+                                                className="w-8 h-8 flex items-center justify-center rounded-lg transition-all disabled:opacity-30 text-white/90 hover:bg-white/10 relative"
+                                                title={isGenerating ? "添加到队列" : "发送"}
                                                 style={{ filter: `drop-shadow(0 0 5px ${xingConfig.gradient.colors[2] || xingConfig.gradient.colors[1]})` }}
                                             >
                                                 <Send size={18} strokeWidth={1.5} />
+                                                {/* 队列徽标 */}
+                                                {messageQueue.length > 0 && (
+                                                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-blue-500 rounded-full text-[10px] flex items-center justify-center text-white font-bold">
+                                                        {messageQueue.length}
+                                                    </span>
+                                                )}
                                             </button>
                                         </div>
                                     </div>
@@ -1125,6 +1685,61 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* 场景管理器图标 (归档) */}
+                                        {inspirationSubMode === 'creation' && (
+                                            <div className="relative ml-auto">
+                                                <button
+                                                    onClick={() => setShowArchive(!showArchive)}
+                                                    className={`w-6 h-6 flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/10 transition-colors ${savedEffects.length > 0 ? 'text-blue-400' : ''}`}
+                                                    title="场景效果管理器"
+                                                >
+                                                    <Archive size={14} />
+                                                </button>
+
+                                                {/* 效果列表弹出层 */}
+                                                {showArchive && (
+                                                    <div className="absolute bottom-full right-0 mb-2 w-[200px] z-50">
+                                                        <div className="bg-[#1a1a24] rounded-xl p-2 border border-white/10 shadow-2xl backdrop-blur-xl max-h-[200px] overflow-y-auto custom-scrollbar">
+                                                            {savedEffects.length === 0 ? (
+                                                                <div className="text-center text-white/30 text-xs py-2">暂无保存的效果</div>
+                                                            ) : (
+                                                                savedEffects.map(effect => (
+                                                                    <div key={effect.id} className="flex items-center justify-between gap-2 py-1.5 px-2 hover:bg-white/5 rounded-lg group">
+                                                                        <span className={`text-xs truncate flex-1 ${effect.isActive ? 'text-white/80' : 'text-white/30'}`}>
+                                                                            {effect.name}
+                                                                        </span>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <button
+                                                                                onClick={() => navigator.clipboard.writeText(effect.code)}
+                                                                                className="p-1 rounded text-white/30 hover:text-blue-400 hover:bg-blue-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                                                                                title="复制代码"
+                                                                            >
+                                                                                <Copy size={12} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleToggleEffect(effect.id)}
+                                                                                className={`p-1 rounded transition-colors ${effect.isActive ? 'text-green-400 hover:bg-green-500/20' : 'text-white/30 hover:bg-white/10'}`}
+                                                                                title={effect.isActive ? '关闭' : '开启'}
+                                                                            >
+                                                                                <Power size={12} />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => handleDeleteEffect(effect.id)}
+                                                                                className="p-1 rounded text-white/30 hover:text-red-400 hover:bg-red-500/10 transition-colors opacity-0 group-hover:opacity-100"
+                                                                                title="删除"
+                                                                            >
+                                                                                <Trash2 size={12} />
+                                                                            </button>
+                                                                        </div>
+                                                                    </div>
+                                                                ))
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

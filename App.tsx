@@ -19,6 +19,7 @@ import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSett
 import { useDraggableStar } from './hooks/useDraggableStar';
 import { DrawingCanvasOverlay } from './components/MagicCircleDrawing';
 import { DrawingModeButton } from './components/MagicCircleDrawing/DrawingModeButton';
+// AICreationCanvas removed - using main scene for AI objects
 import { AppSettings, HandData, AppMode, PlanetSceneSettings, NebulaInstance, NebulaBlendMode, ThemeConfig, MaterialSettings, MaterialPreset, NebulaPreset, CustomMagicCircle, DrawingModeState } from './types';
 import {
   DEFAULT_SETTINGS,
@@ -1450,8 +1451,13 @@ const App: React.FC = () => {
     <div className="w-full h-screen relative overflow-hidden font-sans" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-1)' }}>
       {/* 3D Scene Area - 全屏 */}
       <div className="absolute inset-0">
-        {/* 用户信息显示 - 左上角 */}
-        <div className="absolute top-0 left-0 p-2 md:p-3 z-50">
+        {/* 用户信息显示 - 左上角（默认隐藏在左侧，悬停时滑出） */}
+        <div
+          className="absolute top-0 left-0 p-2 md:p-3 z-50 transition-transform duration-300 ease-out group"
+          style={{ transform: 'translateX(-85%)' }}
+          onMouseEnter={(e) => e.currentTarget.style.transform = 'translateX(0)'}
+          onMouseLeave={(e) => e.currentTarget.style.transform = 'translateX(-85%)'}
+        >
           <UserMenu
             settings={settings}
             setSettings={setSettings}
@@ -1590,6 +1596,8 @@ const App: React.FC = () => {
             />
           </div>
         )}
+
+        {/* AI 创造模式使用主场景，不需要独立画布 */}
 
         {/* Floating Toggle for Sidebar - 绘图模式下隐藏 */}
         {!drawingModeActive && (

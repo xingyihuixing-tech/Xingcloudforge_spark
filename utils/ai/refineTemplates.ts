@@ -7,7 +7,7 @@
  * update: 一旦我被更新，务必更新我的开头注释，以及所属的文件夹的md
  */
 
-export type InspirationSubMode = 'particleShape' | 'background' | 'magicCircle' | 'freeChat';
+export type InspirationSubMode = 'particleShape' | 'background' | 'magicCircle' | 'freeChat' | 'creation' | 'creation_refine' | 'creation_generate';
 
 // ============================================
 // 润色模板 (中文版，用户可编辑)
@@ -55,7 +55,14 @@ export const REFINE_TEMPLATES: Record<InspirationSubMode, (input: string) => str
 - 复杂精细的符文/几何细节`,
 
     // 自由对话模式不需要润色，直接返回输入
-    freeChat: (input: string) => input
+    freeChat: (input: string) => input,
+
+    // 创造模式：生成代码
+    creation: (input: string) => input,
+    // 创造模式 (润色)
+    creation_refine: (input: string) => input,
+    // 创造模式 (生成代码)
+    creation_generate: (input: string) => input,
 };
 
 // ============================================
@@ -73,7 +80,13 @@ export const REFINE_TO_ENGLISH: Record<InspirationSubMode, (chinesePrompt: strin
         `Generate a magic circle pattern: ${chinesePrompt}. Style: pure black background (#000000), glowing neon/energy lines, strictly center-symmetric geometric structure, 512x512 pixels, square PNG with transparency, intricate runes and geometric details.`,
 
     // 自由对话模式直接返回
-    freeChat: (chinesePrompt: string) => chinesePrompt
+    freeChat: (chinesePrompt: string) => chinesePrompt,
+
+    // 创造模式直接返回
+    // 创造模式直接返回
+    creation: (chinesePrompt: string) => chinesePrompt,
+    creation_refine: (chinesePrompt: string) => chinesePrompt,
+    creation_generate: (chinesePrompt: string) => chinesePrompt
 };
 
 // ============================================
@@ -100,5 +113,20 @@ export const INSPIRATION_MODE_INFO: Record<InspirationSubMode, { name: string; d
         name: '自由对话',
         desc: '无系统提示词，直接与模型对话',
         icon: '⌨️'
+    },
+    creation: {
+        name: '创造',
+        desc: '使用自然语言创造3D物体与特效',
+        icon: '🔮'
+    },
+    creation_refine: {
+        name: '创造润色',
+        desc: '优化3D场景描述',
+        icon: '✨'
+    },
+    creation_generate: {
+        name: '创造生成',
+        desc: '生成场景代码',
+        icon: '⚙️'
     }
 };

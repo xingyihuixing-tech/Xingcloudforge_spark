@@ -1507,7 +1507,10 @@ export function createLightsaberStrokeMesh(
                 depthTest: false,
                 depthWrite: false,
                 blending: THREE.AdditiveBlending,
-                side: THREE.FrontSide
+                side: THREE.DoubleSide,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1
             });
 
             const mesh = new THREE.Mesh(tubeGeometry, material);
@@ -1669,7 +1672,10 @@ export function createLightsaberStrokeMesh(
             depthTest: false,
             depthWrite: false,
             blending: THREE.AdditiveBlending,
-            side: THREE.FrontSide
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1
         });
 
         const mesh = new THREE.Mesh(tubeGeometry, material);
@@ -1949,7 +1955,10 @@ export function createLineStrokeMesh(
                 depthTest: false,
                 depthWrite: false,
                 blending: THREE.AdditiveBlending,
-                side: THREE.FrontSide
+                side: THREE.DoubleSide,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1
             });
 
             const mesh = new THREE.Mesh(tubeGeometry, material);
@@ -2064,7 +2073,10 @@ export function createLineStrokeMesh(
                 depthTest: false,
                 depthWrite: false,
                 blending: THREE.AdditiveBlending,
-                side: THREE.FrontSide
+                side: THREE.DoubleSide,
+                polygonOffset: true,
+                polygonOffsetFactor: 1,
+                polygonOffsetUnits: 1
             });
 
             const mesh = new THREE.Mesh(tubeGeometry, material);

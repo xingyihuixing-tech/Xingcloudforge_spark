@@ -73,6 +73,8 @@ interface UserConfig {
     modulePresets?: Record<string, Array<Record<string, unknown>>>;
     // 自定义法阵绘制数据（MagicCircleDrawing）
     customMagicCircles?: Array<Record<string, unknown>>;
+    // 创造模式保存的效果（AI 生成的 Three.js 代码）
+    creationEffects?: Array<{ id: string; name: string; code: string; isActive: boolean; createdAt: number }>;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -150,6 +152,8 @@ async function getConfig(req: VercelRequest, res: VercelResponse) {
                 modulePresets: {},
                 // 自定义法阵绘制默认空数组
                 customMagicCircles: [],
+                // 创造模式效果默认空数组
+                creationEffects: [],
             }
         });
     }
@@ -197,6 +201,8 @@ async function saveConfig(req: VercelRequest, res: VercelResponse) {
         modulePresets: config.modulePresets ?? existingConfig?.modulePresets ?? {},
         // 自定义法阵绘制
         customMagicCircles: config.customMagicCircles ?? existingConfig?.customMagicCircles ?? [],
+        // 创造模式效果
+        creationEffects: config.creationEffects ?? existingConfig?.creationEffects ?? [],
     };
 
     await redis!.set(`config:${userId}`, newConfig);

@@ -464,7 +464,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         // 离线模式：返回本地缓存
         configCacheRef.current = { data: config, timestamp: now, userId };
         return config;
-    }, [currentUser?.id, isOnline, configVersion]);
+    }, [currentUser?.id, isOnline]); // 移除 configVersion 避免保存后缓存失效
 
     const saveCloudConfig = async (config: Partial<UserConfig>) => {
         if (!currentUser) return false;

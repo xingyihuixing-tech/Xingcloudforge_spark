@@ -6674,6 +6674,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
     rendererRef.current = renderer;
     renderer.autoClearStencil = true;
 
+
+
     // �𥕦遣�峕艶���嚗�鍂鈭𤾸��臬㦛嚗?
     const bgGeometry = new THREE.SphereGeometry(5000, 64, 32);
     const bgMaterial = new THREE.ShaderMaterial({
@@ -6706,6 +6708,62 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       TWO: THREE.TOUCH.DOLLY_PAN
     };
     controlsRef.current = controls;
+
+    // [CREATION MODE BRIDGE] AI 回调注册表 - 存储每帧需要执行的更新函数
+    const aiUpdateCallbacks = new Set<(deltaTime: number) => void>();
+    (window as any)._aiUpdateCallbacks = aiUpdateCallbacks; // 保存引用供 animate 使用
+
+    // [CREATION MODE] 保存原始 Bloom 参数供恢复
+    const originalBloomParams = {
+      strength: isMobile ? Math.min(settings.bloomStrength, 1.0) : settings.bloomStrength,
+      radius: overlayMode ? (isMobile ? 0.3 : 0.5) : 0.4,
+      threshold: overlayMode ? 0 : 0.85
+    };
+
+    // [CREATION MODE BRIDGE] 暴露给 AI 面板进行代码注入
+    (window as any).xingPlanetScene = {
+      scene,
+      THREE,
+      camera,
+      renderer,
+      controls,
+
+      // 注册每帧更新回调
+      registerUpdate: (callback: (deltaTime: number) => void) => {
+        aiUpdateCallbacks.add(callback);
+        console.log('[Creation Mode] Registered update callback, total:', aiUpdateCallbacks.size);
+      },
+      // 注销更新回调
+      unregisterUpdate: (callback: (deltaTime: number) => void) => {
+        aiUpdateCallbacks.delete(callback);
+        console.log('[Creation Mode] Unregistered update callback, total:', aiUpdateCallbacks.size);
+      },
+      // 清除所有 AI 回调
+      clearAllUpdates: () => {
+        aiUpdateCallbacks.clear();
+        console.log('[Creation Mode] Cleared all update callbacks');
+      },
+
+      // 获取 bloomPass 引用
+      get bloomPass() {
+        return bloomPassRef.current;
+      },
+      // 设置 Bloom 参数
+      setBloom: (strength: number, radius: number, threshold: number) => {
+        if (bloomPassRef.current) {
+          bloomPassRef.current.strength = strength;
+          bloomPassRef.current.radius = radius;
+          bloomPassRef.current.threshold = threshold;
+          console.log('[Creation Mode] Bloom set:', { strength, radius, threshold });
+        }
+      },
+
+      // 设置雾效
+      setFog: (color: number, density: number) => {
+        scene.fog = new THREE.FogExp2(color, density);
+        console.log('[Creation Mode] Fog set:', { color: color.toString(16), density });
+      }
+    };
 
     // �𥕦遣�𤾸��?- 蝘餃𢆡蝡舫�雿𤾸�颲函�
     const postProcessScale = isMobile ? 0.5 : 1.0;
@@ -7155,6 +7213,11 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       afterimagePassRef.current = null;
       chromaticPassRef.current = null;
       vignettePassRef.current = null;
+
+      // 清理全局引用
+      if ((window as any).xingPlanetScene) {
+        delete (window as any).xingPlanetScene;
+      }
 
       if (textureCache.current) {
         textureCache.current.forEach((tex) => {
@@ -10054,6 +10117,19 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
             }
           }
         }
+      }
+
+      // [CREATION MODE] 执行 AI 注册的更新回调
+      const aiCallbacks = (window as any)._aiUpdateCallbacks as Set<(deltaTime: number) => void> | undefined;
+      if (aiCallbacks && aiCallbacks.size > 0) {
+        const deltaTimeSeconds = deltaTime / 1000; // 转换为秒
+        aiCallbacks.forEach(callback => {
+          try {
+            callback(deltaTimeSeconds);
+          } catch (e) {
+            console.error('[Creation Mode] Callback error:', e);
+          }
+        });
       }
 
       // 渲染
