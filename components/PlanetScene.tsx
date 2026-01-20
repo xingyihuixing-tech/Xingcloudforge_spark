@@ -4,6 +4,7 @@
  * pos: 互通模式渲染的权威入口，负责“星球 + 星云叠加”整体画面与特效即时生效；并在运行时同步自定义法阵各笔刷材质（包含 lightsaber 的 uMC* 命名）uniforms
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  * 2026-01-16: 粒子环混色模式改为基准色+色相偏移逻辑（proceduralIntensity控制色相跨度，blendStrength控制边界清晰度）
+ * 2026-01-19: 自定义法阵丝环/光剑 iPad 自转闪烁修复：保留笔刷内部细粒度 renderOrder，并按 layerIndex 叠加大偏移以稳定透明排序
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -13117,9 +13118,14 @@ void main() {
           // 增加偏移量到0.5，iPad精度较低需要更大间隔
           layerGroup.position.z = layerIndex * 0.5;
           // 每层设置不同的renderOrder，确保渲染顺序正确
+          const layerRenderOrderOffset = layerIndex * 1000000;
           layerGroup.traverse((child) => {
-            if (child instanceof THREE.Object3D) {
-              child.renderOrder = 50 + layerIndex;
+            if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Points) {
+              const baseRenderOrder = (child.userData.__mcBaseRenderOrder ?? (child.renderOrder !== 0 ? child.renderOrder : child.id)) as number;
+              if (child.userData.__mcBaseRenderOrder === undefined) {
+                child.userData.__mcBaseRenderOrder = baseRenderOrder;
+              }
+              child.renderOrder = layerRenderOrderOffset + baseRenderOrder;
             }
           });
 

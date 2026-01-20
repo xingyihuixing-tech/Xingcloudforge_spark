@@ -5,6 +5,7 @@
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，支持核心/光晕双色、核心宽度、光晕强度/衰减、脉冲效果、压感模式
  * 2026-01-16: 粒子画笔参数范围调整(粒子大小0-20、密度1-60、亮度0.1-5)，新增handleUpdatePhaseOffset图层相位偏移处理
+ * 2026-01-19: 图层自转使用真实 deltaTime（iPad 低帧率下避免角度跳变放大透明排序抖动）
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
@@ -326,11 +327,17 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         // 4. 渲染循环
         let startTime = Date.now();
+        let lastFrameTime = startTime;
         const animate = () => {
             animationFrameRef.current = requestAnimationFrame(animate);
 
             const refs = refsRef.current;
             if (!refs.scene || !refs.camera) return;
+
+            const now = Date.now();
+            const elapsed = (now - startTime) / 1000;
+            const deltaSeconds = (now - lastFrameTime) / 1000;
+            lastFrameTime = now;
 
             // 更新 OrbitControls（如果存在）
             if (orbitControlsRef.current) {
@@ -339,7 +346,6 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
             // 更新中心点漩涡动画
             if (refs.centerPoint && (refs.centerPoint.material as THREE.ShaderMaterial).uniforms) {
-                const elapsed = (Date.now() - startTime) / 1000;
                 (refs.centerPoint.material as THREE.ShaderMaterial).uniforms.uTime.value = elapsed;
 
                 // 更新所有丝环笔画的uTime (修复压感模式下流动效果静止)
@@ -359,12 +365,11 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
             // 更新图层自转动画
             if (refs.strokesGroup) {
-                const deltaTime = 1 / 60; // 约60FPS
                 refs.strokesGroup.children.forEach((child) => {
                     if (child instanceof THREE.Group && child.userData.rotationSpeed !== undefined) {
                         const speed = child.userData.rotationSpeed as number;
                         if (speed !== 0) {
-                            child.rotation.z += speed * deltaTime * 0.5; // 缩放速度使动画更平滑
+                            child.rotation.z += speed * deltaSeconds * 0.5; // 缩放速度使动画更平滑
                         }
                     }
                 });
