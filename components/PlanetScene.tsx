@@ -13117,17 +13117,8 @@ void main() {
           // 法阵默认旋转 -90度 X，Local Z 对应法线方向
           // 增加偏移量到0.5，iPad精度较低需要更大间隔
           layerGroup.position.z = layerIndex * 0.5;
-          // 每层设置不同的renderOrder，确保渲染顺序正确
-          const layerRenderOrderOffset = layerIndex * 1000000;
-          layerGroup.traverse((child) => {
-            if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Points) {
-              const baseRenderOrder = (child.userData.__mcBaseRenderOrder ?? (child.renderOrder !== 0 ? child.renderOrder : child.id)) as number;
-              if (child.userData.__mcBaseRenderOrder === undefined) {
-                child.userData.__mcBaseRenderOrder = baseRenderOrder;
-              }
-              child.renderOrder = layerRenderOrderOffset + baseRenderOrder;
-            }
-          });
+          // 注意：不再覆盖 renderOrder，保留 drawingSystem.ts 中的细粒度排序
+          // 这是修复 iPad 旋转闪烁的关键
 
           group.add(layerGroup);
           (group.userData.layerGroups as THREE.Group[]).push(layerGroup);
