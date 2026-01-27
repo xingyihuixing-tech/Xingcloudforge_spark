@@ -5,7 +5,9 @@
  * update: 一旦我被更新，务必更新本文件头部注释以及所属文件夹的架构md
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，包含lightsaberVertexShader/lightsaberFragmentShader、createLightsaberStrokeMesh函数、AdditiveBlending混合模式
  * 2026-01-16: 统一粒子画笔与粒子环效果：移除0.05大小系数、随机范围改为1~3、应用brightness参数、光晕采用pow模型、uGlowIntensity默认3
+ * 2026-01-27: 修复网格画笔在星芒/漩涡对称模式下的问题：将独立的起点/终点变换改为使用applySymmetryToPath进行路径级别变换，确保线段两端在同一对称轨道上
  */
+
 
 import * as THREE from 'three';
 import {
@@ -2252,24 +2254,21 @@ export function createWebStrokeMesh(
     const allOpacities: number[] = [];
 
     for (const seg of lineSegments) {
-        // 获取起点和终点的对称变换结果
-        const startSymmetry = applySymmetryTransform(
-            { x: seg.start.x, y: seg.start.y },
-            symmetryMode,
-            symmetryDivisions,
-            symmetryParams
-        );
-        const endSymmetry = applySymmetryTransform(
-            { x: seg.end.x, y: seg.end.y },
-            symmetryMode,
-            symmetryDivisions,
-            symmetryParams
-        );
+        // 修复：将线段作为迷你路径处理，确保起点和终点在同一对称变换轨道上
+        // 这解决了星芒/漩涡模式下起点和终点被独立变换导致连线方向错乱的问题
+        const miniPath = [
+            { x: seg.start.x, y: seg.start.y, pressure: 1 },
+            { x: seg.end.x, y: seg.end.y, pressure: 1 }
+        ];
 
-        // 为每个对称变换添加线段到批量数组
-        for (let s = 0; s < startSymmetry.length; s++) {
-            const sp = startSymmetry[s];
-            const ep = endSymmetry[s];
+        const transformedPaths = applySymmetryToPath(miniPath, symmetryMode, symmetryDivisions, symmetryParams);
+
+        // 为每条变换后的路径添加线段到批量数组
+        for (const path of transformedPaths) {
+            if (path.length < 2) continue;
+
+            const sp = path[0];
+            const ep = path[1];
 
             // 添加起点和终点位置
             allPositions.push(sp.x, sp.y, sp.z ?? 0);
@@ -2284,6 +2283,7 @@ export function createWebStrokeMesh(
             allOpacities.push(seg.opacity);
         }
     }
+
 
     // 如果没有线段，直接返回空组
     if (allPositions.length === 0) {

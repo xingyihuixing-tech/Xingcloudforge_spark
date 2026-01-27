@@ -1690,7 +1690,49 @@ const App: React.FC = () => {
             </button>
           </div>
         )}
+
+        {/* 互通模式辉光控制面板 - 左下角 */}
+        {overlayMode && !drawingModeActive && (
+          <div
+            className="absolute bottom-24 md:bottom-8 left-4 z-40 rounded-xl p-3 transition-all duration-300"
+            style={{
+              background: 'rgba(30,30,40,0.16)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)',
+              border: '1px solid rgba(255,255,255,0.15)',
+              minWidth: 180
+            }}
+          >
+            <div className="text-xs text-gray-400 flex items-center gap-2 mb-2">
+              <span className="text-base">🌟</span>
+              <span className="font-medium">互通辉光</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="range"
+                min={0}
+                max={3}
+                step={0.1}
+                value={settings.overlayBloomStrength}
+                onChange={(e) => setSettings(prev => ({
+                  ...prev,
+                  overlayBloomStrength: Number(e.target.value)
+                }))}
+                className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer"
+                style={{
+                  background: `linear-gradient(to right, var(--ui-secondary) 0%, var(--ui-secondary) ${(settings.overlayBloomStrength / 3) * 100}%, rgba(255,255,255,0.1) ${(settings.overlayBloomStrength / 3) * 100}%, rgba(255,255,255,0.1) 100%)`,
+                  accentColor: 'var(--ui-secondary)'
+                }}
+              />
+              <span className="text-white text-xs w-8 text-right font-mono">
+                {settings.overlayBloomStrength.toFixed(1)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
+
 
       {/* Sidebar - 悬浮在右侧 */}
       <div className={`
@@ -1717,7 +1759,7 @@ const App: React.FC = () => {
             nebulaPreviewMode={nebulaPreviewMode}
             setNebulaPreviewMode={setNebulaPreviewMode}
             fps={fps}
-            particleCount={data?.count || 0}
+            particleCount={calculateTotalParticles()}
             colorPickMode={colorPickMode}
             setColorPickMode={setColorPickMode}
             pickedColor={pickedColor}
