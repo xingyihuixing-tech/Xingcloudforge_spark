@@ -15,6 +15,7 @@ import { UserMenu } from './components/UserMenu';
 import { UserLogin } from './components/UserLogin';
 import { AIStarButton } from './components/AIStarButton'; // Added import
 import AIAssistantPanel from './components/AIAssistantPanel';
+import AIEffectParamsPanel, { SavedEffectForParams } from './components/AIEffectParamsPanel';
 import { XingSparkConfig, DEFAULT_XING_CONFIG } from './components/XingSparkSettings';
 import { useDraggableStar } from './hooks/useDraggableStar';
 import { DrawingCanvasOverlay } from './components/MagicCircleDrawing';
@@ -418,6 +419,24 @@ const App: React.FC = () => {
 
   // 星云预览模式
   const [nebulaPreviewMode, setNebulaPreviewMode] = useState(false);
+
+  // AI 效果参数编辑器状态
+  const [selectedEffectForParams, setSelectedEffectForParams] = useState<SavedEffectForParams | null>(null);
+
+  const handleEffectParamChange = useCallback((effectId: string, paramId: string, newValue: any) => {
+    // 这里如果需要在 App层处理，可以添加逻辑。目前由 AIAssistantPanel 内部处理，
+    // 我们只需要在这里接收到变更（如果是只读展示），或者通过 Panel 的回调传递回去。
+    // 但我们的设计是将状态保留在 Panel 内部，这里主要是为了让 React 渲染左侧及接收事件。
+    // 实际的修改逻辑通过回调传回 AIAssistantPanel
+  }, []);
+
+  const handleEffectParamReset = useCallback((effectId: string, paramId: string) => {
+    // 同上，占位
+  }, []);
+
+  const handleEffectAllParamsReset = useCallback((effectId: string) => {
+    // 同上
+  }, []);
 
   // 自定义法阵绘制系统 - 初始化时从本地存储加载
   const [customMagicCircles, setCustomMagicCircles] = useState<CustomMagicCircle[]>(() => loadCustomMagicCircles(null));
@@ -1841,7 +1860,76 @@ const App: React.FC = () => {
             console.error('Failed to save magic circle texture preset:', preset.name);
           }
         }}
+        // 传递效果选择状态给 App，以便渲染左侧参数面板
+        onEffectSelect={setSelectedEffectForParams}
+      // 参数修改由 AIAssistantPanel 内部处理，这里传递空函数或者状态更新函数（如果需要双向绑定）
+      // 在 AIAssistantPanel 中通过 onParamChange 接收来自左侧面板的变更
       />
+
+      {/* AI 效果参数编辑器 - 左侧面板 (类似绘画模式面板位置) */}
+      {showAIPanel && selectedEffectForParams && (
+        <div
+          className="fixed left-0 top-1/2 -translate-y-1/2 z-[60] w-56 transform transition-all duration-300"
+          style={{
+            background: 'rgba(0,0,0,0.6)',
+            backdropFilter: 'blur(12px)',
+            borderRadius: '0 12px 12px 0',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderLeft: 'none',
+            maxHeight: '70vh',
+            overflowY: 'auto'
+          }}
+        >
+          {/* 这里需要传递修改回调给 AIAssistantPanel ？？ 
+              实际上我们应该在 App 层定义修改函数，然后传给左侧面板，
+              这个修改函数再调用 AIAssistantPanel 暴露的方法？
+              或者，更简单的：左侧面板直接调用 AIAssistantPanel 传递过来的 onParamChange？
+              不对，左侧面板是在 App 层渲染的。
+              
+              修正方案：
+              AIAssistantPanel 内部定义了 handleInternalParamChange。
+              我们需要把这个 handleInternalParamChange 暴露给 App，或者 App 定义状态传给 AIAssistantPanel。
+              
+              鉴于 AIAssistantPanel 已经维护了 savedEffects 状态，
+              最简单的办法是让 AIAssistantPanel 渲染这个左侧面板？
+              不，用户要求类似绘画模式左侧面板，AIsPanel 是个弹窗/面板，通常在右侧或独立。
+              如果左侧面板是全局的，App 渲染比较合理。
+              
+              但是状态都在 AIAssistantPanel 里。
+              我们可以在 AIAssistantPanel 内部使用 Portal 渲染到左侧？
+              或者在 App 层维护 savedEffects？但这改动太大。
+              
+              折衷方案：
+              AIAssistantPanel 将 handleParamChange 传递给 App (通过 onEffectSelect 或者 ref?)
+              或者，我们把 selectedEffectForParams 的修改回调也设为状态？
+          */}
+          <AIEffectParamsPanel
+            selectedEffect={selectedEffectForParams}
+            onParamChange={(effectId, paramId, val) => {
+              // 这里有一个难题：AIAssistantPanel 需要知道参数变了。
+              // 我们可以通过一个事件总线或者 Context。
+              // 或者，我们让 AIAssistantPanel 导出 handleParamChange？
+              // 或者最简单的：使用 window 自定义事件？
+              const event = new CustomEvent('ai-effect-param-change', {
+                detail: { effectId, paramId, value: val }
+              });
+              window.dispatchEvent(event);
+            }}
+            onResetParam={(effectId, paramId) => {
+              const event = new CustomEvent('ai-effect-param-reset', {
+                detail: { effectId, paramId }
+              });
+              window.dispatchEvent(event);
+            }}
+            onResetAllParams={(effectId) => {
+              const event = new CustomEvent('ai-effect-all-params-reset', {
+                detail: { effectId }
+              });
+              window.dispatchEvent(event);
+            }}
+          />
+        </div>
+      )}
 
       {/* 可拖动绘图模式按钮 - 仅在星球模式且未进入绘图模式时显示 */}
       {appMode === 'planet' && !drawingModeActive && (

@@ -6779,8 +6779,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(ppWidth, ppHeight),
       isMobile ? Math.min(settings.bloomStrength, 1.0) : settings.bloomStrength,
-      0.4,
-      0.85
+      settings.bloomRadius ?? 0.4,
+      settings.bloomThreshold ?? 0.85
     );
     // 互通模式下使用与NebulaScene一致的Bloom参数
     if (overlayMode) {
@@ -7600,6 +7600,8 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
         bloomPassRef.current.radius = isMobile ? 0.3 : 0.5;
       } else {
         bloomPassRef.current.strength = isMobile ? Math.min(settings.bloomStrength, 1.0) : settings.bloomStrength;
+        bloomPassRef.current.radius = settings.bloomRadius ?? 0.4;
+        bloomPassRef.current.threshold = settings.bloomThreshold ?? 0.85;
       }
     }
     if (afterimagePassRef.current) {
@@ -7610,7 +7612,18 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
         afterimagePassRef.current.uniforms['damp'].value = settings.trailEnabled ? settings.trailLength : 0;
       }
     }
-  }, [settings.bloomStrength, settings.trailEnabled, settings.trailLength, overlayMode, nebulaSettings?.overlayBloomStrength, nebulaSettings?.trailEnabled, nebulaSettings?.trailLength]);
+    // Fog 更新 - 全局统一
+    if (sceneRef.current) {
+      if (settings.fogEnabled) {
+        const fogColorNum = parseInt((settings.fogColor ?? '#000508').replace('#', ''), 16);
+        sceneRef.current.fog = new THREE.FogExp2(fogColorNum, settings.fogDensity ?? 0.0005);
+      } else {
+        sceneRef.current.fog = null;
+      }
+    }
+  }, [settings.bloomStrength, settings.bloomRadius, settings.bloomThreshold,
+  settings.fogEnabled, settings.fogColor, settings.fogDensity,
+  settings.trailEnabled, settings.trailLength, overlayMode, nebulaSettings?.overlayBloomStrength, nebulaSettings?.trailEnabled, nebulaSettings?.trailLength]);
 
   // 侧边栏展开时调整相机目标点，使场景内容在左侧可见区域居中
   useEffect(() => {

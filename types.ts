@@ -1718,6 +1718,12 @@ export interface PlanetSceneSettings {
   background: BackgroundSettings;
   // 视觉效果（复用主场景）
   bloomStrength: number;
+  bloomRadius: number;       // Bloom 扩散半径 (0-2)
+  bloomThreshold: number;    // Bloom 亮度阈值 (0-1)
+  // 全局雾效
+  fogEnabled: boolean;       // 雾效开关
+  fogColor: string;          // 雾效颜色 (hex string)
+  fogDensity: number;        // 雾效密度 (0-0.01)
   trailEnabled: boolean;
   trailLength: number;
   // 动态效果（复用主场景）

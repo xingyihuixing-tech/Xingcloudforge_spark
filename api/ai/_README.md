@@ -10,6 +10,7 @@
 | `image.ts` | 生图 API (参考图支持) |
 | `refine.ts` | 润色 API (多模态分析) |
 | `name.ts` | 命名 API (图片视觉分析) |
+| `analyze-code.ts` | 代码分析 API (提取可编辑参数) |
 
 ## 路由规则 (双 Key 路由)
 

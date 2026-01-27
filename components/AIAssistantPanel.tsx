@@ -47,6 +47,16 @@ interface AIAssistantPanelProps {
     onForceSave?: () => void;
     // 生成完成回调
     onGenerationComplete?: () => void;
+    // 效果参数编辑器回调
+    onEffectSelect?: (effect: {
+        id: string;
+        name: string;
+        params?: any[];
+        paramsAnalyzing?: boolean;
+    } | null) => void;
+    onParamChange?: (effectId: string, paramId: string, newValue: any) => void;
+    onResetParam?: (effectId: string, paramId: string) => void;
+    onResetAllParams?: (effectId: string) => void;
 }
 
 interface ChatMessage {
@@ -120,7 +130,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     xingConfig,
     onConfigChange,
     onForceSave,
-    onGenerationComplete
+    onGenerationComplete,
+    onEffectSelect,
+    onParamChange,
+    onResetParam,
+    onResetAllParams
 }) => {
     // === 模式状态 ===
     const [inspirationSubMode, setInspirationSubMode] = useState<InspirationSubMode>('background');
@@ -174,6 +188,19 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     // 创造模式对象历史
     const [createdObjectsHistory, setCreatedObjectsHistory] = useState<Map<string, any[]>>(new Map());
 
+    // 可编辑参数接口
+    interface EditableParam {
+        id: string;
+        name: string;
+        varName: string;
+        type: 'number' | 'color' | 'boolean';
+        value: any;
+        originalValue: any;
+        min?: number;
+        max?: number;
+        step?: number;
+    }
+
     // 场景对象管理器 (Saved Effects)
     // 本地运行时的对象引用（不序列化）
     interface SavedEffect {
@@ -182,6 +209,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         code: string;
         objects: any[]; // Three.js 对象引用，仅存在于内存
         isActive: boolean;
+        params?: EditableParam[];      // 可编辑参数
+        paramsAnalyzing?: boolean;     // 正在分析参数
     }
     // 云端存储的数据结构（不包含 objects）
     interface CloudSavedEffect {
@@ -190,9 +219,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         code: string;
         isActive: boolean;
         createdAt: number;
+        params?: EditableParam[];      // 同步参数到云端
     }
     const [savedEffects, setSavedEffects] = useState<SavedEffect[]>([]);
     const [showArchive, setShowArchive] = useState(false);
+    const [selectedEffectId, setSelectedEffectId] = useState<string | null>(null); // 选中的效果（用于左侧参数面板）
     const [effectsLoaded, setEffectsLoaded] = useState(false); // 防止重复加载
     const lastSyncedEffectsRef = useRef<string>('[]'); // 初始化为空数组，防止误覆盖云端数据
 
@@ -889,16 +920,21 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     }, [createdObjectsHistory]);
 
     // === 保存效果到管理器 ===
-    const handleSaveEffect = useCallback((code: string, messageId: string) => {
+    const handleSaveEffect = useCallback(async (code: string, messageId: string) => {
         const objects = createdObjectsHistory.get(messageId);
         if (!objects || objects.length === 0) return;
 
+        const cleanCode = code.replace(/```javascript|```/g, '').trim();
+        const effectId = generateId();
+
         const newEffect: SavedEffect = {
-            id: generateId(),
+            id: effectId,
             name: `效果 ${savedEffects.length + 1}`,
-            code: code.replace(/```javascript|```/g, '').trim(),
+            code: cleanCode,
             objects: objects,
-            isActive: true
+            isActive: true,
+            params: [],
+            paramsAnalyzing: true  // 标记正在分析
         };
         setSavedEffects(prev => [...prev, newEffect]);
 
@@ -908,6 +944,46 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             next.delete(messageId);
             return next;
         });
+
+        // 后台分析参数（用户无感知）
+        try {
+            const res = await fetch('/api/ai/analyze-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: cleanCode })
+            });
+            const data = await res.json();
+
+            if (data.params && data.params.length > 0) {
+                // 为每个参数添加 id 和 originalValue
+                const paramsWithId: EditableParam[] = data.params.map((p: any) => ({
+                    ...p,
+                    id: generateId(),
+                    originalValue: p.value
+                }));
+
+                // 更新效果的参数
+                setSavedEffects(prev => prev.map(e =>
+                    e.id === effectId
+                        ? { ...e, params: paramsWithId, paramsAnalyzing: false }
+                        : e
+                ));
+                console.log(`[Creation Mode] Extracted ${paramsWithId.length} params for effect ${effectId}`);
+            } else {
+                setSavedEffects(prev => prev.map(e =>
+                    e.id === effectId
+                        ? { ...e, paramsAnalyzing: false }
+                        : e
+                ));
+            }
+        } catch (err) {
+            console.error('[Creation Mode] Param analysis failed:', err);
+            setSavedEffects(prev => prev.map(e =>
+                e.id === effectId
+                    ? { ...e, paramsAnalyzing: false }
+                    : e
+            ));
+        }
     }, [createdObjectsHistory, savedEffects.length]);
 
     // === 切换效果开关 ===
@@ -990,7 +1066,146 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             }
             return prev.filter(e => e.id !== effectId);
         });
+        // 如果删除的是当前选中效果，清除选中
+        if (selectedEffectId === effectId) {
+            setSelectedEffectId(null);
+        }
+    }, [selectedEffectId]);
+
+    // === 选中效果通知父组件 ===
+    useEffect(() => {
+        if (onEffectSelect) {
+            const selectedEffect = savedEffects.find(e => e.id === selectedEffectId);
+            if (selectedEffect) {
+                onEffectSelect({
+                    id: selectedEffect.id,
+                    name: selectedEffect.name,
+                    params: selectedEffect.params,
+                    paramsAnalyzing: selectedEffect.paramsAnalyzing
+                });
+            } else {
+                onEffectSelect(null);
+            }
+        }
+    }, [selectedEffectId, savedEffects, onEffectSelect]);
+
+    // === 参数变更处理（内部实现） ===
+    const handleInternalParamChange = useCallback((effectId: string, paramId: string, newValue: any) => {
+        setSavedEffects(prev => prev.map(effect => {
+            if (effect.id !== effectId) return effect;
+
+            // 1. 更新参数值
+            const newParams = effect.params?.map(p =>
+                p.id === paramId ? { ...p, value: newValue } : p
+            );
+
+            // 2. 更新代码中的参数值
+            let newCode = effect.code;
+            const param = effect.params?.find(p => p.id === paramId);
+            if (param) {
+                // 根据类型格式化值
+                let formattedValue: string;
+                if (param.type === 'color') {
+                    formattedValue = typeof newValue === 'string' && newValue.startsWith('#')
+                        ? '0x' + newValue.replace('#', '')
+                        : String(newValue);
+                } else {
+                    formattedValue = String(newValue);
+                }
+
+                // 替换代码中的值
+                const patterns = [
+                    new RegExp(`(const\\s+${param.varName}\\s*=\\s*)[^;\\n]+`, 'g'),
+                    new RegExp(`(${param.varName}\\s*:\\s*)[^,}\\n]+`, 'g')
+                ];
+                patterns.forEach(regex => {
+                    newCode = newCode.replace(regex, `$1${formattedValue}`);
+                });
+            }
+
+            // 3. 移除旧对象
+            const context = (window as any).xingPlanetScene;
+            if (context && effect.isActive) {
+                effect.objects.forEach(obj => context.scene.remove(obj));
+            }
+
+            // 4. 重新执行代码
+            let newObjects: any[] = [];
+            if (context && effect.isActive) {
+                try {
+                    const { scene, THREE, camera, renderer, controls,
+                        registerUpdate, unregisterUpdate,
+                        bloomPass, setBloom, setFog } = context;
+                    const childrenBefore = new Set(scene.children);
+
+                    const func = new Function(
+                        'scene', 'THREE', 'camera', 'renderer', 'controls',
+                        'registerUpdate', 'unregisterUpdate',
+                        'bloomPass', 'setBloom', 'setFog', 'document',
+                        newCode
+                    );
+                    func(scene, THREE, camera, renderer, controls,
+                        registerUpdate, unregisterUpdate,
+                        bloomPass, setBloom, setFog, document);
+
+                    scene.children.forEach((child: any) => {
+                        if (!childrenBefore.has(child)) {
+                            newObjects.push(child);
+                        }
+                    });
+                    console.log(`[Creation Mode] Re-executed with updated param, created ${newObjects.length} objects`);
+                } catch (err) {
+                    console.error('[Creation Mode] Re-execution failed:', err);
+                    newObjects = effect.objects; // 保持原对象
+                }
+            }
+
+            return { ...effect, params: newParams, code: newCode, objects: newObjects };
+        }));
     }, []);
+
+    // === 重置单个参数 ===
+    const handleInternalResetParam = useCallback((effectId: string, paramId: string) => {
+        const effect = savedEffects.find(e => e.id === effectId);
+        const param = effect?.params?.find(p => p.id === paramId);
+        if (param) {
+            handleInternalParamChange(effectId, paramId, param.originalValue);
+        }
+    }, [savedEffects, handleInternalParamChange]);
+
+    // === 重置所有参数 ===
+    const handleInternalResetAllParams = useCallback((effectId: string) => {
+        const effect = savedEffects.find(e => e.id === effectId);
+        effect?.params?.forEach(param => {
+            handleInternalParamChange(effectId, param.id, param.originalValue);
+        });
+    }, [savedEffects, handleInternalParamChange]);
+
+    // === 监听外部参数变更事件 (来自左侧 AIEffectParamsPanel) ===
+    useEffect(() => {
+        const onParamChange = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            handleInternalParamChange(detail.effectId, detail.paramId, detail.value);
+        };
+        const onResetParam = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            handleInternalResetParam(detail.effectId, detail.paramId);
+        };
+        const onResetAllParams = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            handleInternalResetAllParams(detail.effectId);
+        };
+
+        window.addEventListener('ai-effect-param-change', onParamChange);
+        window.addEventListener('ai-effect-param-reset', onResetParam);
+        window.addEventListener('ai-effect-all-params-reset', onResetAllParams);
+
+        return () => {
+            window.removeEventListener('ai-effect-param-change', onParamChange);
+            window.removeEventListener('ai-effect-param-reset', onResetParam);
+            window.removeEventListener('ai-effect-all-params-reset', onResetAllParams);
+        };
+    }, [handleInternalParamChange, handleInternalResetParam, handleInternalResetAllParams]);
 
     // === 云同步：从云端加载效果并重新执行代码 ===
     useEffect(() => {

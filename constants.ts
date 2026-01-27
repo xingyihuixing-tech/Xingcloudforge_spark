@@ -2557,6 +2557,12 @@ export const DEFAULT_PLANET_SCENE_SETTINGS: PlanetSceneSettings = {
   },
   // 视觉效果
   bloomStrength: 0.4,
+  bloomRadius: 0.4,
+  bloomThreshold: 0.85,
+  // 全局雾效
+  fogEnabled: false,
+  fogColor: '#000508',
+  fogDensity: 0.0005,
   trailEnabled: false,
   trailLength: 0.3,
   // 动态效果
