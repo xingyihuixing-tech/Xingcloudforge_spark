@@ -986,6 +986,55 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         }
     }, [createdObjectsHistory, savedEffects.length]);
 
+    // === 独立的参数分析函数（供保存和选中时复用）===
+    const analyzeEffectParams = useCallback(async (effectId: string) => {
+        const effect = savedEffects.find(e => e.id === effectId);
+        if (!effect || !effect.code) return;
+
+        // 标记正在分析
+        setSavedEffects(prev => prev.map(e =>
+            e.id === effectId ? { ...e, paramsAnalyzing: true } : e
+        ));
+
+        try {
+            const res = await fetch('/api/ai/analyze-code', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: effect.code })
+            });
+            const data = await res.json();
+
+            if (data.params && data.params.length > 0) {
+                const paramsWithId: EditableParam[] = data.params.map((p: any) => ({
+                    ...p,
+                    id: generateId(),
+                    originalValue: p.value
+                }));
+
+                setSavedEffects(prev => prev.map(e =>
+                    e.id === effectId
+                        ? { ...e, params: paramsWithId, paramsAnalyzing: false }
+                        : e
+                ));
+                console.log(`[Creation Mode] Analyzed ${paramsWithId.length} params for effect ${effectId}`);
+            } else {
+                setSavedEffects(prev => prev.map(e =>
+                    e.id === effectId
+                        ? { ...e, paramsAnalyzing: false }
+                        : e
+                ));
+                console.log(`[Creation Mode] No params found for effect ${effectId}`);
+            }
+        } catch (err) {
+            console.error('[Creation Mode] Param analysis failed:', err);
+            setSavedEffects(prev => prev.map(e =>
+                e.id === effectId
+                    ? { ...e, paramsAnalyzing: false }
+                    : e
+            ));
+        }
+    }, [savedEffects]);
+
     // === 切换效果开关 ===
     const handleToggleEffect = useCallback((effectId: string) => {
         setSavedEffects(prev => prev.map(e => {
@@ -1360,7 +1409,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
 
         // 序列化当前效果（不包含 objects 和 createdAt）
         const currentEffectsStr = JSON.stringify(
-            savedEffects.map(e => ({ id: e.id, name: e.name, code: e.code, isActive: e.isActive }))
+            savedEffects.map(e => ({ id: e.id, name: e.name, code: e.code, isActive: e.isActive, params: e.params }))
         );
 
         // 内容相同则跳过保存
@@ -1374,7 +1423,8 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 name: e.name,
                 code: e.code,
                 isActive: e.isActive,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                params: e.params  // 持久化参数到云端
             }));
 
             await saveCloudConfig({ creationEffects: cloudEffects });
@@ -1980,6 +2030,10 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                                                     params: effect.params,
                                                                                     paramsAnalyzing: effect.paramsAnalyzing
                                                                                 });
+                                                                                // 如果没有参数且未在分析中，触发按需分析
+                                                                                if ((!effect.params || effect.params.length === 0) && !effect.paramsAnalyzing) {
+                                                                                    analyzeEffectParams(effect.id);
+                                                                                }
                                                                             } else if (onEffectSelect) {
                                                                                 onEffectSelect(null);
                                                                             }
