@@ -1211,101 +1211,147 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
     useEffect(() => {
         if (effectsLoaded || !userId) return;
 
-        const loadEffectsFromCloud = async () => {
-            try {
-                const config = await loadCloudConfig();
-                if (config?.creationEffects && config.creationEffects.length > 0) {
-                    console.log('[Creation Mode] Loading', config.creationEffects.length, 'effects from cloud');
+        let cancelled = false;
+        let cleanupSceneListener: (() => void) | null = null;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-                    // 等待场景初始化（最多 10 秒）
-                    let context = (window as any).xingPlanetScene;
-                    let waitTime = 0;
-                    while (!context && waitTime < 10000) {
-                        await new Promise(r => setTimeout(r, 500));
-                        waitTime += 500;
-                        context = (window as any).xingPlanetScene;
-                    }
+        const restoreEffects = async (config: any, context: any) => {
+            const restoredEffects: SavedEffect[] = [];
 
-                    if (!context) {
-                        console.warn('[Creation Mode] Scene not ready after 10s, skipping effect restoration');
-                        setEffectsLoaded(true);
-                        return;
-                    }
+            for (const cloudEffect of config.creationEffects) {
+                try {
+                    const newObjects: any[] = [];
 
-                    const restoredEffects: SavedEffect[] = [];
+                    if (context && cloudEffect.isActive) {
+                        const {
+                            scene, THREE, camera, renderer, controls,
+                            registerUpdate, unregisterUpdate,
+                            bloomPass, setBloom, setFog
+                        } = context;
+                        const childrenBefore = new Set(scene.children);
 
-                    for (const cloudEffect of config.creationEffects) {
-                        try {
-                            // 重新执行代码来恢复对象
-                            const newObjects: any[] = [];
-                            if (context && cloudEffect.isActive) {
-                                const {
-                                    scene, THREE, camera, renderer, controls,
-                                    registerUpdate, unregisterUpdate,
-                                    bloomPass, setBloom, setFog
-                                } = context;
-                                const childrenBefore = new Set(scene.children);
+                        const func = new Function(
+                            'scene', 'THREE', 'camera', 'renderer', 'controls',
+                            'registerUpdate', 'unregisterUpdate',
+                            'bloomPass', 'setBloom', 'setFog',
+                            'document',
+                            cloudEffect.code
+                        );
+                        const result = func(
+                            scene, THREE, camera, renderer, controls,
+                            registerUpdate, unregisterUpdate,
+                            bloomPass, setBloom, setFog,
+                            document
+                        );
 
-                                const func = new Function(
-                                    'scene', 'THREE', 'camera', 'renderer', 'controls',
-                                    'registerUpdate', 'unregisterUpdate',
-                                    'bloomPass', 'setBloom', 'setFog',
-                                    'document',
-                                    cloudEffect.code
-                                );
-                                const result = func(
-                                    scene, THREE, camera, renderer, controls,
-                                    registerUpdate, unregisterUpdate,
-                                    bloomPass, setBloom, setFog,
-                                    document
-                                );
-
-                                scene.children.forEach((child: any) => {
-                                    if (!childrenBefore.has(child)) {
-                                        newObjects.push(child);
-                                    }
-                                });
-                                if (result && result.isObject3D && !newObjects.includes(result)) {
-                                    newObjects.push(result);
-                                }
+                        scene.children.forEach((child: any) => {
+                            if (!childrenBefore.has(child)) {
+                                newObjects.push(child);
                             }
-
-                            restoredEffects.push({
-                                id: cloudEffect.id,
-                                name: cloudEffect.name,
-                                code: cloudEffect.code,
-                                objects: newObjects,
-                                isActive: cloudEffect.isActive
-                            });
-                        } catch (e) {
-                            console.error('[Creation Mode] Failed to restore effect:', cloudEffect.name, e);
-                            // 仍然添加到列表，但没有对象
-                            restoredEffects.push({
-                                id: cloudEffect.id,
-                                name: cloudEffect.name,
-                                code: cloudEffect.code,
-                                objects: [],
-                                isActive: false
-                            });
+                        });
+                        if (result && result.isObject3D && !newObjects.includes(result)) {
+                            newObjects.push(result);
                         }
                     }
 
-                    setSavedEffects(restoredEffects);
-                    // 更新同步记录，防止立即触发保存覆盖云端数据
-                    lastSyncedEffectsRef.current = JSON.stringify(
-                        restoredEffects.map(e => ({ id: e.id, name: e.name, code: e.code, isActive: e.isActive }))
-                    );
-                    console.log('[Creation Mode] Restored', restoredEffects.length, 'effects');
+                    restoredEffects.push({
+                        id: cloudEffect.id,
+                        name: cloudEffect.name,
+                        code: cloudEffect.code,
+                        objects: newObjects,
+                        isActive: cloudEffect.isActive,
+                        params: cloudEffect.params
+                    });
+                } catch (e) {
+                    console.error('[Creation Mode] Failed to restore effect:', cloudEffect.name, e);
+                    restoredEffects.push({
+                        id: cloudEffect.id,
+                        name: cloudEffect.name,
+                        code: cloudEffect.code,
+                        objects: [],
+                        isActive: false,
+                        params: cloudEffect.params
+                    });
                 }
-            } catch (e) {
-                console.error('[Creation Mode] Failed to load effects from cloud:', e);
             }
+
+            if (cancelled) return;
+
+            setSavedEffects(restoredEffects);
+            lastSyncedEffectsRef.current = JSON.stringify(
+                restoredEffects.map(e => ({ id: e.id, name: e.name, code: e.code, isActive: e.isActive }))
+            );
+            console.log('[Creation Mode] Restored', restoredEffects.length, 'effects');
             setEffectsLoaded(true);
         };
 
-        // 延迟加载，确保场景已初始化
-        const timer = setTimeout(loadEffectsFromCloud, 2000);
-        return () => clearTimeout(timer);
+        const loadAndMaybeRestore = async () => {
+            try {
+                const config = await loadCloudConfig();
+                if (cancelled) return;
+
+                if (!config?.creationEffects || config.creationEffects.length === 0) {
+                    setEffectsLoaded(true);
+                    return;
+                }
+
+                console.log('[Creation Mode] Loading', config.creationEffects.length, 'effects from cloud');
+
+                const tryRestoreNow = async () => {
+                    const context = (window as any).xingPlanetScene;
+                    if (context) {
+                        await restoreEffects(config, context);
+                        return true;
+                    }
+                    return false;
+                };
+
+                // 1) 如果场景已就绪，直接恢复
+                if (await tryRestoreNow()) return;
+
+                // 2) 否则监听场景就绪事件（方案A），等待恢复
+                const onSceneReady = async () => {
+                    if (cancelled) return;
+                    // 避免重复触发
+                    if (effectsLoaded) return;
+                    const context = (window as any).xingPlanetScene;
+                    if (!context) return;
+                    if (cleanupSceneListener) {
+                        cleanupSceneListener();
+                        cleanupSceneListener = null;
+                    }
+                    if (timeoutId) {
+                        clearTimeout(timeoutId);
+                        timeoutId = null;
+                    }
+                    await restoreEffects(config, context);
+                };
+
+                window.addEventListener('xing-planet-scene-ready', onSceneReady);
+                cleanupSceneListener = () => window.removeEventListener('xing-planet-scene-ready', onSceneReady);
+
+                // 3) 兜底超时：避免永远挂起
+                timeoutId = setTimeout(() => {
+                    if (cancelled) return;
+                    console.warn('[Creation Mode] Scene not ready after 30s, effect restoration deferred');
+                    // 注意：这里不把 effectsLoaded 置 true，保留后续 scene-ready 事件的恢复机会
+                }, 30000);
+
+            } catch (e) {
+                console.error('[Creation Mode] Failed to load effects from cloud:', e);
+                setEffectsLoaded(true);
+            }
+        };
+
+        // 小延迟：避免与场景初始化抢占主线程，但不再依赖 10s while 轮询
+        const timer = setTimeout(loadAndMaybeRestore, 2000);
+
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+            if (cleanupSceneListener) cleanupSceneListener();
+            if (timeoutId) clearTimeout(timeoutId);
+        };
     }, [userId, effectsLoaded, loadCloudConfig]);
 
     // === 云同步：保存效果到云端 ===
@@ -1920,7 +1966,25 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                                                 <div className="text-center text-white/30 text-xs py-2">暂无保存的效果</div>
                                                             ) : (
                                                                 savedEffects.map(effect => (
-                                                                    <div key={effect.id} className="flex items-center justify-between gap-2 py-1.5 px-2 hover:bg-white/5 rounded-lg group">
+                                                                    <div
+                                                                        key={effect.id}
+                                                                        className={`flex items-center justify-between gap-2 py-1.5 px-2 hover:bg-white/5 rounded-lg group cursor-pointer ${selectedEffectId === effect.id ? 'bg-blue-500/20 ring-1 ring-blue-400/50' : ''}`}
+                                                                        onClick={() => {
+                                                                            const newId = selectedEffectId === effect.id ? null : effect.id;
+                                                                            setSelectedEffectId(newId);
+                                                                            // 通知 App 层以渲染左侧参数面板
+                                                                            if (newId && onEffectSelect) {
+                                                                                onEffectSelect({
+                                                                                    id: effect.id,
+                                                                                    name: effect.name,
+                                                                                    params: effect.params,
+                                                                                    paramsAnalyzing: effect.paramsAnalyzing
+                                                                                });
+                                                                            } else if (onEffectSelect) {
+                                                                                onEffectSelect(null);
+                                                                            }
+                                                                        }}
+                                                                    >
                                                                         <span className={`text-xs truncate flex-1 ${effect.isActive ? 'text-white/80' : 'text-white/30'}`}>
                                                                             {effect.name}
                                                                         </span>

@@ -6766,6 +6766,9 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
       }
     };
 
+    // [CREATION MODE BRIDGE] 通知外部：主场景桥接已就绪（供 AI 面板恢复云端效果）
+    window.dispatchEvent(new CustomEvent('xing-planet-scene-ready'));
+
     // �𥕦遣�𤾸��?- 蝘餃𢆡蝡舫�雿𤾸�颲函�
     const postProcessScale = isMobile ? 0.5 : 1.0;
     const ppWidth = Math.floor(width * postProcessScale);
@@ -7612,17 +7615,7 @@ const PlanetScene: React.FC<PlanetSceneProps> = ({
         afterimagePassRef.current.uniforms['damp'].value = settings.trailEnabled ? settings.trailLength : 0;
       }
     }
-    // Fog 更新 - 全局统一
-    if (sceneRef.current) {
-      if (settings.fogEnabled) {
-        const fogColorNum = parseInt((settings.fogColor ?? '#000508').replace('#', ''), 16);
-        sceneRef.current.fog = new THREE.FogExp2(fogColorNum, settings.fogDensity ?? 0.0005);
-      } else {
-        sceneRef.current.fog = null;
-      }
-    }
   }, [settings.bloomStrength, settings.bloomRadius, settings.bloomThreshold,
-  settings.fogEnabled, settings.fogColor, settings.fogDensity,
   settings.trailEnabled, settings.trailLength, overlayMode, nebulaSettings?.overlayBloomStrength, nebulaSettings?.trailEnabled, nebulaSettings?.trailLength]);
 
   // 侧边栏展开时调整相机目标点，使场景内容在左侧可见区域居中

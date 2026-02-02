@@ -11248,41 +11248,8 @@ const ControlPanel: React.FC<ControlPanelProps & { nebulaPresets: NebulaPreset[]
                   <div className="space-y-1">
                     <RangeControl label="强度" value={planetSettings.bloomStrength} min={0} max={10} step={0.1} onChange={(v) => setPlanetSettings(prev => ({ ...prev, bloomStrength: v }))} />
                     <RangeControl label="扩散半径" value={planetSettings.bloomRadius ?? 0.4} min={0} max={2} step={0.05} onChange={(v) => setPlanetSettings(prev => ({ ...prev, bloomRadius: v }))} />
-                    <RangeControl label="亮度阈值" value={planetSettings.bloomThreshold ?? 0.85} min={0} max={1} step={0.05} onChange={(v) => setPlanetSettings(prev => ({ ...prev, bloomThreshold: v }))} />
+                    <RangeControl label="亮度阈值" value={planetSettings.bloomThreshold ?? 0.85} min={0} max={2} step={0.05} onChange={(v) => setPlanetSettings(prev => ({ ...prev, bloomThreshold: v }))} />
                   </div>
-                </div>
-
-                {/* Fog 雾效 - 全局统一 */}
-                <div className="mb-3 p-2 bg-gray-800 rounded">
-                  <div className="flex items-center justify-between text-xs text-gray-300 mb-2">
-                    <span className="font-medium">🌫️ 雾效</span>
-                    <button
-                      onClick={() => setPlanetSettings(prev => ({ ...prev, fogEnabled: !prev.fogEnabled }))}
-                      className="px-2 py-0.5 text-[10px] rounded transition-all font-medium"
-                      style={{
-                        background: planetSettings.fogEnabled ? 'rgba(var(--ui-secondary-rgb, 165, 180, 252), 0.3)' : 'rgba(120, 120, 120, 0.3)',
-                        backdropFilter: 'blur(8px)',
-                        border: planetSettings.fogEnabled ? '1px solid var(--ui-secondary)' : '1px solid rgba(255,255,255,0.1)',
-                        color: planetSettings.fogEnabled ? 'var(--ui-secondary)' : 'rgba(255,255,255,0.5)',
-                      }}
-                    >
-                      {planetSettings.fogEnabled ? '已启用' : '已禁用'}
-                    </button>
-                  </div>
-                  {planetSettings.fogEnabled && (
-                    <div className="space-y-2">
-                      <div>
-                        <label className="text-[10px] text-gray-400 block mb-1">颜色</label>
-                        <input
-                          type="color"
-                          value={planetSettings.fogColor ?? '#000508'}
-                          onChange={(e) => setPlanetSettings(prev => ({ ...prev, fogColor: e.target.value }))}
-                          className="w-full h-6 rounded cursor-pointer bg-transparent border border-gray-600"
-                        />
-                      </div>
-                      <RangeControl label="密度" value={(planetSettings.fogDensity ?? 0.0005) * 10000} min={0} max={100} step={1} onChange={(v) => setPlanetSettings(prev => ({ ...prev, fogDensity: v / 10000 }))} />
-                    </div>
-                  )}
                 </div>
               </ControlGroup>
 
