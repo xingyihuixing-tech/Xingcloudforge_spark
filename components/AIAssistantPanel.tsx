@@ -211,6 +211,7 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         isActive: boolean;
         params?: EditableParam[];      // 可编辑参数
         paramsAnalyzing?: boolean;     // 正在分析参数
+        updateIds?: string[];          // 注册的动画回调 ID（用于清理）
     }
     // 云端存储的数据结构（不包含 objects）
     interface CloudSavedEffect {
@@ -1042,22 +1043,70 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 const context = (window as any).xingPlanetScene;
                 if (context) {
                     if (e.isActive) {
-                        // 关闭：从场景移除
-                        e.objects.forEach(obj => context.scene.remove(obj));
-                        return { ...e, isActive: false };
-                    } else {
-                        // 开启：检查 objects 是否为空
-                        let objectsToAdd = e.objects;
+                        // === 关闭效果：完整清理 ===
+                        const { scene, unregisterUpdate } = context;
 
-                        if (objectsToAdd.length === 0 && e.code) {
-                            // objects 为空，需要重新执行代码创建对象
+                        // 1. 清理注册的动画回调
+                        if (e.updateIds && e.updateIds.length > 0) {
+                            e.updateIds.forEach(id => {
+                                try { unregisterUpdate(id); } catch (err) { /* ignore */ }
+                            });
+                            console.log(`[Creation Mode] Unregistered ${e.updateIds.length} update callbacks`);
+                        }
+
+                        // 2. 从场景移除并 dispose Three.js 对象
+                        e.objects.forEach(obj => {
+                            scene.remove(obj);
+                            // 递归 dispose 所有子对象
+                            obj.traverse?.((child: any) => {
+                                if (child.geometry) child.geometry.dispose();
+                                if (child.material) {
+                                    if (Array.isArray(child.material)) {
+                                        child.material.forEach((m: any) => {
+                                            m.map?.dispose();
+                                            m.dispose();
+                                        });
+                                    } else {
+                                        child.material.map?.dispose();
+                                        child.material.dispose();
+                                    }
+                                }
+                            });
+                        });
+                        console.log(`[Creation Mode] Disposed ${e.objects.length} objects`);
+
+                        return { ...e, isActive: false, objects: [], updateIds: [] };
+                    } else {
+                        // === 开启效果：重新执行代码 ===
+                        let objectsToAdd: any[] = [];
+                        let collectedUpdateIds: string[] = [];
+
+                        if (e.code) {
                             try {
                                 const {
                                     scene, THREE, camera, renderer, controls,
                                     registerUpdate, unregisterUpdate,
-                                    bloomPass, setBloom, setFog
+                                    bloomPass
                                 } = context;
+
+                                // 保存当前全局效果设置
+                                const savedBloom = bloomPass ? {
+                                    strength: bloomPass.strength,
+                                    radius: bloomPass.radius,
+                                    threshold: bloomPass.threshold
+                                } : null;
+
                                 const childrenBefore = new Set(scene.children);
+
+                                // 创建包装的 registerUpdate 来追踪 ID
+                                const trackedRegisterUpdate = (id: string, fn: Function) => {
+                                    collectedUpdateIds.push(id);
+                                    registerUpdate(id, fn);
+                                };
+
+                                // 创建空的 setBloom/setFog 函数防止代码修改全局效果
+                                const noopSetBloom = () => { console.log('[Creation Mode] setBloom blocked'); };
+                                const noopSetFog = () => { console.log('[Creation Mode] setFog blocked'); };
 
                                 const cleanCode = e.code.replace(/```javascript|```/g, '').trim();
                                 const func = new Function(
@@ -1069,31 +1118,33 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                                 );
                                 const result = func(
                                     scene, THREE, camera, renderer, controls,
-                                    registerUpdate, unregisterUpdate,
-                                    bloomPass, setBloom, setFog,
+                                    trackedRegisterUpdate, unregisterUpdate,
+                                    bloomPass, noopSetBloom, noopSetFog,
                                     document
                                 );
 
-                                const newObjects: any[] = [];
+                                // 恢复全局效果设置
+                                if (savedBloom && bloomPass) {
+                                    bloomPass.strength = savedBloom.strength;
+                                    bloomPass.radius = savedBloom.radius;
+                                    bloomPass.threshold = savedBloom.threshold;
+                                }
+
                                 scene.children.forEach((child: any) => {
                                     if (!childrenBefore.has(child)) {
-                                        newObjects.push(child);
+                                        objectsToAdd.push(child);
                                     }
                                 });
-                                if (result && result.isObject3D && !newObjects.includes(result)) {
-                                    newObjects.push(result);
+                                if (result && result.isObject3D && !objectsToAdd.includes(result)) {
+                                    objectsToAdd.push(result);
                                 }
-                                objectsToAdd = newObjects;
-                                console.log('[Creation Mode] Re-executed code, created', newObjects.length, 'objects');
+                                console.log(`[Creation Mode] Executed code, created ${objectsToAdd.length} objects, ${collectedUpdateIds.length} updates`);
                             } catch (err) {
-                                console.error('[Creation Mode] Failed to re-execute code:', err);
+                                console.error('[Creation Mode] Failed to execute code:', err);
                             }
-                        } else {
-                            // objects 不为空，直接添加回场景
-                            objectsToAdd.forEach(obj => context.scene.add(obj));
                         }
 
-                        return { ...e, objects: objectsToAdd, isActive: true };
+                        return { ...e, objects: objectsToAdd, updateIds: collectedUpdateIds, isActive: true };
                     }
                 }
                 return { ...e, isActive: !e.isActive };
@@ -1107,10 +1158,36 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
         setSavedEffects(prev => {
             const effect = prev.find(e => e.id === effectId);
             if (effect) {
-                // 优先使用独立画布
                 const context = (window as any).xingPlanetScene;
                 if (context && effect.isActive) {
-                    effect.objects.forEach(obj => context.scene.remove(obj));
+                    const { scene, unregisterUpdate } = context;
+
+                    // 1. 清理注册的动画回调
+                    if (effect.updateIds && effect.updateIds.length > 0) {
+                        effect.updateIds.forEach(id => {
+                            try { unregisterUpdate(id); } catch (err) { /* ignore */ }
+                        });
+                    }
+
+                    // 2. 从场景移除并 dispose Three.js 对象
+                    effect.objects.forEach(obj => {
+                        scene.remove(obj);
+                        obj.traverse?.((child: any) => {
+                            if (child.geometry) child.geometry.dispose();
+                            if (child.material) {
+                                if (Array.isArray(child.material)) {
+                                    child.material.forEach((m: any) => {
+                                        m.map?.dispose();
+                                        m.dispose();
+                                    });
+                                } else {
+                                    child.material.map?.dispose();
+                                    child.material.dispose();
+                                }
+                            }
+                        });
+                    });
+                    console.log(`[Creation Mode] Deleted effect, disposed ${effect.objects.length} objects`);
                 }
             }
             return prev.filter(e => e.id !== effectId);
@@ -1172,20 +1249,62 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                 });
             }
 
-            // 3. 移除旧对象
+            // 3. 移除旧对象并清理动画回调
             const context = (window as any).xingPlanetScene;
             if (context && effect.isActive) {
-                effect.objects.forEach(obj => context.scene.remove(obj));
+                const { scene, unregisterUpdate } = context;
+
+                // 清理旧的动画回调
+                if (effect.updateIds && effect.updateIds.length > 0) {
+                    effect.updateIds.forEach(id => {
+                        try { unregisterUpdate(id); } catch (err) { /* ignore */ }
+                    });
+                }
+
+                // 移除并 dispose 旧对象
+                effect.objects.forEach(obj => {
+                    scene.remove(obj);
+                    obj.traverse?.((child: any) => {
+                        if (child.geometry) child.geometry.dispose();
+                        if (child.material) {
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach((m: any) => { m.map?.dispose(); m.dispose(); });
+                            } else {
+                                child.material.map?.dispose();
+                                child.material.dispose();
+                            }
+                        }
+                    });
+                });
             }
 
             // 4. 重新执行代码
             let newObjects: any[] = [];
+            let newUpdateIds: string[] = [];
             if (context && effect.isActive) {
                 try {
                     const { scene, THREE, camera, renderer, controls,
                         registerUpdate, unregisterUpdate,
-                        bloomPass, setBloom, setFog } = context;
+                        bloomPass } = context;
+
+                    // 保存当前全局效果设置
+                    const savedBloom = bloomPass ? {
+                        strength: bloomPass.strength,
+                        radius: bloomPass.radius,
+                        threshold: bloomPass.threshold
+                    } : null;
+
                     const childrenBefore = new Set(scene.children);
+
+                    // 追踪动画 ID
+                    const trackedRegisterUpdate = (id: string, fn: Function) => {
+                        newUpdateIds.push(id);
+                        registerUpdate(id, fn);
+                    };
+
+                    // 阻止修改全局效果
+                    const noopSetBloom = () => { };
+                    const noopSetFog = () => { };
 
                     const func = new Function(
                         'scene', 'THREE', 'camera', 'renderer', 'controls',
@@ -1194,22 +1313,30 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
                         newCode
                     );
                     func(scene, THREE, camera, renderer, controls,
-                        registerUpdate, unregisterUpdate,
-                        bloomPass, setBloom, setFog, document);
+                        trackedRegisterUpdate, unregisterUpdate,
+                        bloomPass, noopSetBloom, noopSetFog, document);
+
+                    // 恢复全局效果设置
+                    if (savedBloom && bloomPass) {
+                        bloomPass.strength = savedBloom.strength;
+                        bloomPass.radius = savedBloom.radius;
+                        bloomPass.threshold = savedBloom.threshold;
+                    }
 
                     scene.children.forEach((child: any) => {
                         if (!childrenBefore.has(child)) {
                             newObjects.push(child);
                         }
                     });
-                    console.log(`[Creation Mode] Re-executed with updated param, created ${newObjects.length} objects`);
+                    console.log(`[Creation Mode] Re-executed with updated param, created ${newObjects.length} objects, ${newUpdateIds.length} updates`);
                 } catch (err) {
                     console.error('[Creation Mode] Re-execution failed:', err);
                     newObjects = effect.objects; // 保持原对象
+                    newUpdateIds = effect.updateIds || [];
                 }
             }
 
-            return { ...effect, params: newParams, code: newCode, objects: newObjects };
+            return { ...effect, params: newParams, code: newCode, objects: newObjects, updateIds: newUpdateIds };
         }));
     }, []);
 

@@ -27,6 +27,11 @@ const ANALYZE_PROMPT = `分析以下 Three.js 代码，提取所有可以被用�
 4. 忽略临时变量、循环变量、数组索引
 5. 为每个参数推断合理的 min/max/step 范围
 
+重要排除规则（必须遵守）：
+- 排除所有与全局后处理效果相关的变量：bloom、bloomStrength、bloomRadius、bloomThreshold、fog、fogEnabled、fogColor、fogDensity
+- 排除任何调用 setBloom() 或 setFog() 相关的参数
+- 只提取与当前3D对象本身相关的参数（如尺寸、颜色、数量、速度等）
+
 返回 JSON 数组格式，每个元素包含：
 {
   "name": "中文参数名称",
