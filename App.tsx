@@ -1927,6 +1927,12 @@ const App: React.FC = () => {
               });
               window.dispatchEvent(event);
             }}
+            onReanalyze={(effectId) => {
+              const event = new CustomEvent('ai-effect-reanalyze', {
+                detail: { effectId }
+              });
+              window.dispatchEvent(event);
+            }}
           />
         </div>
       )}

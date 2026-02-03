@@ -1371,17 +1371,23 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({
             const detail = (e as CustomEvent).detail;
             handleInternalResetAllParams(detail.effectId);
         };
+        const onReanalyze = (e: Event) => {
+            const detail = (e as CustomEvent).detail;
+            analyzeEffectParams(detail.effectId);
+        };
 
         window.addEventListener('ai-effect-param-change', onParamChange);
         window.addEventListener('ai-effect-param-reset', onResetParam);
         window.addEventListener('ai-effect-all-params-reset', onResetAllParams);
+        window.addEventListener('ai-effect-reanalyze', onReanalyze);
 
         return () => {
             window.removeEventListener('ai-effect-param-change', onParamChange);
             window.removeEventListener('ai-effect-param-reset', onResetParam);
             window.removeEventListener('ai-effect-all-params-reset', onResetAllParams);
+            window.removeEventListener('ai-effect-reanalyze', onReanalyze);
         };
-    }, [handleInternalParamChange, handleInternalResetParam, handleInternalResetAllParams]);
+    }, [handleInternalParamChange, handleInternalResetParam, handleInternalResetAllParams, analyzeEffectParams]);
 
     // === 云同步：从云端加载效果并重新执行代码 ===
     useEffect(() => {

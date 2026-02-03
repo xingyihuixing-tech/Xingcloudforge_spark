@@ -35,13 +35,15 @@ interface AIEffectParamsPanelProps {
     onParamChange: (effectId: string, paramId: string, newValue: any) => void;
     onResetParam: (effectId: string, paramId: string) => void;
     onResetAllParams: (effectId: string) => void;
+    onReanalyze?: (effectId: string) => void;  // 重新分析回调
 }
 
 const AIEffectParamsPanel: React.FC<AIEffectParamsPanelProps> = ({
     selectedEffect,
     onParamChange,
     onResetParam,
-    onResetAllParams
+    onResetAllParams,
+    onReanalyze
 }) => {
     // 未选中效果
     if (!selectedEffect) {
@@ -83,18 +85,29 @@ const AIEffectParamsPanel: React.FC<AIEffectParamsPanelProps> = ({
 
     return (
         <div className="p-2">
-            {/* 标题 */}
-            <div className="flex items-center justify-between mb-3 px-1">
+            {/* 标题和操作栏 */}
+            <div className="flex items-center justify-between mb-2 px-1">
                 <div className="text-xs text-white/90 font-medium truncate flex-1">
                     {selectedEffect.name}
                 </div>
-                <button
-                    onClick={() => onResetAllParams(selectedEffect.id)}
-                    className="text-[10px] text-gray-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
-                    title="重置所有参数"
-                >
-                    ↺ 全部重置
-                </button>
+                <div className="flex items-center gap-1">
+                    {onReanalyze && (
+                        <button
+                            onClick={() => onReanalyze(selectedEffect.id)}
+                            className="text-[10px] text-blue-400 hover:text-blue-300 px-1.5 py-0.5 rounded hover:bg-blue-500/10 transition-colors"
+                            title="重新分析参数"
+                        >
+                            🔄 重新分析
+                        </button>
+                    )}
+                    <button
+                        onClick={() => onResetAllParams(selectedEffect.id)}
+                        className="text-[10px] text-gray-400 hover:text-white px-1.5 py-0.5 rounded hover:bg-white/10 transition-colors"
+                        title="重置所有参数"
+                    >
+                        ↺ 重置
+                    </button>
+                </div>
             </div>
 
             {/* 参数列表 */}
@@ -172,8 +185,8 @@ const AIEffectParamsPanel: React.FC<AIEffectParamsPanelProps> = ({
                             <button
                                 onClick={() => onParamChange(selectedEffect.id, param.id, !param.value)}
                                 className={`w-full px-2 py-1 text-[10px] rounded transition-all ${param.value
-                                        ? 'bg-green-500/30 text-green-300 border border-green-500/30'
-                                        : 'bg-gray-500/30 text-gray-400 border border-gray-500/30'
+                                    ? 'bg-green-500/30 text-green-300 border border-green-500/30'
+                                    : 'bg-gray-500/30 text-gray-400 border border-gray-500/30'
                                     }`}
                             >
                                 {param.value ? '✓ 开启' : '✗ 关闭'}
