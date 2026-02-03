@@ -72,19 +72,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        // 使用 Gemini 2.0 Flash 分析（通过 chat proxy）
+        // 使用 Claude Sonnet 分析（通过 chat proxy）
         const baseUrl = process.env.CHAT_PROXY_BASE_URL || 'https://jimiai.ai/v1';
-        const apiKey = process.env.JIMIAI_API_KEY_GEMINI;
+        const apiKey = process.env.JIMIAI_API_KEY_CLAUDE;
 
         if (!apiKey) {
-            console.error('[analyze-code] Missing Gemini API Key');
+            console.error('[analyze-code] Missing Claude API Key');
             return res.status(500).json({ error: 'AI Config Missing', params: [] });
         }
 
         const prompt = ANALYZE_PROMPT.replace('CODE_PLACEHOLDER', code);
 
         const payload = {
-            model: 'gemini-3-flash-preview',
+            model: 'claude-sonnet-4-5-20250929',
             messages: [
                 { role: 'user', content: prompt }
             ],
