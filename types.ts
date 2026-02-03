@@ -1940,12 +1940,16 @@ export interface MaterialPreset {
 // - radial: 径向旋转对称
 // - kaleidoscope: 万花筒（旋转+镜像）
 // - starburst: 星芒（奇偶分割缩放+分形）
-// - vortex: 漩涡（随半径变化的旋转扭曲）
 // - sphere: 球面（2D映射到3D球体表面）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'vortex' | 'sphere';
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'sphere';
 
 // 对称模式可调参数
 export interface SymmetryParams {
+  // ========== 通用分形参数（适用于所有非 none 对称模式）==========
+  fractalLevels?: number;          // 分形层数, 1-4, 默认1 (1=关闭)
+  fractalScale?: number;           // 分形缩放, 0.3-0.8, 默认0.5
+  fractalAngle?: number;           // 分形角度偏移, 0-45°, 默认0
+
   // ========== 径向参数 ==========
   radialPhaseOffset?: number;      // 起始相位角度, 0-360°, 默认0
   radialScaleVariation?: number;   // 每份缩放变化幅度, 0-0.5, 默认0
@@ -1957,15 +1961,10 @@ export interface SymmetryParams {
   starburstInnerScale?: number;    // 内缩比例, 0.1-1.0, 默认0.5
   starburstOuterScale?: number;    // 外延比例, 1.0-2.0, 默认1.3
   starburstPhaseOffset?: number;   // 相位偏移, 0-360°, 默认0
-  starburstFractalLevels?: number; // 分形层数, 1-4, 默认1
-  starburstFractalScale?: number;  // 分形缩放, 0.3-0.8, 默认0.5
-  starburstFractalAngle?: number;  // 分形角度偏移, 0-45°, 默认0
-
-  // ========== 漩涡参数 ==========
-  vortexTwistFactor?: number;      // 扭曲强度, 0-5, 默认2.0
-  vortexTwistDecay?: number;       // 衰减系数, 0.5-6, 默认3.0
-  vortexDirection?: number;        // 旋转方向, -1=顺时针, 1=逆时针, 默认1
-  vortexCenterOffset?: number;     // 中心偏移量, 0-0.3, 默认0
+  // 向后兼容：旧版星芒分形参数（优先使用通用参数）
+  starburstFractalLevels?: number; // @deprecated 使用 fractalLevels
+  starburstFractalScale?: number;  // @deprecated 使用 fractalScale
+  starburstFractalAngle?: number;  // @deprecated 使用 fractalAngle
 
   // ========== 球面参数 ==========
   sphereRadius?: number;           // 球体半径, 0.2-1.0, 默认0.5

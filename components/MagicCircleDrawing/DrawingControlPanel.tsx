@@ -105,7 +105,6 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
         { mode: 'radial', label: '径向' },
         { mode: 'kaleidoscope', label: '万花筒' },
         { mode: 'starburst', label: '星芒' },
-        { mode: 'vortex', label: '漩涡' },
         { mode: 'sphere', label: '球面' }
     ];
 
@@ -322,6 +321,50 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                 <span className="text-xs text-white w-8 text-center">{(currentLayer?.rotationSpeed ?? 0).toFixed(1)}</span>
                             </div>
 
+                            {/* ========== 通用分形设置（适用于所有对称模式）========== */}
+                            <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
+                                <div className="text-xs text-gray-500 font-medium">分形设置</div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-400 w-16">分形层数</span>
+                                    <input
+                                        type="range"
+                                        min={1}
+                                        max={4}
+                                        step={1}
+                                        value={symmetryParams?.fractalLevels ?? symmetryParams?.starburstFractalLevels ?? 1}
+                                        onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, fractalLevels: Number(e.target.value) })}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                    />
+                                    <span className="text-xs text-white w-8 text-center">{symmetryParams?.fractalLevels ?? symmetryParams?.starburstFractalLevels ?? 1}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-400 w-16">分形缩放</span>
+                                    <input
+                                        type="range"
+                                        min={0.3}
+                                        max={0.8}
+                                        step={0.05}
+                                        value={symmetryParams?.fractalScale ?? symmetryParams?.starburstFractalScale ?? 0.5}
+                                        onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, fractalScale: Number(e.target.value) })}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                    />
+                                    <span className="text-xs text-white w-8 text-center">{(symmetryParams?.fractalScale ?? symmetryParams?.starburstFractalScale ?? 0.5).toFixed(2)}</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-400 w-16">分形角度</span>
+                                    <input
+                                        type="range"
+                                        min={0}
+                                        max={45}
+                                        step={5}
+                                        value={symmetryParams?.fractalAngle ?? symmetryParams?.starburstFractalAngle ?? 0}
+                                        onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, fractalAngle: Number(e.target.value) })}
+                                        className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                    />
+                                    <span className="text-xs text-white w-8 text-center">{symmetryParams?.fractalAngle ?? symmetryParams?.starburstFractalAngle ?? 0}°</span>
+                                </div>
+                            </div>
+
                             {/* ========== 径向参数 ========== */}
                             {symmetryMode === 'radial' && (
                                 <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
@@ -402,102 +445,10 @@ export const DrawingControlPanel: React.FC<DrawingControlPanelProps> = ({
                                         />
                                         <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstOuterScale ?? 1.0).toFixed(2)}</span>
                                     </div>
-                                    <div className="text-xs text-gray-500 font-medium mt-2">分形设置</div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">分形层数</span>
-                                        <input
-                                            type="range"
-                                            min={1}
-                                            max={4}
-                                            step={1}
-                                            value={symmetryParams?.starburstFractalLevels ?? 1}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstFractalLevels: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstFractalLevels ?? 1}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">分形缩放</span>
-                                        <input
-                                            type="range"
-                                            min={0.3}
-                                            max={0.8}
-                                            step={0.05}
-                                            value={symmetryParams?.starburstFractalScale ?? 0.5}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstFractalScale: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.starburstFractalScale ?? 0.5).toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">分形角度</span>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={45}
-                                            step={5}
-                                            value={symmetryParams?.starburstFractalAngle ?? 0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, starburstFractalAngle: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{symmetryParams?.starburstFractalAngle ?? 0}°</span>
-                                    </div>
                                 </div>
                             )}
 
-                            {/* ========== 漩涡参数 ========== */}
-                            {symmetryMode === 'vortex' && (
-                                <div className="space-y-2 mt-2 pt-2 border-t border-white/10">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">扭曲强度</span>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={5}
-                                            step={0.1}
-                                            value={symmetryParams?.vortexTwistFactor ?? 0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, vortexTwistFactor: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.vortexTwistFactor ?? 0).toFixed(1)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">衰减系数</span>
-                                        <input
-                                            type="range"
-                                            min={0.5}
-                                            max={6}
-                                            step={0.1}
-                                            value={symmetryParams?.vortexTwistDecay ?? 3.0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, vortexTwistDecay: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.vortexTwistDecay ?? 3.0).toFixed(1)}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">旋转方向</span>
-                                        <button
-                                            onClick={() => onUpdateSymmetryParams({ ...symmetryParams, vortexDirection: (symmetryParams?.vortexDirection ?? 1) * -1 })}
-                                            className="flex-1 px-2 py-1 text-xs rounded bg-gray-700 hover:bg-gray-600 text-white"
-                                        >
-                                            {(symmetryParams?.vortexDirection ?? 1) > 0 ? '逆时针 ↺' : '顺时针 ↻'}
-                                        </button>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-400 w-16">中心偏移</span>
-                                        <input
-                                            type="range"
-                                            min={0}
-                                            max={0.3}
-                                            step={0.02}
-                                            value={symmetryParams?.vortexCenterOffset ?? 0}
-                                            onChange={(e) => onUpdateSymmetryParams({ ...symmetryParams, vortexCenterOffset: Number(e.target.value) })}
-                                            className="flex-1 h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-cyan-500"
-                                        />
-                                        <span className="text-xs text-white w-8 text-center">{(symmetryParams?.vortexCenterOffset ?? 0).toFixed(2)}</span>
-                                    </div>
-                                </div>
-                            )}
+
 
                             {/* ========== 球面参数 ========== */}
                             {symmetryMode === 'sphere' && (

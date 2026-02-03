@@ -297,43 +297,78 @@ export function applySymmetryTransform(
     const radius = Math.sqrt(dx * dx + dy * dy);
     const baseAngle = Math.atan2(dy, dx);
 
+    // 通用分形参数（优先使用通用参数，回退到星芒专属参数以兼容旧数据）
+    const fractalLevels = params?.fractalLevels ?? params?.starburstFractalLevels ?? 1;
+    const fractalScale = params?.fractalScale ?? params?.starburstFractalScale ?? 0.5;
+    const fractalAngle = ((params?.fractalAngle ?? params?.starburstFractalAngle ?? 0) / 180) * Math.PI;
+
     if (mode === 'radial') {
-        // 径向对称：简单旋转复制
+        // 径向对称：旋转复制 + 分形
         const phaseOffset = ((params?.radialPhaseOffset ?? 0) / 180) * Math.PI;
         const scaleVariation = params?.radialScaleVariation ?? 0;
-        for (let i = 0; i < divisions; i++) {
-            const angle = baseAngle + angleStep * i + phaseOffset;
-            const scale = 1.0 + ((i % 2 === 0) ? scaleVariation : -scaleVariation);
-            const scaledRadius = radius * scale;
-            results.push({
-                x: scaledRadius * Math.cos(angle),
-                y: scaledRadius * Math.sin(angle)
-            });
+
+        function generateRadialFractal(
+            cx: number, cy: number,
+            baseRadius: number,
+            level: number,
+            parentAngle: number
+        ) {
+            for (let i = 0; i < divisions; i++) {
+                const angle = parentAngle + angleStep * i + phaseOffset;
+                const scale = 1.0 + ((i % 2 === 0) ? scaleVariation : -scaleVariation);
+                const scaledRadius = baseRadius * scale;
+
+                const px = cx + scaledRadius * Math.cos(angle);
+                const py = cy + scaledRadius * Math.sin(angle);
+                results.push({ x: px, y: py });
+
+                // 分形递归：在每个分割点上生成子层
+                if (level < fractalLevels) {
+                    const childRadius = scaledRadius * fractalScale;
+                    generateRadialFractal(px, py, childRadius, level + 1, angle + fractalAngle);
+                }
+            }
         }
+
+        generateRadialFractal(0, 0, radius, 1, baseAngle);
+
     } else if (mode === 'kaleidoscope') {
-        // 万花筒模式：旋转+镜像
+        // 万花筒模式：旋转+镜像 + 分形
         const mirrorAngle = ((params?.kaleidoscopeMirrorAngle ?? 0) / 180) * Math.PI;
-        for (let i = 0; i < divisions; i++) {
-            const angle = baseAngle + angleStep * i;
-            results.push({
-                x: radius * Math.cos(angle),
-                y: radius * Math.sin(angle)
-            });
-            // 每份内部镜像（基于镜像轴角度）
-            const mirroredAngle = 2 * (angleStep * i + mirrorAngle) - angle;
-            results.push({
-                x: radius * Math.cos(mirroredAngle),
-                y: radius * Math.sin(mirroredAngle)
-            });
+
+        function generateKaleidoscopeFractal(
+            cx: number, cy: number,
+            baseRadius: number,
+            level: number,
+            parentAngle: number
+        ) {
+            for (let i = 0; i < divisions; i++) {
+                const angle = parentAngle + angleStep * i;
+                const px = cx + baseRadius * Math.cos(angle);
+                const py = cy + baseRadius * Math.sin(angle);
+                results.push({ x: px, y: py });
+
+                // 每份内部镜像（基于镜像轴角度）
+                const mirroredAngle = 2 * (angleStep * i + mirrorAngle) - angle;
+                const mx = cx + baseRadius * Math.cos(mirroredAngle);
+                const my = cy + baseRadius * Math.sin(mirroredAngle);
+                results.push({ x: mx, y: my });
+
+                // 分形递归：只在非镜像点上生成
+                if (level < fractalLevels) {
+                    const childRadius = baseRadius * fractalScale;
+                    generateKaleidoscopeFractal(px, py, childRadius, level + 1, angle + fractalAngle);
+                }
+            }
         }
+
+        generateKaleidoscopeFractal(0, 0, radius, 1, baseAngle);
+
     } else if (mode === 'starburst') {
         // 星芒模式：奇偶分割缩放 + 分形
         const innerScale = params?.starburstInnerScale ?? 1.0;
         const outerScale = params?.starburstOuterScale ?? 1.0;
         const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
-        const fractalLevels = params?.starburstFractalLevels ?? 1;
-        const fractalScale = params?.starburstFractalScale ?? 0.5;
-        const fractalAngle = ((params?.starburstFractalAngle ?? 0) / 180) * Math.PI;
 
         // 递归生成分形点
         function generateFractalPoints(
@@ -361,47 +396,50 @@ export function applySymmetryTransform(
         }
 
         generateFractalPoints(0, 0, radius, 1, baseAngle);
-    } else if (mode === 'vortex') {
-        // 漩涡模式：随半径旋转扭曲
-        const twistFactor = params?.vortexTwistFactor ?? 0;
-        const twistDecay = params?.vortexTwistDecay ?? 3.0;
-        const direction = params?.vortexDirection ?? 1;
-        const centerOffset = params?.vortexCenterOffset ?? 0;
-        for (let i = 0; i < divisions; i++) {
-            const angleOffset = angleStep * i;
-            const adjustedRadius = Math.max(0.001, radius - centerOffset);
-            const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
-            const angle = baseAngle + angleOffset + twistAngle;
-            results.push({
-                x: radius * Math.cos(angle),
-                y: radius * Math.sin(angle)
-            });
-        }
+
     } else if (mode === 'sphere') {
-        // 球面模式：2D映射到3D球体表面
+        // 球面模式：2D映射到3D球体表面 + 分形
         const R = params?.sphereRadius ?? 0.5;
         const latScale = params?.sphereLatScale ?? 1.0;
         const lonScale = params?.sphereLonScale ?? 1.0;
 
-        // 经纬度映射（带缩放）
-        const lat = dy * Math.PI * latScale;
-        const lon = dx * Math.PI * 2 * lonScale;
+        function generateSphereFractal(
+            baseDx: number, baseDy: number,
+            baseR: number,
+            level: number,
+            parentRotAngle: number
+        ) {
+            // 经纬度映射（带缩放）
+            const lat = baseDy * Math.PI * latScale;
+            const lon = baseDx * Math.PI * 2 * lonScale;
 
-        // 球坐标转笛卡尔坐标
-        const bx = R * Math.cos(lat) * Math.sin(lon);
-        const by = R * Math.sin(lat);
-        const bz = R * Math.cos(lat) * Math.cos(lon);
+            // 球坐标转笛卡尔坐标
+            const bx = baseR * Math.cos(lat) * Math.sin(lon);
+            const by = baseR * Math.sin(lat);
+            const bz = baseR * Math.cos(lat) * Math.cos(lon);
 
-        for (let i = 0; i < divisions; i++) {
-            const rotAngle = angleStep * i;
-            const cos = Math.cos(rotAngle);
-            const sin = Math.sin(rotAngle);
-            results.push({
-                x: bx * cos + bz * sin,
-                y: by,
-                z: -bx * sin + bz * cos
-            });
+            for (let i = 0; i < divisions; i++) {
+                const rotAngle = parentRotAngle + angleStep * i;
+                const cos = Math.cos(rotAngle);
+                const sin = Math.sin(rotAngle);
+                const px = bx * cos + bz * sin;
+                const pz = -bx * sin + bz * cos;
+
+                results.push({ x: px, y: by, z: pz });
+
+                // 分形递归：在每个球面点上叠加更小的球面图案
+                if (level < fractalLevels) {
+                    const childR = baseR * fractalScale;
+                    // 使用旋转后的位置作为新的映射基点
+                    generateSphereFractal(
+                        baseDx * fractalScale, baseDy * fractalScale,
+                        childR, level + 1, rotAngle + fractalAngle
+                    );
+                }
+            }
         }
+
+        generateSphereFractal(dx, dy, R, 1, 0);
     }
 
     return results;
@@ -1702,62 +1740,102 @@ function applySymmetryToPath(
     if (symmetryMode === 'none') return [basePath];
 
     const allPaths: { x: number; y: number; z?: number; pressure: number }[][] = [];
+    const angleStep = (Math.PI * 2) / divisions;
+
+    // 通用分形参数（优先使用通用参数，回退到星芒专属参数以兼容旧数据）
+    const fractalLevels = params?.fractalLevels ?? params?.starburstFractalLevels ?? 1;
+    const fractalScale = params?.fractalScale ?? params?.starburstFractalScale ?? 0.5;
+    const fractalAngle = ((params?.fractalAngle ?? params?.starburstFractalAngle ?? 0) / 180) * Math.PI;
 
     if (symmetryMode === 'radial') {
-        // 径向对称：简单旋转复制
+        // 径向对称：旋转复制 + 分形
         const phaseOffset = ((params?.radialPhaseOffset ?? 0) / 180) * Math.PI;
         const scaleVariation = params?.radialScaleVariation ?? 0;
-        for (let div = 0; div < divisions; div++) {
-            const angle = (div / divisions) * Math.PI * 2 + phaseOffset;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
-            const scale = 1.0 + ((div % 2 === 0) ? scaleVariation : -scaleVariation);
 
-            const rotatedPath = basePath.map(p => ({
-                x: (p.x * cos - p.y * sin) * scale,
-                y: (p.x * sin + p.y * cos) * scale,
-                pressure: p.pressure
-            }));
-            allPaths.push(rotatedPath);
-        }
-    } else if (symmetryMode === 'kaleidoscope') {
-        // 万花筒模式：旋转+镜像
-        const mirrorAngle = ((params?.kaleidoscopeMirrorAngle ?? 0) / 180) * Math.PI;
-        for (let div = 0; div < divisions; div++) {
-            const angle = (div / divisions) * Math.PI * 2;
-            const cos = Math.cos(angle);
-            const sin = Math.sin(angle);
+        function generateRadialFractalPaths(
+            cx: number, cy: number,
+            baseScale: number,
+            level: number,
+            parentAngle: number
+        ): void {
+            for (let i = 0; i < divisions; i++) {
+                const angle = parentAngle + angleStep * i + phaseOffset;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const scale = (1.0 + ((i % 2 === 0) ? scaleVariation : -scaleVariation)) * baseScale;
 
-            const rotatedPath = basePath.map(p => ({
-                x: p.x * cos - p.y * sin,
-                y: p.x * sin + p.y * cos,
-                pressure: p.pressure
-            }));
-            allPaths.push(rotatedPath);
-
-            // 镜像路径
-            const cosM = Math.cos(mirrorAngle * 2);
-            const sinM = Math.sin(mirrorAngle * 2);
-            const mirroredPath = basePath.map(p => {
-                const rx = p.x * cos - p.y * sin;
-                const ry = p.x * sin + p.y * cos;
-                return {
-                    x: rx * cosM + ry * sinM,
-                    y: rx * sinM - ry * cosM,
+                const transformedPath = basePath.map(p => ({
+                    x: cx + (p.x * cos - p.y * sin) * scale,
+                    y: cy + (p.x * sin + p.y * cos) * scale,
                     pressure: p.pressure
-                };
-            });
-            allPaths.push(mirroredPath);
+                }));
+                allPaths.push(transformedPath);
+
+                // 分形递归
+                if (level < fractalLevels) {
+                    const childCx = cx + scale * 0.3 * cos;
+                    const childCy = cy + scale * 0.3 * sin;
+                    const childScale = scale * fractalScale;
+                    generateRadialFractalPaths(childCx, childCy, childScale, level + 1, angle + fractalAngle);
+                }
+            }
         }
+
+        generateRadialFractalPaths(0, 0, 1.0, 1, 0);
+
+    } else if (symmetryMode === 'kaleidoscope') {
+        // 万花筒模式：旋转+镜像 + 分形
+        const mirrorAngle = ((params?.kaleidoscopeMirrorAngle ?? 0) / 180) * Math.PI;
+
+        function generateKaleidoscopeFractalPaths(
+            cx: number, cy: number,
+            baseScale: number,
+            level: number,
+            parentAngle: number
+        ): void {
+            for (let i = 0; i < divisions; i++) {
+                const angle = parentAngle + angleStep * i;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+
+                const transformedPath = basePath.map(p => ({
+                    x: cx + (p.x * cos - p.y * sin) * baseScale,
+                    y: cy + (p.x * sin + p.y * cos) * baseScale,
+                    pressure: p.pressure
+                }));
+                allPaths.push(transformedPath);
+
+                // 镜像路径
+                const cosM = Math.cos(mirrorAngle * 2);
+                const sinM = Math.sin(mirrorAngle * 2);
+                const mirroredPath = basePath.map(p => {
+                    const rx = p.x * cos - p.y * sin;
+                    const ry = p.x * sin + p.y * cos;
+                    return {
+                        x: cx + (rx * cosM + ry * sinM) * baseScale,
+                        y: cy + (rx * sinM - ry * cosM) * baseScale,
+                        pressure: p.pressure
+                    };
+                });
+                allPaths.push(mirroredPath);
+
+                // 分形递归（只在非镜像点上生成）
+                if (level < fractalLevels) {
+                    const childCx = cx + baseScale * 0.3 * cos;
+                    const childCy = cy + baseScale * 0.3 * sin;
+                    const childScale = baseScale * fractalScale;
+                    generateKaleidoscopeFractalPaths(childCx, childCy, childScale, level + 1, angle + fractalAngle);
+                }
+            }
+        }
+
+        generateKaleidoscopeFractalPaths(0, 0, 1.0, 1, 0);
+
     } else if (symmetryMode === 'starburst') {
         // 星芒模式：奇偶分割缩放 + 分形
         const innerScale = params?.starburstInnerScale ?? 0.5;
         const outerScale = params?.starburstOuterScale ?? 1.3;
         const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
-        const fractalLevels = params?.starburstFractalLevels ?? 1;
-        const fractalScale = params?.starburstFractalScale ?? 0.5;
-        const fractalAngle = ((params?.starburstFractalAngle ?? 0) / 180) * Math.PI;
-        const angleStep = (Math.PI * 2) / divisions;
 
         // 递归生成分形路径
         function generateFractalPaths(
@@ -1791,53 +1869,47 @@ function applySymmetryToPath(
         }
 
         generateFractalPaths(0, 0, 1.0, 1, 0);
-    } else if (symmetryMode === 'vortex') {
-        // 漩涡模式：随半径旋转扭曲
-        const twistFactor = params?.vortexTwistFactor ?? 2.0;
-        const twistDecay = params?.vortexTwistDecay ?? 3.0;
-        const direction = params?.vortexDirection ?? 1;
-        const centerOffset = params?.vortexCenterOffset ?? 0;
-        for (let div = 0; div < divisions; div++) {
-            const angleOffset = (div / divisions) * Math.PI * 2;
-            const twistedPath = basePath.map(p => {
-                const radius = Math.sqrt(p.x * p.x + p.y * p.y);
-                const adjustedRadius = Math.max(0.001, radius - centerOffset);
-                const twistAngle = direction * twistFactor * Math.max(0, 1.0 - adjustedRadius * twistDecay);
-                const angle = angleOffset + twistAngle;
-                const cos = Math.cos(angle);
-                const sin = Math.sin(angle);
-                return {
-                    x: p.x * cos - p.y * sin,
-                    y: p.x * sin + p.y * cos,
-                    pressure: p.pressure
-                };
-            });
-            allPaths.push(twistedPath);
-        }
+
     } else if (symmetryMode === 'sphere') {
-        // 球面模式：2D映射到3D球体表面
+        // 球面模式：2D映射到3D球体表面 + 分形
         const R = params?.sphereRadius ?? 0.5;
         const latScale = params?.sphereLatScale ?? 1.0;
         const lonScale = params?.sphereLonScale ?? 1.0;
-        for (let div = 0; div < divisions; div++) {
-            const rotAngle = (div / divisions) * Math.PI * 2;
-            const cos = Math.cos(rotAngle);
-            const sin = Math.sin(rotAngle);
-            const spherePath = basePath.map(p => {
-                const lat = p.y * Math.PI * latScale;
-                const lon = p.x * Math.PI * 2 * lonScale;
-                const bx = R * Math.cos(lat) * Math.sin(lon);
-                const by = R * Math.sin(lat);
-                const bz = R * Math.cos(lat) * Math.cos(lon);
-                return {
-                    x: bx * cos + bz * sin,
-                    y: by,
-                    z: -bx * sin + bz * cos,
-                    pressure: p.pressure
-                };
-            });
-            allPaths.push(spherePath);
+
+        function generateSphereFractalPaths(
+            baseR: number,
+            level: number,
+            parentRotAngle: number
+        ): void {
+            for (let i = 0; i < divisions; i++) {
+                const rotAngle = parentRotAngle + angleStep * i;
+                const cos = Math.cos(rotAngle);
+                const sin = Math.sin(rotAngle);
+
+                const spherePath = basePath.map(p => {
+                    const lat = p.y * Math.PI * latScale;
+                    const lon = p.x * Math.PI * 2 * lonScale;
+                    const bx = baseR * Math.cos(lat) * Math.sin(lon);
+                    const by = baseR * Math.sin(lat);
+                    const bz = baseR * Math.cos(lat) * Math.cos(lon);
+                    return {
+                        x: bx * cos + bz * sin,
+                        y: by,
+                        z: -bx * sin + bz * cos,
+                        pressure: p.pressure
+                    };
+                });
+                allPaths.push(spherePath);
+
+                // 分形递归
+                if (level < fractalLevels) {
+                    const childR = baseR * fractalScale;
+                    generateSphereFractalPaths(childR, level + 1, rotAngle + fractalAngle);
+                }
+            }
         }
+
+        generateSphereFractalPaths(R, 1, 0);
     }
 
     return allPaths;

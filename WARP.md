@@ -73,7 +73,7 @@ Shaders are defined in `shaders/nebulaShaders.ts` and `shaders/nebulaCanvasShade
 
 Located in `components/MagicCircleDrawing/`:
 - Three brush types: particle, silk ring (lineRing), lightsaber
-- Supports symmetry modes: radial, kaleidoscope, starburst, vortex, sphere, orbital
+- Supports symmetry modes: radial, kaleidoscope, starburst, sphere (all with fractal support)
 - Pressure sensitivity modes: none, calligraphy, brightness
 - Brush parameters use existing `ParticleRingSettings` and `SilkRingSettings` types
 
