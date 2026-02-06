@@ -6,7 +6,7 @@
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，包含lightsaberVertexShader/lightsaberFragmentShader、createLightsaberStrokeMesh函数、AdditiveBlending混合模式
  * 2026-01-16: 统一粒子画笔与粒子环效果：移除0.05大小系数、随机范围改为1~3、应用brightness参数、光晕采用pow模型、uGlowIntensity默认3
  * 2026-01-27: 修复网格画笔在星芒/漩涡对称模式下的问题：将独立的起点/终点变换改为使用applySymmetryToPath进行路径级别变换，确保线段两端在同一对称轨道上
- * 2026-02-06: 重写StrokeStabilizer类，使用Pulled String(拉绳)算法替换EMA算法，实现类似Procreate Streamline的流线效果，包含速度自适应功能
+ * 2026-02-06: 实现流线功能(Streamline)，使用Catmull-Rom Centripetal样条曲线拟合采样点，消除手抖产生的锯齿；四种画笔(粒子/丝环/光剑/网格)均支持；streamline参数0-100控制平滑强度
  */
 
 
@@ -131,6 +131,113 @@ export class StrokeStabilizer {
 
         return { ...this.brushPos };
     }
+}
+
+// ==================== Catmull-Rom 样条曲线平滑 ====================
+
+/**
+ * Catmull-Rom Centripetal 样条曲线插值
+ * 用于实现类似 Procreate Streamline 的曲线平滑效果
+ * 
+ * @param points 原始采样点数组
+ * @param streamline 流线强度 0-100 (0=不平滑, 100=最大平滑)
+ * @returns 平滑后的点数组
+ */
+export function smoothStrokeWithCatmullRom(
+    points: { x: number; y: number; pressure: number; timestamp?: number }[],
+    streamline: number
+): { x: number; y: number; pressure: number }[] {
+    // 流线强度为0或点数太少时直接返回原始点
+    if (streamline <= 0 || points.length < 3) {
+        return points.map(p => ({ x: p.x, y: p.y, pressure: p.pressure }));
+    }
+
+    const result: { x: number; y: number; pressure: number }[] = [];
+
+    // 根据streamline计算细分程度
+    // streamline 0-100 映射到 segments 1-10
+    // 更高的segments意味着更平滑的曲线（因为插值点更多）
+    const segmentsPerSpan = Math.max(1, Math.floor(1 + (streamline / 100) * 9));
+
+    // alpha = 0.5 为 centripetal (防止尖点和自交)
+    const alpha = 0.5;
+
+    // 为端点添加虚拟点以确保曲线通过所有实际点
+    const extendedPoints = [
+        points[0], // 复制第一个点
+        ...points,
+        points[points.length - 1] // 复制最后一个点
+    ];
+
+    // 对每一段进行插值
+    for (let i = 1; i < extendedPoints.length - 2; i++) {
+        const p0 = extendedPoints[i - 1];
+        const p1 = extendedPoints[i];
+        const p2 = extendedPoints[i + 1];
+        const p3 = extendedPoints[i + 2];
+
+        // 计算参数化距离 (centripetal)
+        const t0 = 0;
+        const t1 = t0 + Math.pow(distance2D(p0, p1), alpha);
+        const t2 = t1 + Math.pow(distance2D(p1, p2), alpha);
+        const t3 = t2 + Math.pow(distance2D(p2, p3), alpha);
+
+        // 避免除以零
+        if (t1 === t0 || t2 === t1 || t3 === t2) {
+            result.push({ x: p1.x, y: p1.y, pressure: p1.pressure });
+            continue;
+        }
+
+        // 在 p1 到 p2 之间插值
+        for (let j = 0; j < segmentsPerSpan; j++) {
+            const t = t1 + (t2 - t1) * (j / segmentsPerSpan);
+
+            // Catmull-Rom 插值公式
+            const A1x = (t1 - t) / (t1 - t0) * p0.x + (t - t0) / (t1 - t0) * p1.x;
+            const A1y = (t1 - t) / (t1 - t0) * p0.y + (t - t0) / (t1 - t0) * p1.y;
+            const A1p = (t1 - t) / (t1 - t0) * p0.pressure + (t - t0) / (t1 - t0) * p1.pressure;
+
+            const A2x = (t2 - t) / (t2 - t1) * p1.x + (t - t1) / (t2 - t1) * p2.x;
+            const A2y = (t2 - t) / (t2 - t1) * p1.y + (t - t1) / (t2 - t1) * p2.y;
+            const A2p = (t2 - t) / (t2 - t1) * p1.pressure + (t - t1) / (t2 - t1) * p2.pressure;
+
+            const A3x = (t3 - t) / (t3 - t2) * p2.x + (t - t2) / (t3 - t2) * p3.x;
+            const A3y = (t3 - t) / (t3 - t2) * p2.y + (t - t2) / (t3 - t2) * p3.y;
+            const A3p = (t3 - t) / (t3 - t2) * p2.pressure + (t - t2) / (t3 - t2) * p3.pressure;
+
+            const B1x = (t2 - t) / (t2 - t0) * A1x + (t - t0) / (t2 - t0) * A2x;
+            const B1y = (t2 - t) / (t2 - t0) * A1y + (t - t0) / (t2 - t0) * A2y;
+            const B1p = (t2 - t) / (t2 - t0) * A1p + (t - t0) / (t2 - t0) * A2p;
+
+            const B2x = (t3 - t) / (t3 - t1) * A2x + (t - t1) / (t3 - t1) * A3x;
+            const B2y = (t3 - t) / (t3 - t1) * A2y + (t - t1) / (t3 - t1) * A3y;
+            const B2p = (t3 - t) / (t3 - t1) * A2p + (t - t1) / (t3 - t1) * A3p;
+
+            const Cx = (t2 - t) / (t2 - t1) * B1x + (t - t1) / (t2 - t1) * B2x;
+            const Cy = (t2 - t) / (t2 - t1) * B1y + (t - t1) / (t2 - t1) * B2y;
+            const Cp = (t2 - t) / (t2 - t1) * B1p + (t - t1) / (t2 - t1) * B2p;
+
+            result.push({ x: Cx, y: Cy, pressure: Math.max(0, Math.min(1, Cp)) });
+        }
+    }
+
+    // 添加最后一个点
+    const lastPoint = points[points.length - 1];
+    result.push({ x: lastPoint.x, y: lastPoint.y, pressure: lastPoint.pressure });
+
+    return result;
+}
+
+/**
+ * 计算两点间的欧氏距离
+ */
+function distance2D(
+    p1: { x: number; y: number },
+    p2: { x: number; y: number }
+): number {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    return Math.sqrt(dx * dx + dy * dy);
 }
 
 // ==================== 绘图系统状态接口 ====================
@@ -535,8 +642,9 @@ export function createParticleStrokeMesh(
     },
     symmetryParams?: SymmetryParams
 ): THREE.Points {
-    // 流线功能现在在绘制过程中实时应用，此处直接使用输入点
-    const smoothedPoints = points;
+    // 应用 Catmull-Rom 曲线平滑
+    const streamline = settings.streamline ?? 0;
+    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
 
     // 沿路径均匀插值生成粒子（参考粒子环实现）
     const particlePositions: number[] = [];
@@ -1433,8 +1541,9 @@ export function createLightsaberStrokeMesh(
     const group = new THREE.Group();
     if (points.length < 2) return group;
 
-    // 流线功能现在在绘制过程中实时应用，此处直接使用输入点
-    const smoothedPoints = points;
+    // 应用 Catmull-Rom 曲线平滑
+    const streamline = settings.streamline ?? 30;
+    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
 
     const lightsaberMaterials: THREE.ShaderMaterial[] = [];
     const baseLineWidth = (settings.thickness || 0.03) * 0.5;
@@ -2003,9 +2112,13 @@ export function createLineStrokeMesh(
     const baseLineWidth = (settings.thickness || 0.02) * 0.3;
     const mcSettings = magicCircleSettings || {};
 
+    // 应用 Catmull-Rom 曲线平滑
+    const streamline = settings.streamline ?? 0;
+    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
+
     // 为每个对称副本创建线条
     // 生成路径点
-    const basePath = points.map(p => ({
+    const basePath = smoothedPoints.map(p => ({
         x: p.x - 0.5,
         y: 0.5 - p.y,
         pressure: clamp01(p.pressure ?? 0.5)
@@ -2223,6 +2336,7 @@ export function createWebStrokeMesh(
         pressureMode?: 'none' | 'opacity' | 'density';
         distanceFade?: number;
         brightness?: number;
+        streamline?: number;  // 流线强度 0-100
     },
     symmetryMode: SymmetryMode,
     symmetryDivisions: number,
@@ -2235,11 +2349,10 @@ export function createWebStrokeMesh(
         pulseEnabled?: boolean;
         pulseSpeed?: number;
         pulseIntensity?: number;
-        // 染色功能参数
         baseHue?: number;
         baseSaturation?: number;
         saturationBoost?: number;
-        colorMode?: number;  // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
+        colorMode?: number;
         color1?: THREE.Vector3;
         color2?: THREE.Vector3;
         color3?: THREE.Vector3;
@@ -2253,6 +2366,10 @@ export function createWebStrokeMesh(
     const group = new THREE.Group();
 
     if (points.length < 1) return group;
+
+    // 应用 Catmull-Rom 曲线平滑
+    const streamline = settings.streamline ?? 0;
+    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
 
     // 提取设置参数
     const connectionsPerFrame = settings.connectionsPerFrame ?? 3;
@@ -2279,7 +2396,7 @@ export function createWebStrokeMesh(
 
     // 将当前笔画点转换为 THREE.Vector3 并添加到历史
     const currentPoints: THREE.Vector3[] = [];
-    for (const pt of points) {
+    for (const pt of smoothedPoints) {
         // 坐标归一化：从(0,1)转换为(-0.5, 0.5)
         const x = pt.x - 0.5;
         const y = 0.5 - pt.y; // Y轴翻转
@@ -2292,7 +2409,7 @@ export function createWebStrokeMesh(
     // 对每个当前点
     for (let i = 0; i < currentPoints.length; i++) {
         const currentPoint = currentPoints[i];
-        const pressure = points[i].pressure;
+        const pressure = smoothedPoints[i].pressure;
 
         // 更新色相（彩虹模式）
         if (colorMode === 'rainbow') {
