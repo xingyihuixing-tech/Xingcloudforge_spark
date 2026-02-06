@@ -37,7 +37,8 @@ import {
     createNewLayer,
     disposeDrawingResources,
     DrawingSystemRefs,
-    applySymmetryTransform
+    applySymmetryTransform,
+    StrokeStabilizer
 } from '../../utils/drawingSystem';
 import { DrawingControlPanel } from './DrawingControlPanel';
 import { UndoIcon, RedoIcon, BrushIcon, ClearIcon } from './Icons';
@@ -85,7 +86,7 @@ const defaultLightsaberSettings: Partial<LightsaberSettings> = {
     pulseSpeed: 1.0,         // 脉冲速度 0.5-3
     pulseIntensity: 0.2,     // 脉冲强度 0-0.5
     pressureMode: 'none',
-    smoothness: 0.5          // 笔迹平滑 0-3
+    streamline: 30           // 流线强度 0-100
 };
 
 const defaultWebSettings: Partial<WebBrushSettings> = {
@@ -164,6 +165,9 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
     const webHueRef = useRef<{ value: number }>({ value: 0 });
     const strokeStartHueRef = useRef<number>(0); // 记录每笔开始时的色相
     const lastProcessedPointIndexRef = useRef<number>(0);
+
+    // 流线稳定器
+    const stabilizerRef = useRef<StrokeStabilizer>(new StrokeStabilizer(0));
 
     // 对称设置 (从当前图层读取)
     const symmetryMode = currentLayer?.symmetryMode || 'radial';
@@ -625,7 +629,21 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         // 捕获指针
         (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    }, [viewMode, currentCircle, currentLayer]);
+
+        // 重置流线稳定器并设置当前画笔的流线强度
+        let streamlineValue = 0;
+        if (brushType === 'particle') {
+            streamlineValue = particleSettings.streamline ?? 0;
+        } else if (brushType === 'lineRing') {
+            streamlineValue = silkSettings.streamline ?? 0;
+        } else if (brushType === 'lightsaber') {
+            streamlineValue = lightsaberSettings.streamline ?? 30;
+        } else if (brushType === 'web') {
+            streamlineValue = webSettings.streamline ?? 0;
+        }
+        stabilizerRef.current.setStreamline(streamlineValue);
+        stabilizerRef.current.reset();
+    }, [viewMode, currentCircle, currentLayer, brushType, particleSettings, silkSettings, lightsaberSettings, webSettings]);
 
     // 处理指针移动
     const handlePointerMove = useCallback((e: React.PointerEvent) => {
@@ -647,9 +665,16 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
 
         const pos = screenToCanvas(e.clientX, e.clientY, canvasRect);
 
-        currentStrokeRef.current.push({
+        // 应用流线稳定
+        const rawPos = {
             x: Math.max(0, Math.min(1, pos.x + 0.5)),
-            y: Math.max(0, Math.min(1, 0.5 - pos.y)),
+            y: Math.max(0, Math.min(1, 0.5 - pos.y))
+        };
+        const stabilizedPos = stabilizerRef.current.stabilize(rawPos);
+
+        currentStrokeRef.current.push({
+            x: stabilizedPos.x,
+            y: stabilizedPos.y,
             pressure: e.pressure || 0.5,
             timestamp: Date.now()
         });
@@ -1436,6 +1461,22 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                     />
                                 </div>
                             )}
+                            {/* 流线 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>流线</span>
+                                    <span style={{ color: '#ffffff' }}>{particleSettings.streamline ?? 0}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
+                                    step={5}
+                                    value={particleSettings.streamline ?? 0}
+                                    onChange={(e) => setParticleSettings(prev => ({ ...prev, streamline: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
                         </>
                     )}
                     {brushType === 'lineRing' && (
@@ -1709,6 +1750,22 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                     </>
                                 )}
                             </div>
+                            {/* 流线 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>流线</span>
+                                    <span style={{ color: '#ffffff' }}>{silkSettings.streamline ?? 0}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
+                                    step={5}
+                                    value={silkSettings.streamline ?? 0}
+                                    onChange={(e) => setSilkSettings(prev => ({ ...prev, streamline: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
                         </>
                     )}
                     {brushType === 'lightsaber' && (
@@ -1834,19 +1891,19 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                     style={{ width: '100%' }}
                                 />
                             </div>
-                            {/* 笔迹平滑 */}
+                            {/* 流线 */}
                             <div style={{ marginBottom: 10 }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
-                                    <span>笔迹平滑</span>
-                                    <span style={{ color: '#ffffff' }}>{(lightsaberSettings.smoothness ?? 0.5).toFixed(1)}</span>
+                                    <span>流线</span>
+                                    <span style={{ color: '#ffffff' }}>{lightsaberSettings.streamline ?? 30}%</span>
                                 </div>
                                 <input
                                     type="range"
                                     min={0}
-                                    max={3}
-                                    step={0.1}
-                                    value={lightsaberSettings.smoothness ?? 0.5}
-                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, smoothness: Number(e.target.value) }))}
+                                    max={100}
+                                    step={5}
+                                    value={lightsaberSettings.streamline ?? 30}
+                                    onChange={(e) => setLightsaberSettings(prev => ({ ...prev, streamline: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>
@@ -2132,6 +2189,22 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                     step={0.1}
                                     value={webSettings.brightness ?? 1}
                                     onChange={(e) => setWebSettings(prev => ({ ...prev, brightness: Number(e.target.value) }))}
+                                    style={{ width: '100%' }}
+                                />
+                            </div>
+                            {/* 流线 */}
+                            <div style={{ marginBottom: 10 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                                    <span>流线</span>
+                                    <span style={{ color: '#ffffff' }}>{webSettings.streamline ?? 0}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min={0}
+                                    max={100}
+                                    step={5}
+                                    value={webSettings.streamline ?? 0}
+                                    onChange={(e) => setWebSettings(prev => ({ ...prev, streamline: Number(e.target.value) }))}
                                     style={{ width: '100%' }}
                                 />
                             </div>

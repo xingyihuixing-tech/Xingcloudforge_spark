@@ -6,6 +6,7 @@
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，包含lightsaberVertexShader/lightsaberFragmentShader、createLightsaberStrokeMesh函数、AdditiveBlending混合模式
  * 2026-01-16: 统一粒子画笔与粒子环效果：移除0.05大小系数、随机范围改为1~3、应用brightness参数、光晕采用pow模型、uGlowIntensity默认3
  * 2026-01-27: 修复网格画笔在星芒/漩涡对称模式下的问题：将独立的起点/终点变换改为使用applySymmetryToPath进行路径级别变换，确保线段两端在同一对称轨道上
+ * 2026-02-06: 重写StrokeStabilizer类，使用Pulled String(拉绳)算法替换EMA算法，实现类似Procreate Streamline的流线效果，包含速度自适应功能
  */
 
 
@@ -29,66 +30,107 @@ const CANVAS_SIZE = 1; // 归一化画布尺寸 (-0.5 to 0.5)
 const DEFAULT_SYMMETRY_DIVISIONS = 8;
 const DEFAULT_COLOR = '#ffaa00';
 
-// ==================== 笔迹平滑函数 ====================
+// ==================== 实时流线稳定器 ====================
 
 /**
- * 使用CatmullRomCurve3对笔迹点进行平滑处理
- * @param points 原始采样点
- * @param smoothness 平滑度 (0=不平滑保持原样, 1-3=越来越平滑的曲线)
- * @param minPoints 至少需要的点数才进行平滑
- * @returns 平滑后的点数组
+ * 笔画流线稳定器 - 实现类似 Procreate Streamline 的拉绳效果
+ * 
+ * 核心原理：Pulled String (拉绳) 算法
+ * - 笔刷像被一根绳子拴在光标后面
+ * - 只有当光标拉动距离超过绳长时笔刷才移动
+ * - 自然保留转角处的精确控制，同时平滑长曲线
  */
-export function smoothStrokePoints(
-    points: StrokePoint[],
-    smoothness: number = 0.5,
-    minPoints: number = 4
-): StrokePoint[] {
-    // 点数太少或平滑度为0时不进行平滑
-    if (points.length < minPoints || smoothness <= 0) {
-        return points;
+export class StrokeStabilizer {
+    private brushPos: { x: number; y: number } | null = null;
+    private lastRawPos: { x: number; y: number } | null = null;
+    private lastTimestamp: number = 0;
+    private streamlineAmount: number; // 0-100
+
+    // 速度自适应参数
+    private maxSpeed: number = 0.002; // 归一化坐标每毫秒的最大速度
+
+    /**
+     * @param streamline 流线强度 0-100 (0=直接跟随, 100=最强惯性)
+     */
+    constructor(streamline: number = 0) {
+        this.streamlineAmount = Math.max(0, Math.min(100, streamline));
     }
 
-    // 创建3D曲线（z用于存储压力值的索引）
-    const curve3DPoints = points.map((p, i) => new THREE.Vector3(p.x, p.y, i));
-
-    // 将smoothness映射到CatmullRom张力参数：
-    // smoothness=0 → tension=0.5（不平滑，贴近原始点）
-    // smoothness=3 → tension=0（最平滑，圆润曲线）
-    const tension = Math.max(0, 0.5 - (smoothness / 6));
-
-    // 使用CatmullRom样条曲线，张力越小曲线越圆润
-    const curve = new THREE.CatmullRomCurve3(curve3DPoints, false, 'catmullrom', tension);
-
-    // 输出点数：保证足够密集以呈现平滑曲线
-    // 基础点数 + 额外插值点数（根据路径长度）
-    const baseOutputCount = Math.max(points.length, 20);
-    const extraPoints = Math.floor(smoothness * points.length);
-    const outputPointCount = baseOutputCount + extraPoints;
-
-    const smoothedPoints: StrokePoint[] = [];
-
-    for (let i = 0; i < outputPointCount; i++) {
-        const t = i / (outputPointCount - 1);
-        const point = curve.getPoint(t);
-
-        // 从z坐标插值压力值
-        const originalIndex = Math.min(point.z, points.length - 1);
-        const lowerIndex = Math.floor(originalIndex);
-        const upperIndex = Math.min(lowerIndex + 1, points.length - 1);
-        const indexFrac = originalIndex - lowerIndex;
-
-        const pressure = points[lowerIndex].pressure * (1 - indexFrac) +
-            points[upperIndex].pressure * indexFrac;
-
-        smoothedPoints.push({
-            x: point.x,
-            y: point.y,
-            pressure: pressure,
-            timestamp: Date.now()
-        });
+    /**
+     * 重置稳定器状态（每笔开始时调用）
+     */
+    reset(): void {
+        this.brushPos = null;
+        this.lastRawPos = null;
+        this.lastTimestamp = 0;
     }
 
-    return smoothedPoints;
+    /**
+     * 更新流线强度
+     */
+    setStreamline(value: number): void {
+        this.streamlineAmount = Math.max(0, Math.min(100, value));
+    }
+
+    /**
+     * 处理原始输入点，返回稳定后的位置
+     * @param rawPos 原始输入位置 (归一化坐标 0-1)
+     * @returns 稳定后的位置
+     */
+    stabilize(rawPos: { x: number; y: number }): { x: number; y: number } {
+        const now = Date.now();
+
+        // 流线强度为0时直接返回原始位置
+        if (this.streamlineAmount <= 0) {
+            this.brushPos = { ...rawPos };
+            this.lastRawPos = { ...rawPos };
+            this.lastTimestamp = now;
+            return rawPos;
+        }
+
+        // 第一个点直接使用
+        if (this.brushPos === null) {
+            this.brushPos = { ...rawPos };
+            this.lastRawPos = { ...rawPos };
+            this.lastTimestamp = now;
+            return rawPos;
+        }
+
+        // 计算绳长：streamline 0-100 映射到 0-0.08 (归一化坐标)
+        // 绳子越长，惯性越大
+        const baseStringLength = (this.streamlineAmount / 100) * 0.08;
+
+        // 速度自适应：快速移动时缩短绳长，提高响应性
+        let stringLength = baseStringLength;
+        if (this.lastRawPos && this.lastTimestamp > 0) {
+            const dt = Math.max(1, now - this.lastTimestamp);
+            const dxSpeed = rawPos.x - this.lastRawPos.x;
+            const dySpeed = rawPos.y - this.lastRawPos.y;
+            const speed = Math.sqrt(dxSpeed * dxSpeed + dySpeed * dySpeed) / dt;
+
+            // 速度因子：速度越快，绳子越短
+            const speedFactor = Math.min(1, speed / this.maxSpeed);
+            stringLength = baseStringLength * (1 - speedFactor * 0.7);
+        }
+
+        // Pulled String 核心算法
+        const dx = rawPos.x - this.brushPos.x;
+        const dy = rawPos.y - this.brushPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > stringLength && distance > 0.0001) {
+            // 笔刷被拉向光标，保持绳长距离
+            const pullRatio = (distance - stringLength) / distance;
+            this.brushPos.x += dx * pullRatio;
+            this.brushPos.y += dy * pullRatio;
+        }
+        // 距离小于绳长时，笔刷不动（这是与EMA的关键区别！）
+
+        this.lastRawPos = { ...rawPos };
+        this.lastTimestamp = now;
+
+        return { ...this.brushPos };
+    }
 }
 
 // ==================== 绘图系统状态接口 ====================
@@ -493,9 +535,8 @@ export function createParticleStrokeMesh(
     },
     symmetryParams?: SymmetryParams
 ): THREE.Points {
-    // 应用笔迹平滑
-    const smoothness = settings.smoothness ?? 0.5;
-    const smoothedPoints = smoothStrokePoints(points, smoothness);
+    // 流线功能现在在绘制过程中实时应用，此处直接使用输入点
+    const smoothedPoints = points;
 
     // 沿路径均匀插值生成粒子（参考粒子环实现）
     const particlePositions: number[] = [];
@@ -1392,9 +1433,8 @@ export function createLightsaberStrokeMesh(
     const group = new THREE.Group();
     if (points.length < 2) return group;
 
-    // 应用笔迹平滑
-    const smoothness = settings.smoothness ?? 0.5;
-    const smoothedPoints = smoothStrokePoints(points, smoothness);
+    // 流线功能现在在绘制过程中实时应用，此处直接使用输入点
+    const smoothedPoints = points;
 
     const lightsaberMaterials: THREE.ShaderMaterial[] = [];
     const baseLineWidth = (settings.thickness || 0.03) * 0.5;

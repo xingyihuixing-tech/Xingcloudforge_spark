@@ -936,8 +936,8 @@ export interface ParticleRingSettings {
   // 空间粗细（自定义法阵绘制专用）
   spatialThickness?: boolean;            // 启用空间粗细（z方向散布）
   zThickness?: number;                   // z方向散布范围（默认与bandwidth一致）
-  // 笔迹平滑（自定义法阵绘制专用）
-  smoothness?: number;                   // 平滑度 0-1（0=不平滑，1=非常平滑）
+  // 笔迹流线（自定义法阵绘制专用）
+  streamline?: number;                   // 流线强度 0-100 (0=无流线，100=最强)
 }
 
 // 丝绸效果配置
@@ -1419,6 +1419,8 @@ export interface SilkRingSettings {
   clusterCount: number;       // 簇内丝线数量 1-12（1=单条，>1形成丝带）
   axisSpread: number;         // 轴向偏移范围 0-0.3
   radiusSpread: number;       // 半径偏移范围 0-80
+  // 笔迹流线（自定义法阵绘制专用）
+  streamline?: number;        // 流线强度 0-100 (0=无流线，100=最强)
 }
 
 // 光剑墨迹设置（自定义法阵绘制专用）
@@ -1446,8 +1448,8 @@ export interface LightsaberSettings {
   // 压感模式
   pressureMode: LightsaberPressureMode;
 
-  // 笔迹平滑
-  smoothness: number;        // 平滑度 0-3
+  // 笔迹流线
+  streamline: number;          // 流线强度 0-100 (0=无流线，100=最强)
 }
 
 // 光环系统配置
@@ -1985,6 +1987,8 @@ export interface WebBrushSettings {
   pressureMode: 'none' | 'opacity' | 'density'; // 压感模式
   distanceFade: number;          // 距离衰减强度, 0-2, 默认1, 步进0.1
   brightness: number;            // 亮度, 0.1-3, 默认1, 步进0.1
+  // 笔迹流线
+  streamline?: number;           // 流线强度 0-100 (0=无流线，100=最强)
 }
 
 // 画笔类型
