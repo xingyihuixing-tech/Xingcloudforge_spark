@@ -6,7 +6,8 @@
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，包含lightsaberVertexShader/lightsaberFragmentShader、createLightsaberStrokeMesh函数、AdditiveBlending混合模式
  * 2026-01-16: 统一粒子画笔与粒子环效果：移除0.05大小系数、随机范围改为1~3、应用brightness参数、光晕采用pow模型、uGlowIntensity默认3
  * 2026-01-27: 修复网格画笔在星芒/漩涡对称模式下的问题：将独立的起点/终点变换改为使用applySymmetryToPath进行路径级别变换，确保线段两端在同一对称轨道上
- * 2026-02-06: 实现流线功能(Streamline)，使用Catmull-Rom Centripetal样条曲线拟合采样点，消除手抖产生的锯齿；四种画笔(粒子/丝环/光剑/网格)均支持；streamline参数0-100控制平滑强度
+ * 2026-02-06: 实现流线功能(Streamline)，使用Catmull-Rom Centripetal样条曲线拟合采样点
+ * 2026-02-07: 重写流线功能为纯Pulled String算法(类似Procreate)：移除后处理Catmull-Rom平滑，仅用实时StrokeStabilizer；增大绳长范围(0.08→0.12)、添加起笔缓入效果、添加最小绳长阈值
  */
 
 
@@ -44,10 +45,17 @@ export class StrokeStabilizer {
     private brushPos: { x: number; y: number } | null = null;
     private lastRawPos: { x: number; y: number } | null = null;
     private lastTimestamp: number = 0;
+    private strokeStartTime: number = 0;
     private streamlineAmount: number; // 0-100
 
     // 速度自适应参数
     private maxSpeed: number = 0.002; // 归一化坐标每毫秒的最大速度
+
+    // 增强参数
+    private readonly MAX_STRING_LENGTH: number = 0.12; // 增大绳长范围 (原0.08)
+    private readonly MIN_STRING_LENGTH: number = 0.002; // 最小绳长阈值
+    private readonly EASE_IN_DURATION: number = 150; // 起笔缓入时长(ms)
+    private readonly SPEED_DECAY: number = 0.5; // 速度自适应衰减因子 (原0.7)
 
     /**
      * @param streamline 流线强度 0-100 (0=直接跟随, 100=最强惯性)
@@ -63,6 +71,7 @@ export class StrokeStabilizer {
         this.brushPos = null;
         this.lastRawPos = null;
         this.lastTimestamp = 0;
+        this.strokeStartTime = Date.now();
     }
 
     /**
@@ -93,12 +102,13 @@ export class StrokeStabilizer {
             this.brushPos = { ...rawPos };
             this.lastRawPos = { ...rawPos };
             this.lastTimestamp = now;
+            this.strokeStartTime = now;
             return rawPos;
         }
 
-        // 计算绳长：streamline 0-100 映射到 0-0.08 (归一化坐标)
+        // 计算绳长：streamline 0-100 映射到 0-MAX_STRING_LENGTH (归一化坐标)
         // 绳子越长，惯性越大
-        const baseStringLength = (this.streamlineAmount / 100) * 0.08;
+        const baseStringLength = (this.streamlineAmount / 100) * this.MAX_STRING_LENGTH;
 
         // 速度自适应：快速移动时缩短绳长，提高响应性
         let stringLength = baseStringLength;
@@ -110,8 +120,16 @@ export class StrokeStabilizer {
 
             // 速度因子：速度越快，绳子越短
             const speedFactor = Math.min(1, speed / this.maxSpeed);
-            stringLength = baseStringLength * (1 - speedFactor * 0.7);
+            stringLength = baseStringLength * (1 - speedFactor * this.SPEED_DECAY);
         }
+
+        // 起笔缓入效果：前EASE_IN_DURATION ms逐渐增加有效绳长
+        const elapsed = now - this.strokeStartTime;
+        const easeInFactor = Math.min(1, elapsed / this.EASE_IN_DURATION);
+        stringLength = stringLength * easeInFactor;
+
+        // 确保绳长不低于最小阈值
+        stringLength = Math.max(this.MIN_STRING_LENGTH, stringLength);
 
         // Pulled String 核心算法
         const dx = rawPos.x - this.brushPos.x;
@@ -642,9 +660,8 @@ export function createParticleStrokeMesh(
     },
     symmetryParams?: SymmetryParams
 ): THREE.Points {
-    // 应用 Catmull-Rom 曲线平滑
-    const streamline = settings.streamline ?? 0;
-    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
+    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
+    const smoothedPoints = points;
 
     // 沿路径均匀插值生成粒子（参考粒子环实现）
     const particlePositions: number[] = [];
@@ -1541,9 +1558,8 @@ export function createLightsaberStrokeMesh(
     const group = new THREE.Group();
     if (points.length < 2) return group;
 
-    // 应用 Catmull-Rom 曲线平滑
-    const streamline = settings.streamline ?? 30;
-    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
+    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
+    const smoothedPoints = points;
 
     const lightsaberMaterials: THREE.ShaderMaterial[] = [];
     const baseLineWidth = (settings.thickness || 0.03) * 0.5;
@@ -2112,9 +2128,8 @@ export function createLineStrokeMesh(
     const baseLineWidth = (settings.thickness || 0.02) * 0.3;
     const mcSettings = magicCircleSettings || {};
 
-    // 应用 Catmull-Rom 曲线平滑
-    const streamline = settings.streamline ?? 0;
-    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
+    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
+    const smoothedPoints = points;
 
     // 为每个对称副本创建线条
     // 生成路径点
@@ -2367,9 +2382,8 @@ export function createWebStrokeMesh(
 
     if (points.length < 1) return group;
 
-    // 应用 Catmull-Rom 曲线平滑
-    const streamline = settings.streamline ?? 0;
-    const smoothedPoints = smoothStrokeWithCatmullRom(points, streamline);
+    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
+    const smoothedPoints = points;
 
     // 提取设置参数
     const connectionsPerFrame = settings.connectionsPerFrame ?? 3;
