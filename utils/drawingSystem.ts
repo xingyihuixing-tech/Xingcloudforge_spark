@@ -6,8 +6,7 @@
  * 2026-01-08: 新增光剑(lightsaber)画笔类型，包含lightsaberVertexShader/lightsaberFragmentShader、createLightsaberStrokeMesh函数、AdditiveBlending混合模式
  * 2026-01-16: 统一粒子画笔与粒子环效果：移除0.05大小系数、随机范围改为1~3、应用brightness参数、光晕采用pow模型、uGlowIntensity默认3
  * 2026-01-27: 修复网格画笔在星芒/漩涡对称模式下的问题：将独立的起点/终点变换改为使用applySymmetryToPath进行路径级别变换，确保线段两端在同一对称轨道上
- * 2026-02-06: 实现流线功能(Streamline)，使用Catmull-Rom Centripetal样条曲线拟合采样点
- * 2026-02-07: 重写流线功能为纯Pulled String算法(类似Procreate)：移除后处理Catmull-Rom平滑，仅用实时StrokeStabilizer；增大绳长范围(0.08→0.12)、添加起笔缓入效果、添加最小绳长阈值
+ * 2026-02-07: 移除流线功能(Streamline)，恢复直接跟随模式
  */
 
 
@@ -30,233 +29,6 @@ import {
 const CANVAS_SIZE = 1; // 归一化画布尺寸 (-0.5 to 0.5)
 const DEFAULT_SYMMETRY_DIVISIONS = 8;
 const DEFAULT_COLOR = '#ffaa00';
-
-// ==================== 实时流线稳定器 ====================
-
-/**
- * 笔画流线稳定器 - 实现类似 Procreate Streamline 的拉绳效果
- * 
- * 核心原理：Pulled String (拉绳) 算法
- * - 笔刷像被一根绳子拴在光标后面
- * - 只有当光标拉动距离超过绳长时笔刷才移动
- * - 自然保留转角处的精确控制，同时平滑长曲线
- */
-export class StrokeStabilizer {
-    private brushPos: { x: number; y: number } | null = null;
-    private lastRawPos: { x: number; y: number } | null = null;
-    private lastTimestamp: number = 0;
-    private strokeStartTime: number = 0;
-    private streamlineAmount: number; // 0-100
-
-    // 速度自适应参数
-    private maxSpeed: number = 0.002; // 归一化坐标每毫秒的最大速度
-
-    // 增强参数
-    private readonly MAX_STRING_LENGTH: number = 0.12; // 增大绳长范围 (原0.08)
-    private readonly MIN_STRING_LENGTH: number = 0.002; // 最小绳长阈值
-    private readonly EASE_IN_DURATION: number = 150; // 起笔缓入时长(ms)
-    private readonly SPEED_DECAY: number = 0.5; // 速度自适应衰减因子 (原0.7)
-
-    /**
-     * @param streamline 流线强度 0-100 (0=直接跟随, 100=最强惯性)
-     */
-    constructor(streamline: number = 0) {
-        this.streamlineAmount = Math.max(0, Math.min(100, streamline));
-    }
-
-    /**
-     * 重置稳定器状态（每笔开始时调用）
-     */
-    reset(): void {
-        this.brushPos = null;
-        this.lastRawPos = null;
-        this.lastTimestamp = 0;
-        this.strokeStartTime = Date.now();
-    }
-
-    /**
-     * 更新流线强度
-     */
-    setStreamline(value: number): void {
-        this.streamlineAmount = Math.max(0, Math.min(100, value));
-    }
-
-    /**
-     * 处理原始输入点，返回稳定后的位置
-     * @param rawPos 原始输入位置 (归一化坐标 0-1)
-     * @returns 稳定后的位置
-     */
-    stabilize(rawPos: { x: number; y: number }): { x: number; y: number } {
-        const now = Date.now();
-
-        // 流线强度为0时直接返回原始位置
-        if (this.streamlineAmount <= 0) {
-            this.brushPos = { ...rawPos };
-            this.lastRawPos = { ...rawPos };
-            this.lastTimestamp = now;
-            return rawPos;
-        }
-
-        // 第一个点直接使用
-        if (this.brushPos === null) {
-            this.brushPos = { ...rawPos };
-            this.lastRawPos = { ...rawPos };
-            this.lastTimestamp = now;
-            this.strokeStartTime = now;
-            return rawPos;
-        }
-
-        // 计算绳长：streamline 0-100 映射到 0-MAX_STRING_LENGTH (归一化坐标)
-        // 绳子越长，惯性越大
-        const baseStringLength = (this.streamlineAmount / 100) * this.MAX_STRING_LENGTH;
-
-        // 速度自适应：快速移动时缩短绳长，提高响应性
-        let stringLength = baseStringLength;
-        if (this.lastRawPos && this.lastTimestamp > 0) {
-            const dt = Math.max(1, now - this.lastTimestamp);
-            const dxSpeed = rawPos.x - this.lastRawPos.x;
-            const dySpeed = rawPos.y - this.lastRawPos.y;
-            const speed = Math.sqrt(dxSpeed * dxSpeed + dySpeed * dySpeed) / dt;
-
-            // 速度因子：速度越快，绳子越短
-            const speedFactor = Math.min(1, speed / this.maxSpeed);
-            stringLength = baseStringLength * (1 - speedFactor * this.SPEED_DECAY);
-        }
-
-        // 起笔缓入效果：前EASE_IN_DURATION ms逐渐增加有效绳长
-        const elapsed = now - this.strokeStartTime;
-        const easeInFactor = Math.min(1, elapsed / this.EASE_IN_DURATION);
-        stringLength = stringLength * easeInFactor;
-
-        // 确保绳长不低于最小阈值
-        stringLength = Math.max(this.MIN_STRING_LENGTH, stringLength);
-
-        // Pulled String 核心算法
-        const dx = rawPos.x - this.brushPos.x;
-        const dy = rawPos.y - this.brushPos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance > stringLength && distance > 0.0001) {
-            // 笔刷被拉向光标，保持绳长距离
-            const pullRatio = (distance - stringLength) / distance;
-            this.brushPos.x += dx * pullRatio;
-            this.brushPos.y += dy * pullRatio;
-        }
-        // 距离小于绳长时，笔刷不动（这是与EMA的关键区别！）
-
-        this.lastRawPos = { ...rawPos };
-        this.lastTimestamp = now;
-
-        return { ...this.brushPos };
-    }
-}
-
-// ==================== Catmull-Rom 样条曲线平滑 ====================
-
-/**
- * Catmull-Rom Centripetal 样条曲线插值
- * 用于实现类似 Procreate Streamline 的曲线平滑效果
- * 
- * @param points 原始采样点数组
- * @param streamline 流线强度 0-100 (0=不平滑, 100=最大平滑)
- * @returns 平滑后的点数组
- */
-export function smoothStrokeWithCatmullRom(
-    points: { x: number; y: number; pressure: number; timestamp?: number }[],
-    streamline: number
-): { x: number; y: number; pressure: number }[] {
-    // 流线强度为0或点数太少时直接返回原始点
-    if (streamline <= 0 || points.length < 3) {
-        return points.map(p => ({ x: p.x, y: p.y, pressure: p.pressure }));
-    }
-
-    const result: { x: number; y: number; pressure: number }[] = [];
-
-    // 根据streamline计算细分程度
-    // streamline 0-100 映射到 segments 1-10
-    // 更高的segments意味着更平滑的曲线（因为插值点更多）
-    const segmentsPerSpan = Math.max(1, Math.floor(1 + (streamline / 100) * 9));
-
-    // alpha = 0.5 为 centripetal (防止尖点和自交)
-    const alpha = 0.5;
-
-    // 为端点添加虚拟点以确保曲线通过所有实际点
-    const extendedPoints = [
-        points[0], // 复制第一个点
-        ...points,
-        points[points.length - 1] // 复制最后一个点
-    ];
-
-    // 对每一段进行插值
-    for (let i = 1; i < extendedPoints.length - 2; i++) {
-        const p0 = extendedPoints[i - 1];
-        const p1 = extendedPoints[i];
-        const p2 = extendedPoints[i + 1];
-        const p3 = extendedPoints[i + 2];
-
-        // 计算参数化距离 (centripetal)
-        const t0 = 0;
-        const t1 = t0 + Math.pow(distance2D(p0, p1), alpha);
-        const t2 = t1 + Math.pow(distance2D(p1, p2), alpha);
-        const t3 = t2 + Math.pow(distance2D(p2, p3), alpha);
-
-        // 避免除以零
-        if (t1 === t0 || t2 === t1 || t3 === t2) {
-            result.push({ x: p1.x, y: p1.y, pressure: p1.pressure });
-            continue;
-        }
-
-        // 在 p1 到 p2 之间插值
-        for (let j = 0; j < segmentsPerSpan; j++) {
-            const t = t1 + (t2 - t1) * (j / segmentsPerSpan);
-
-            // Catmull-Rom 插值公式
-            const A1x = (t1 - t) / (t1 - t0) * p0.x + (t - t0) / (t1 - t0) * p1.x;
-            const A1y = (t1 - t) / (t1 - t0) * p0.y + (t - t0) / (t1 - t0) * p1.y;
-            const A1p = (t1 - t) / (t1 - t0) * p0.pressure + (t - t0) / (t1 - t0) * p1.pressure;
-
-            const A2x = (t2 - t) / (t2 - t1) * p1.x + (t - t1) / (t2 - t1) * p2.x;
-            const A2y = (t2 - t) / (t2 - t1) * p1.y + (t - t1) / (t2 - t1) * p2.y;
-            const A2p = (t2 - t) / (t2 - t1) * p1.pressure + (t - t1) / (t2 - t1) * p2.pressure;
-
-            const A3x = (t3 - t) / (t3 - t2) * p2.x + (t - t2) / (t3 - t2) * p3.x;
-            const A3y = (t3 - t) / (t3 - t2) * p2.y + (t - t2) / (t3 - t2) * p3.y;
-            const A3p = (t3 - t) / (t3 - t2) * p2.pressure + (t - t2) / (t3 - t2) * p3.pressure;
-
-            const B1x = (t2 - t) / (t2 - t0) * A1x + (t - t0) / (t2 - t0) * A2x;
-            const B1y = (t2 - t) / (t2 - t0) * A1y + (t - t0) / (t2 - t0) * A2y;
-            const B1p = (t2 - t) / (t2 - t0) * A1p + (t - t0) / (t2 - t0) * A2p;
-
-            const B2x = (t3 - t) / (t3 - t1) * A2x + (t - t1) / (t3 - t1) * A3x;
-            const B2y = (t3 - t) / (t3 - t1) * A2y + (t - t1) / (t3 - t1) * A3y;
-            const B2p = (t3 - t) / (t3 - t1) * A2p + (t - t1) / (t3 - t1) * A3p;
-
-            const Cx = (t2 - t) / (t2 - t1) * B1x + (t - t1) / (t2 - t1) * B2x;
-            const Cy = (t2 - t) / (t2 - t1) * B1y + (t - t1) / (t2 - t1) * B2y;
-            const Cp = (t2 - t) / (t2 - t1) * B1p + (t - t1) / (t2 - t1) * B2p;
-
-            result.push({ x: Cx, y: Cy, pressure: Math.max(0, Math.min(1, Cp)) });
-        }
-    }
-
-    // 添加最后一个点
-    const lastPoint = points[points.length - 1];
-    result.push({ x: lastPoint.x, y: lastPoint.y, pressure: lastPoint.pressure });
-
-    return result;
-}
-
-/**
- * 计算两点间的欧氏距离
- */
-function distance2D(
-    p1: { x: number; y: number },
-    p2: { x: number; y: number }
-): number {
-    const dx = p2.x - p1.x;
-    const dy = p2.y - p1.y;
-    return Math.sqrt(dx * dx + dy * dy);
-}
 
 // ==================== 绘图系统状态接口 ====================
 
@@ -660,7 +432,6 @@ export function createParticleStrokeMesh(
     },
     symmetryParams?: SymmetryParams
 ): THREE.Points {
-    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
     const smoothedPoints = points;
 
     // 沿路径均匀插值生成粒子（参考粒子环实现）
@@ -1558,7 +1329,6 @@ export function createLightsaberStrokeMesh(
     const group = new THREE.Group();
     if (points.length < 2) return group;
 
-    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
     const smoothedPoints = points;
 
     const lightsaberMaterials: THREE.ShaderMaterial[] = [];
@@ -2128,7 +1898,6 @@ export function createLineStrokeMesh(
     const baseLineWidth = (settings.thickness || 0.02) * 0.3;
     const mcSettings = magicCircleSettings || {};
 
-    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
     const smoothedPoints = points;
 
     // 为每个对称副本创建线条
@@ -2351,7 +2120,6 @@ export function createWebStrokeMesh(
         pressureMode?: 'none' | 'opacity' | 'density';
         distanceFade?: number;
         brightness?: number;
-        streamline?: number;  // 流线强度 0-100
     },
     symmetryMode: SymmetryMode,
     symmetryDivisions: number,
@@ -2382,7 +2150,6 @@ export function createWebStrokeMesh(
 
     if (points.length < 1) return group;
 
-    // Streamline 已在实时输入阶段通过 StrokeStabilizer 应用 (纯 Pulled String 算法)
     const smoothedPoints = points;
 
     // 提取设置参数
