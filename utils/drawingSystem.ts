@@ -838,7 +838,7 @@ void main() {
     pos += normal * wave;
   }
   
-  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(pos, 1.0);
   vViewPosition = -mvPosition.xyz;
   gl_Position = projectionMatrix * mvPosition;
 }
@@ -1487,8 +1487,8 @@ export function createLightsaberStrokeMesh(
     const coreColorObj = new THREE.Color(settings.coreColor || '#ffffff');
 
     const basePath = points.map(p => ({
-        x: p.x,
-        y: p.y,
+        x: p.x - 0.5,
+        y: 0.5 - p.y,
         pressure: p.pressure ?? 1.0
     }));
 
