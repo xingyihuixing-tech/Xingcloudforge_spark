@@ -1910,75 +1910,57 @@ export function createLineStrokeMesh(
 
     // 使用统一的对称变换函数
     const symmetricPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
-    const allPaths = symmetricPaths.map(path => path.map(p => ({ x: p.x, y: p.y, z: p.z, pressure: p.pressure })));
+    const allPaths = symmetricPaths.map(path => path.map(p => ({ x: p.x, y: p.y, z: p.z ?? 0, pressure: p.pressure })));
 
-    // 为每条路径创建线条 - 使用真正的丝环着色器
-    // 修复闪烁：同一笔画的所有分段使用统一的renderOrder，不同路径间隔开
-    const baseRenderOrder = 51;
+    // ==================== 几何体合并优化 ====================
+    // 合并所有对称路径的顶点数据到单个BufferGeometry，减少Draw Call
+    const mergedPositions: number[] = [];
+    const mergedNormals: number[] = [];
+    const mergedUvs: number[] = [];
+    const mergedIndices: number[] = [];
+    let indexOffset = 0;
+
+    const baseOpacity = settings.opacity ?? 0.85;
+    const baseEmissive = settings.emissive ?? 0.9;
+
+    // 遍历所有对称路径收集几何体数据
     for (let pathIndex = 0; pathIndex < allPaths.length; pathIndex++) {
         const path = allPaths[pathIndex];
-        const pathRenderOrder = baseRenderOrder + pathIndex;  // 每条路径一个renderOrder
         if (path.length < 2) continue;
 
         if (pressureMode === 'none') {
-            const curve = new THREE.CatmullRomCurve3(path.map(p => new THREE.Vector3(p.x, p.y, 0)));
-            const tubeGeometry = new THREE.TubeGeometry(curve, Math.max(16, path.length * 3), baseLineWidth, 8, false);
+            // 非压感模式：使用连续管道，提取顶点数据
+            const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
+            const curve = new THREE.CatmullRomCurve3(curvePoints);
+            const tubularSegments = Math.max(16, path.length * 3);
+            const radialSegments = 8;
+            const tubeGeometry = new THREE.TubeGeometry(curve, tubularSegments, baseLineWidth, radialSegments, false);
 
-            const material = new THREE.ShaderMaterial({
-                vertexShader: silkRingVertexShader,
-                fragmentShader: silkRingFragmentShader,
-                uniforms: {
-                    uTime: { value: 0 },
-                    uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
-                    // 波动参数 (与光环系统一致)
-                    uWaveType: { value: settings.waveType === 'sine' ? 1.0 : settings.waveType === 'triangle' ? 2.0 : 0.0 },
-                    uWobbleFrequency: { value: settings.wobbleFrequency ?? 10.0 },
-                    uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.5 },
-                    // 视觉效果参数
-                    uStrandDensity: { value: settings.strandDensity ?? 30.0 },
-                    uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
-                    uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
-                    uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
-                    uOpacity: { value: settings.opacity ?? 0.85 },
-                    uEmissive: { value: settings.emissive ?? 0.9 },
-                    uBloomBoost: { value: settings.bloomBoost ?? 0.12 },
-                    // 染色模式 - 使用法阵级别参数
-                    uColorMode: { value: mcSettings.colorMode ?? 0 },
-                    uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
-                    uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
-                    uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                    uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
-                    uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                    uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 },
-                    // 染色功能参数
-                    uBaseHue: { value: mcSettings.baseHue ?? 200 },
-                    uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                    uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                    // 法阵级别参数
-                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
-                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
-                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
-                },
-                transparent: true,
-                depthTest: false,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending,
-                side: THREE.DoubleSide,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1
-            });
+            // 提取并合并顶点数据
+            const positions = tubeGeometry.getAttribute('position');
+            const normals = tubeGeometry.getAttribute('normal');
+            const uvs = tubeGeometry.getAttribute('uv');
+            const indices = tubeGeometry.getIndex();
 
-            const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = pathRenderOrder;  // 同一路径内所有分段使用相同renderOrder
-            silkMaterials.push(material);  // 收集材质用于后续uTime更新
-            group.add(mesh);
+            // 复制顶点
+            for (let i = 0; i < positions.count; i++) {
+                mergedPositions.push(positions.getX(i), positions.getY(i), positions.getZ(i));
+                mergedNormals.push(normals.getX(i), normals.getY(i), normals.getZ(i));
+                mergedUvs.push(uvs.getX(i), uvs.getY(i));
+            }
+
+            // 复制索引（偏移）
+            if (indices) {
+                for (let i = 0; i < indices.count; i++) {
+                    mergedIndices.push(indices.getX(i) + indexOffset);
+                }
+            }
+
+            indexOffset += positions.count;
+            tubeGeometry.dispose(); // 释放临时几何体
             continue;
         }
-
+        // 压感模式：分段生成可变半径管道
         const cumulative: number[] = [0];
         let totalLen = 0;
         for (let i = 1; i < path.length; i++) {
@@ -1995,7 +1977,7 @@ export function createLineStrokeMesh(
         const segCountByLen = Math.max(1, Math.floor(totalLen / targetSpacing));
         const segCount = Math.min(maxSegmentsPerPath, segCountByLen);
 
-        type PathPoint = { x: number; y: number; z?: number; pressure: number };
+        type PathPoint = { x: number; y: number; z: number; pressure: number };
         const sampleAt = (dist: number): PathPoint => {
             const d = Math.max(0, Math.min(totalLen, dist));
             let segIndex = 0;
@@ -2015,12 +1997,10 @@ export function createLineStrokeMesh(
             return {
                 x: p0.x + (p1.x - p0.x) * t,
                 y: p0.y + (p1.y - p0.y) * t,
+                z: p0.z + (p1.z - p0.z) * t,
                 pressure: p0.pressure + (p1.pressure - p0.pressure) * t
             };
         };
-
-        const baseOpacity = settings.opacity ?? 0.85;
-        const baseEmissive = settings.emissive ?? 1.5;
 
         for (let i = 0; i < segCount; i++) {
             const a = sampleAt((i / segCount) * totalLen);
@@ -2028,79 +2008,111 @@ export function createLineStrokeMesh(
             const midPressure = clamp01((a.pressure + b.pressure) * 0.5);
             const peSeg = pressureCurve(midPressure);
 
-            const radiusScale = pressureMode === 'calligraphy' ? (0.3 + 2.7 * peSeg) : 1.0;  // 书法压感：粗细变化约10倍
+            const radiusScale = pressureMode === 'calligraphy' ? (0.3 + 2.7 * peSeg) : 1.0;
             const radius = baseLineWidth * radiusScale;
 
             const curve = new THREE.LineCurve3(
-                new THREE.Vector3(a.x, a.y, 0),
-                new THREE.Vector3(b.x, b.y, 0)
+                new THREE.Vector3(a.x, a.y, a.z),
+                new THREE.Vector3(b.x, b.y, b.z)
             );
             const tubeGeometry = new THREE.TubeGeometry(curve, 2, radius, 6, false);
 
-            const opacityScale = pressureMode === 'brightness' ? (0.55 + 0.45 * peSeg) : 1.0;
-            const emissiveScale = pressureMode === 'brightness'
-                ? (0.7 + 1.2 * peSeg)
-                : (pressureMode === 'calligraphy' ? (0.9 + 0.25 * peSeg) : 1.0);
+            // 提取并合并顶点数据
+            const positions = tubeGeometry.getAttribute('position');
+            const normals = tubeGeometry.getAttribute('normal');
+            const uvs = tubeGeometry.getAttribute('uv');
+            const indices = tubeGeometry.getIndex();
 
-            const material = new THREE.ShaderMaterial({
-                vertexShader: silkRingVertexShader,
-                fragmentShader: silkRingFragmentShader,
-                uniforms: {
-                    uTime: { value: 0 },
-                    uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
-                    // 波动参数 (与光环系统一致)
-                    uWaveType: { value: settings.waveType === 'sine' ? 1.0 : settings.waveType === 'triangle' ? 2.0 : 0.0 },
-                    uWobbleFrequency: { value: settings.wobbleFrequency ?? 10.0 },
-                    uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.5 },
-                    // 视觉效果参数
-                    uStrandDensity: { value: settings.strandDensity ?? 30.0 },
-                    uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
-                    uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
-                    uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
-                    uOpacity: { value: baseOpacity * opacityScale },
-                    uEmissive: { value: baseEmissive * emissiveScale },
-                    uBloomBoost: { value: settings.bloomBoost ?? 0.12 },
-                    // 染色模式 - 使用法阵级别参数
-                    uColorMode: { value: mcSettings.colorMode ?? 0 },
-                    uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
-                    uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
-                    uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                    uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
-                    uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                    uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 },
-                    // 染色功能参数
-                    uBaseHue: { value: mcSettings.baseHue ?? 200 },
-                    uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                    uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                    // 法阵级别参数
-                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
-                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
-                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
-                },
-                transparent: true,
-                depthTest: false,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending,
-                side: THREE.DoubleSide,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1
-            });
+            for (let j = 0; j < positions.count; j++) {
+                mergedPositions.push(positions.getX(j), positions.getY(j), positions.getZ(j));
+                mergedNormals.push(normals.getX(j), normals.getY(j), normals.getZ(j));
+                mergedUvs.push(uvs.getX(j), uvs.getY(j));
+            }
 
-            const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = pathRenderOrder;  // 同一路径内所有分段使用相同renderOrder
-            silkMaterials.push(material);  // 收集材质用于后续uTime更新
-            group.add(mesh);
+            if (indices) {
+                for (let j = 0; j < indices.count; j++) {
+                    mergedIndices.push(indices.getX(j) + indexOffset);
+                }
+            }
+
+            indexOffset += positions.count;
+            tubeGeometry.dispose();
         }
     }
+
+    // 如果没有有效顶点，返回空组
+    if (mergedPositions.length === 0) {
+        group.userData.silkMaterials = silkMaterials;
+        return group;
+    }
+
+    // 创建合并后的单个几何体
+    const mergedGeometry = new THREE.BufferGeometry();
+    mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(mergedPositions, 3));
+    mergedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(mergedNormals, 3));
+    mergedGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(mergedUvs, 2));
+    mergedGeometry.setIndex(mergedIndices);
+
+    // 创建单个材质
+    const material = new THREE.ShaderMaterial({
+        vertexShader: silkRingVertexShader,
+        fragmentShader: silkRingFragmentShader,
+        uniforms: {
+            uTime: { value: 0 },
+            uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
+            // 波动参数
+            uWaveType: { value: settings.waveType === 'sine' ? 1.0 : settings.waveType === 'triangle' ? 2.0 : 0.0 },
+            uWobbleFrequency: { value: settings.wobbleFrequency ?? 10.0 },
+            uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.5 },
+            // 视觉效果参数
+            uStrandDensity: { value: settings.strandDensity ?? 30.0 },
+            uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
+            uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
+            uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
+            uOpacity: { value: baseOpacity },
+            uEmissive: { value: baseEmissive },
+            uBloomBoost: { value: settings.bloomBoost ?? 0.12 },
+            // 染色模式
+            uColorMode: { value: mcSettings.colorMode ?? 0 },
+            uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+            uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+            uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+            uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+            uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+            uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 },
+            // 染色功能参数
+            uBaseHue: { value: mcSettings.baseHue ?? 200 },
+            uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+            uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+            // 法阵级别参数
+            uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+            uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+            uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+            uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+            uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+            uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
+        },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1
+    });
+
+    // 创建单个Mesh（替代之前的多个Mesh）
+    const mesh = new THREE.Mesh(mergedGeometry, material);
+    mesh.renderOrder = 51;
+    silkMaterials.push(material);
+    group.add(mesh);
 
     // 将材质列表存储到group.userData，以便在动画循环中更新uTime
     group.userData.silkMaterials = silkMaterials;
 
     return group;
+
 }
 
 // ==================== 创建网格画笔笔画 (Web/Plexus效果) ====================
