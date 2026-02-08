@@ -1936,7 +1936,7 @@ export interface MaterialPreset {
 // - kaleidoscope: 万花筒（旋转+镜像）
 // - starburst: 星芒（奇偶分割缩放+分形）
 // - sphere: 球面（2D映射到3D球体表面）
-export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'sphere';
+export type SymmetryMode = 'none' | 'radial' | 'kaleidoscope' | 'starburst' | 'sphere' | 'prism';
 
 // 对称模式可调参数
 export interface SymmetryParams {
