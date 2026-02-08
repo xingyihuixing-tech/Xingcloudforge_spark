@@ -1300,6 +1300,157 @@ void main() {
 
 // ==================== 创建光剑画笔笔画 ====================
 
+// ==================== 光剑Billboard着色器（高性能版本）====================
+
+const lightsaberBillboardVertexShader = `
+precision highp float;
+
+attribute float aSide;
+attribute float aProgress;
+attribute float aTaper;
+
+uniform float uLineWidth;
+uniform float uTime;
+uniform float uPulseEnabled;
+uniform float uPulseSpeed;
+uniform float uPulseIntensity;
+
+varying float vSide;
+varying float vProgress;
+varying float vTaper;
+
+void main() {
+    vSide = aSide;
+    vProgress = aProgress;
+    vTaper = aTaper;
+    vec3 pos = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0);
+}
+`;
+
+const lightsaberBillboardFragmentShader = `
+precision highp float;
+
+varying float vSide;
+varying float vProgress;
+varying float vTaper;
+
+uniform float uTime;
+uniform vec3 uCoreColor;
+uniform vec3 uGlowColor;
+uniform float uCoreWidth;
+uniform float uGlowIntensity;
+uniform float uGlowFalloff;
+uniform float uPulseEnabled;
+uniform float uPulseSpeed;
+uniform float uPulseIntensity;
+uniform float uFlowEnabled;
+
+uniform float uMCOpacity;
+uniform float uMCHueShift;
+uniform float uMCBrightness;
+uniform float uMCSaturationBoost;
+uniform float uMCColorMode;
+uniform vec3 uMCColor1;
+uniform vec3 uMCColor2;
+uniform vec3 uMCColor3;
+uniform float uMCColorMidPos;
+uniform float uMCProceduralIntensity;
+uniform float uMCBaseHue;
+uniform float uMCBaseSaturation;
+
+float hue2rgb(float p, float q, float t) {
+    if (t < 0.0) t += 1.0;
+    if (t > 1.0) t -= 1.0;
+    if (t < 1.0/6.0) return p + (q - p) * 6.0 * t;
+    if (t < 1.0/2.0) return q;
+    if (t < 2.0/3.0) return p + (q - p) * (2.0/3.0 - t) * 6.0;
+    return p;
+}
+
+vec3 hsl2rgb(vec3 hsl) {
+    float h = hsl.x, s = hsl.y, l = hsl.z;
+    if (s == 0.0) return vec3(l);
+    float q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+    float p = 2.0 * l - q;
+    return vec3(hue2rgb(p, q, h + 1.0/3.0), hue2rgb(p, q, h), hue2rgb(p, q, h - 1.0/3.0));
+}
+
+vec3 rgb2hsl(vec3 rgb) {
+    float maxC = max(max(rgb.r, rgb.g), rgb.b);
+    float minC = min(min(rgb.r, rgb.g), rgb.b);
+    float l = (maxC + minC) / 2.0;
+    float h = 0.0, s = 0.0;
+    if (maxC != minC) {
+        float d = maxC - minC;
+        s = l > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC);
+        if (maxC == rgb.r) h = (rgb.g - rgb.b) / d + (rgb.g < rgb.b ? 6.0 : 0.0);
+        else if (maxC == rgb.g) h = (rgb.b - rgb.r) / d + 2.0;
+        else h = (rgb.r - rgb.g) / d + 4.0;
+        h /= 6.0;
+    }
+    return vec3(h, s, l);
+}
+
+void main() {
+    float distFromCenter = abs(vSide);
+    float coreAlpha = (1.0 - smoothstep(uCoreWidth * 0.5, uCoreWidth * 0.5 + 0.15, distFromCenter)) * vTaper;
+    float glowAlpha = pow(1.0 - distFromCenter, uGlowFalloff) * uGlowIntensity * vTaper;
+    
+    if (uPulseEnabled > 0.5) {
+        float pulse = 1.0 + sin(uTime * uPulseSpeed * 3.14159 + vProgress * 6.28318) * uPulseIntensity * 0.5;
+        glowAlpha *= pulse;
+    }
+    
+    if (uFlowEnabled > 0.5) {
+        float flow = sin(vProgress * 20.0 - uTime * 3.0) * 0.15 + 0.85;
+        glowAlpha *= flow;
+    }
+    
+    vec3 finalColor = mix(uGlowColor, uCoreColor, coreAlpha);
+    float t = vProgress;
+    
+    if (uMCColorMode > 0.5) {
+        vec3 tintColor = finalColor;
+        if (uMCColorMode > 3.5) {
+            vec3 hsl = rgb2hsl(finalColor);
+            hsl.x = uMCBaseHue / 360.0;
+            hsl.y = uMCBaseSaturation;
+            tintColor = hsl2rgb(hsl);
+        } else if (uMCColorMode < 1.5) {
+            tintColor = mix(uMCColor1, uMCColor2, t);
+        } else if (uMCColorMode < 2.5) {
+            tintColor = t < uMCColorMidPos 
+                ? mix(uMCColor1, uMCColor2, t / uMCColorMidPos)
+                : mix(uMCColor2, uMCColor3, (t - uMCColorMidPos) / (1.0 - uMCColorMidPos));
+        } else if (uMCColorMode < 3.5) {
+            float hue = mod(t + uTime * 0.1, 1.0);
+            tintColor = hsl2rgb(vec3(hue, 0.8, 0.6)) * uMCProceduralIntensity;
+        }
+        float tintMix = (1.0 - coreAlpha) * 0.8;
+        finalColor = mix(finalColor, tintColor * length(finalColor), tintMix);
+    }
+    
+    if (abs(uMCHueShift) > 0.001) {
+        vec3 hsl = rgb2hsl(finalColor);
+        hsl.x = mod(hsl.x + uMCHueShift, 1.0);
+        finalColor = hsl2rgb(hsl);
+    }
+    
+    if (uMCSaturationBoost > 0.001 || uMCSaturationBoost < 1.999) {
+        vec3 hsl = rgb2hsl(finalColor);
+        hsl.y = clamp(hsl.y * uMCSaturationBoost, 0.0, 1.0);
+        finalColor = hsl2rgb(hsl);
+    }
+    
+    finalColor *= uMCBrightness;
+    float alpha = max(coreAlpha, glowAlpha * 0.85) * uMCOpacity;
+    alpha = smoothstep(0.02, 0.9, alpha);
+    
+    gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+
 export function createLightsaberStrokeMesh(
     points: StrokePoint[],
     color: string,
@@ -1313,11 +1464,10 @@ export function createLightsaberStrokeMesh(
         pulseEnabled?: boolean;
         pulseSpeed?: number;
         pulseIntensity?: number;
-        // 染色功能参数
         baseHue?: number;
         baseSaturation?: number;
         saturationBoost?: number;
-        colorMode?: number;  // 0=none, 4=single, 1=twoColor, 2=threeColor, 3=procedural
+        colorMode?: number;
         color1?: THREE.Vector3;
         color2?: THREE.Vector3;
         color3?: THREE.Vector3;
@@ -1329,462 +1479,150 @@ export function createLightsaberStrokeMesh(
     const group = new THREE.Group();
     if (points.length < 2) return group;
 
-    const smoothedPoints = points;
-
     const lightsaberMaterials: THREE.ShaderMaterial[] = [];
     const baseLineWidth = (settings.thickness || 0.03) * 0.5;
     const mcSettings = magicCircleSettings || {};
 
-    // 解析颜色
     const glowColorObj = new THREE.Color(settings.glowColor || color);
     const coreColorObj = new THREE.Color(settings.coreColor || '#ffffff');
 
-    // 压感模式
-    const pressureMode = settings.pressureMode || 'none';
+    const basePath = points.map(p => ({
+        x: p.x,
+        y: p.y,
+        pressure: p.pressure ?? 1.0
+    }));
 
-    // 应用对称（注意Y轴翻转，与粒子画笔一致）
-    const basePath = smoothedPoints.map(p => ({ x: p.x - 0.5, y: 0.5 - p.y, pressure: p.pressure }));
-
-    // 端点渐变参数（从settings读取）
-    const taperLength = settings.taperLength ?? 0.15;
-
-    // ==================== GPU实例化优化决策 ====================
-    const fractalLevels = symmetryParams?.fractalLevels ?? symmetryParams?.starburstFractalLevels ?? 1;
-    const symmetryMatrices = computeSymmetryMatrices(symmetryMode, symmetryDivisions, symmetryParams);
-    const canUseInstancing = fractalLevels === 1 && symmetryMatrices.length > 0;
-
-    if (canUseInstancing && pressureMode === 'none') {
-        // ========== GPU实例化路径（最优）==========
-        // 计算基础路径总长度
-        let totalLength = 0;
-        for (let i = 1; i < basePath.length; i++) {
-            const dx = basePath[i].x - basePath[i - 1].x;
-            const dy = basePath[i].y - basePath[i - 1].y;
-            totalLength += Math.sqrt(dx * dx + dy * dy);
-        }
-
-        // 端点渐变半径函数
-        const getRadiusAtDistance = (dist: number): number => {
-            const t = dist / totalLength;
-            let radiusFactor = 1.0;
-            if (t < taperLength) {
-                radiusFactor = t / taperLength;
-            } else if (t > 1 - taperLength) {
-                radiusFactor = (1 - t) / taperLength;
-            }
-            return baseLineWidth * Math.max(0.1, Math.pow(radiusFactor, 0.5));
-        };
-
-        // 创建可变半径管道几何体（只处理基础路径，无对称变换）
-        const curvePoints = basePath.map(p => new THREE.Vector3(p.x, p.y, 0));
-        const curve = new THREE.CatmullRomCurve3(curvePoints);
-        const tubularSegments = Math.max(16, basePath.length * 3);
-        const radialSegments = 8;
-
-        const frames = curve.computeFrenetFrames(tubularSegments, false);
-        const vertices: number[] = [];
-        const normals: number[] = [];
-        const uvs: number[] = [];
-        const indices: number[] = [];
-
-        for (let i = 0; i <= tubularSegments; i++) {
-            const t = i / tubularSegments;
-            const P = curve.getPointAt(t);
-            const N = frames.normals[i];
-            const B = frames.binormals[i];
-            const currentDist = t * totalLength;
-            const currentRadius = getRadiusAtDistance(currentDist);
-
-            for (let j = 0; j <= radialSegments; j++) {
-                const v = j / radialSegments * Math.PI * 2;
-                const sin = Math.sin(v);
-                const cos = Math.cos(v);
-
-                const normal = new THREE.Vector3(
-                    cos * N.x + sin * B.x,
-                    cos * N.y + sin * B.y,
-                    cos * N.z + sin * B.z
-                ).normalize();
-
-                vertices.push(
-                    P.x + currentRadius * normal.x,
-                    P.y + currentRadius * normal.y,
-                    P.z + currentRadius * normal.z
-                );
-                normals.push(normal.x, normal.y, normal.z);
-                uvs.push(i / tubularSegments, j / radialSegments);
-            }
-        }
-
-        for (let i = 0; i < tubularSegments; i++) {
-            for (let j = 0; j < radialSegments; j++) {
-                const a = i * (radialSegments + 1) + j;
-                const b = (i + 1) * (radialSegments + 1) + j;
-                const c = (i + 1) * (radialSegments + 1) + (j + 1);
-                const d = i * (radialSegments + 1) + (j + 1);
-                indices.push(a, b, d, b, c, d);
-            }
-        }
-
-        const baseGeometry = new THREE.BufferGeometry();
-        baseGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        baseGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-        baseGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-        baseGeometry.setIndex(indices);
-
-        const material = new THREE.ShaderMaterial({
-            vertexShader: lightsaberVertexShader,
-            fragmentShader: lightsaberFragmentShader,
-            uniforms: {
-                uTime: { value: 0 },
-                uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
-                uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
-                uCoreWidth: { value: settings.coreWidth ?? 0.4 },
-                uGlowIntensity: { value: settings.glowIntensity ?? 1.5 },
-                uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
-                uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
-                uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
-                uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
-                uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
-                uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
-                uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-                uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-                uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-                uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
-                uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                uMCColorMode: { value: mcSettings.colorMode ?? 0 },
-                uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
-            },
-            transparent: true,
-            depthTest: false,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-            side: THREE.DoubleSide,
-            polygonOffset: true,
-            polygonOffsetFactor: 1,
-            polygonOffsetUnits: 1
-        });
-
-        const instancedMesh = new THREE.InstancedMesh(baseGeometry, material, symmetryMatrices.length);
-        for (let i = 0; i < symmetryMatrices.length; i++) {
-            instancedMesh.setMatrixAt(i, symmetryMatrices[i]);
-        }
-        instancedMesh.instanceMatrix.needsUpdate = true;
-        instancedMesh.renderOrder = 53;
-
-        lightsaberMaterials.push(material);
-        group.add(instancedMesh);
-        (group as any).__lightsaberMaterials = lightsaberMaterials;
-        return group;
-    }
-
-    // ========== 回退路径：合并几何体方案 ==========
+    const taperLength = 0.15;
     const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
+    const pressureCurve = (p: number) => 0.3 + p * 0.7;
 
-    // ==================== 几何体合并优化 ====================
-    const mergedPositions: number[] = [];
-    const mergedNormals: number[] = [];
-    const mergedUvs: number[] = [];
-    const mergedIndices: number[] = [];
-    let indexOffset = 0;
+    const positions: number[] = [];
+    const sides: number[] = [];
+    const progresses: number[] = [];
+    const tapers: number[] = [];
+    const indices: number[] = [];
+    let vertexOffset = 0;
 
-    // 遍历所有对称路径收集几何体数据
-    for (let pathIndex = 0; pathIndex < allPaths.length; pathIndex++) {
-        const path = allPaths[pathIndex];
+    for (const path of allPaths) {
         if (path.length < 2) continue;
 
-        // 计算路径总长度
-        let totalLength = 0;
-        const segmentLengths: number[] = [0];
-        for (let i = 1; i < path.length; i++) {
-            const dx = path[i].x - path[i - 1].x;
-            const dy = path[i].y - path[i - 1].y;
-            totalLength += Math.sqrt(dx * dx + dy * dy);
-            segmentLengths.push(totalLength);
-        }
-
-        // 计算每个点的半径（端点渐变）
-        const getRadiusAtDistance = (dist: number): number => {
-            const t = dist / totalLength;
-            let radiusFactor = 1.0;
-
-            // 起点渐变
-            if (t < taperLength) {
-                radiusFactor = t / taperLength;
-            }
-            // 终点渐变
-            else if (t > 1 - taperLength) {
-                radiusFactor = (1 - t) / taperLength;
-            }
-
-            // 使用平滑的二次曲线使渐变更自然
-            radiusFactor = Math.pow(radiusFactor, 0.5);
-            return baseLineWidth * Math.max(0.1, radiusFactor);
-        };
-
-        if (pressureMode === 'none') {
-            // 使用自定义TubeGeometry实现可变半径（使用路径的z坐标支持3D对称）
-            const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, p.z ?? 0));
-            const curve = new THREE.CatmullRomCurve3(curvePoints);
-            const tubularSegments = Math.max(16, path.length * 3);
-            const radialSegments = 8;
-
-            // 创建可变半径的管道几何体
-            const frames = curve.computeFrenetFrames(tubularSegments, false);
-            const vertices: number[] = [];
-            const normals: number[] = [];
-            const uvs: number[] = [];
-            const indices: number[] = [];
-
-            for (let i = 0; i <= tubularSegments; i++) {
-                const t = i / tubularSegments;
-                const P = curve.getPointAt(t);
-                const N = frames.normals[i];
-                const B = frames.binormals[i];
-
-                // 计算当前位置的半径
-                const currentDist = t * totalLength;
-                const currentRadius = getRadiusAtDistance(currentDist);
-
-                for (let j = 0; j <= radialSegments; j++) {
-                    const v = j / radialSegments * Math.PI * 2;
-                    const sin = Math.sin(v);
-                    const cos = Math.cos(v);
-
-                    const normal = new THREE.Vector3(
-                        cos * N.x + sin * B.x,
-                        cos * N.y + sin * B.y,
-                        cos * N.z + sin * B.z
-                    ).normalize();
-
-                    vertices.push(
-                        P.x + currentRadius * normal.x,
-                        P.y + currentRadius * normal.y,
-                        P.z + currentRadius * normal.z
-                    );
-                    normals.push(normal.x, normal.y, normal.z);
-                    uvs.push(i / tubularSegments, j / radialSegments);
-                }
-            }
-
-            // 生成索引
-            for (let i = 0; i < tubularSegments; i++) {
-                for (let j = 0; j < radialSegments; j++) {
-                    const a = i * (radialSegments + 1) + j;
-                    const b = (i + 1) * (radialSegments + 1) + j;
-                    const c = (i + 1) * (radialSegments + 1) + (j + 1);
-                    const d = i * (radialSegments + 1) + (j + 1);
-                    indices.push(a, b, d, b, c, d);
-                }
-            }
-
-            // 将顶点数据合并到全局数组（索引需要偏移）
-            for (let vi = 0; vi < vertices.length; vi += 3) {
-                mergedPositions.push(vertices[vi], vertices[vi + 1], vertices[vi + 2]);
-            }
-            for (let ni = 0; ni < normals.length; ni += 3) {
-                mergedNormals.push(normals[ni], normals[ni + 1], normals[ni + 2]);
-            }
-            for (let ui = 0; ui < uvs.length; ui += 2) {
-                mergedUvs.push(uvs[ui], uvs[ui + 1]);
-            }
-            for (let ii = 0; ii < indices.length; ii++) {
-                mergedIndices.push(indices[ii] + indexOffset);
-            }
-
-            indexOffset += vertices.length / 3;  // 顶点数 = vertices.length / 3
-            continue;
-        }
-
-        // 压感模式：使用连续可变半径管道（与非压感模式类似，但半径随压力变化）
-        const cumulative: number[] = [0];
         let totalLen = 0;
+        const segLengths: number[] = [0];
         for (let i = 1; i < path.length; i++) {
             const dx = path[i].x - path[i - 1].x;
             const dy = path[i].y - path[i - 1].y;
-            totalLen += Math.sqrt(dx * dx + dy * dy);
-            cumulative.push(totalLen);
+            const dz = (path[i].z ?? 0) - (path[i - 1].z ?? 0);
+            totalLen += Math.sqrt(dx * dx + dy * dy + dz * dz);
+            segLengths.push(totalLen);
         }
-        if (totalLen < 0.0005) continue;
+        if (totalLen < 0.001) continue;
 
-        const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
-        const pressureCurve = (p: number) => Math.pow(clamp01(p), 1.5);
+        for (let i = 0; i < path.length; i++) {
+            const pt = path[i];
+            const progress = segLengths[i] / totalLen;
 
-        // 采样函数
-        const sampleAt = (dist: number) => {
-            let lo = 0, hi = cumulative.length - 1;
-            while (lo < hi) { const m = (lo + hi + 1) >> 1; if (cumulative[m] > dist) hi = m - 1; else lo = m; }
-            const i = lo;
-            if (i >= path.length - 1) return path[path.length - 1];
-            const segLen = cumulative[i + 1] - cumulative[i];
-            const t = segLen > 0 ? (dist - cumulative[i]) / segLen : 0;
-            return {
-                x: path[i].x + (path[i + 1].x - path[i].x) * t,
-                y: path[i].y + (path[i + 1].y - path[i].y) * t,
-                pressure: path[i].pressure + (path[i + 1].pressure - path[i].pressure) * t
-            };
-        };
-
-        // 计算压感下每个位置的半径
-        const getRadiusAtDistWithPressure = (dist: number): number => {
-            const sample = sampleAt(dist);
-            const pe = pressureCurve(sample.pressure);
-
-            // 端点渐变
-            const t = dist / totalLen;
-            let taperFactor = 1.0;
-            if (t < taperLength) {
-                taperFactor = t / taperLength;
-            } else if (t > 1 - taperLength) {
-                taperFactor = (1 - t) / taperLength;
+            let tx: number, ty: number, tz: number;
+            if (i === 0) {
+                tx = path[1].x - pt.x;
+                ty = path[1].y - pt.y;
+                tz = (path[1].z ?? 0) - (pt.z ?? 0);
+            } else if (i === path.length - 1) {
+                tx = pt.x - path[i - 1].x;
+                ty = pt.y - path[i - 1].y;
+                tz = (pt.z ?? 0) - (path[i - 1].z ?? 0);
+            } else {
+                tx = path[i + 1].x - path[i - 1].x;
+                ty = path[i + 1].y - path[i - 1].y;
+                tz = (path[i + 1].z ?? 0) - (path[i - 1].z ?? 0);
             }
-            taperFactor = Math.pow(taperFactor, 0.5);
 
-            // 压感影响
-            const radiusScale = pressureMode === 'calligraphy' ? (0.3 + 1.7 * pe) : 1.0;
+            const tLen = Math.sqrt(tx * tx + ty * ty + tz * tz);
+            if (tLen > 0.0001) { tx /= tLen; ty /= tLen; tz /= tLen; }
 
-            return baseLineWidth * radiusScale * Math.max(0.1, taperFactor);
-        };
+            let nx = -ty, ny = tx;
+            const nLen = Math.sqrt(nx * nx + ny * ny);
+            if (nLen > 0.0001) { nx /= nLen; ny /= nLen; }
 
-        // 创建连续的曲线点（使用路径的z坐标支持3D对称）
-        const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, p.z ?? 0));
-        const curve = new THREE.CatmullRomCurve3(curvePoints);
-        const tubularSegments = Math.max(16, path.length * 3);
-        const radialSegments = 8;
+            const pressure = pt.pressure ?? 1.0;
+            const pressureWidth = baseLineWidth * pressureCurve(pressure);
 
-        // 创建可变半径的管道几何体
-        const frames = curve.computeFrenetFrames(tubularSegments, false);
-        const vertices: number[] = [];
-        const normals: number[] = [];
-        const uvs: number[] = [];
-        const indices: number[] = [];
-
-        for (let i = 0; i <= tubularSegments; i++) {
-            const t = i / tubularSegments;
-            const P = curve.getPointAt(t);
-            const N = frames.normals[i];
-            const B = frames.binormals[i];
-
-            // 计算当前位置的半径（考虑压感和端点渐变）
-            const currentDist = t * totalLen;
-            const currentRadius = getRadiusAtDistWithPressure(currentDist);
-
-            for (let j = 0; j <= radialSegments; j++) {
-                const v = j / radialSegments * Math.PI * 2;
-                const sin = Math.sin(v);
-                const cos = Math.cos(v);
-
-                const normal = new THREE.Vector3(
-                    cos * N.x + sin * B.x,
-                    cos * N.y + sin * B.y,
-                    cos * N.z + sin * B.z
-                ).normalize();
-
-                vertices.push(
-                    P.x + currentRadius * normal.x,
-                    P.y + currentRadius * normal.y,
-                    P.z + currentRadius * normal.z
-                );
-                normals.push(normal.x, normal.y, normal.z);
-                uvs.push(i / tubularSegments, j / radialSegments);
+            let taper = 1.0;
+            if (progress < taperLength) {
+                taper = Math.pow(progress / taperLength, 0.5);
+            } else if (progress > 1 - taperLength) {
+                taper = Math.pow((1 - progress) / taperLength, 0.5);
             }
+
+            const width = pressureWidth * 3.0;
+
+            positions.push(pt.x + nx * width, pt.y + ny * width, pt.z ?? 0);
+            sides.push(-1);
+            progresses.push(progress);
+            tapers.push(taper);
+
+            positions.push(pt.x - nx * width, pt.y - ny * width, pt.z ?? 0);
+            sides.push(1);
+            progresses.push(progress);
+            tapers.push(taper);
         }
 
-        // 生成索引
-        for (let i = 0; i < tubularSegments; i++) {
-            for (let j = 0; j < radialSegments; j++) {
-                const a = i * (radialSegments + 1) + j;
-                const b = (i + 1) * (radialSegments + 1) + j;
-                const c = (i + 1) * (radialSegments + 1) + (j + 1);
-                const d = i * (radialSegments + 1) + (j + 1);
-                indices.push(a, b, d, b, c, d);
-            }
+        const pathVertexStart = vertexOffset;
+        for (let i = 0; i < path.length - 1; i++) {
+            const baseIdx = pathVertexStart + i * 2;
+            indices.push(baseIdx, baseIdx + 1, baseIdx + 2);
+            indices.push(baseIdx + 1, baseIdx + 3, baseIdx + 2);
         }
-        // 将顶点数据合并到全局数组
-        for (let vi = 0; vi < vertices.length; vi += 3) {
-            mergedPositions.push(vertices[vi], vertices[vi + 1], vertices[vi + 2]);
-        }
-        for (let ni = 0; ni < normals.length; ni += 3) {
-            mergedNormals.push(normals[ni], normals[ni + 1], normals[ni + 2]);
-        }
-        for (let ui = 0; ui < uvs.length; ui += 2) {
-            mergedUvs.push(uvs[ui], uvs[ui + 1]);
-        }
-        for (let ii = 0; ii < indices.length; ii++) {
-            mergedIndices.push(indices[ii] + indexOffset);
-        }
-
-        indexOffset += vertices.length / 3;
+        vertexOffset += path.length * 2;
     }
 
-    // 如果没有有效顶点，返回空组
-    if (mergedPositions.length === 0) {
-        (group as any).__lightsaberMaterials = lightsaberMaterials;
-        return group;
-    }
+    if (positions.length === 0) return group;
 
-    // 创建合并后的单个几何体
-    const mergedGeometry = new THREE.BufferGeometry();
-    mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(mergedPositions, 3));
-    mergedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(mergedNormals, 3));
-    mergedGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(mergedUvs, 2));
-    mergedGeometry.setIndex(mergedIndices);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('aSide', new THREE.Float32BufferAttribute(sides, 1));
+    geometry.setAttribute('aProgress', new THREE.Float32BufferAttribute(progresses, 1));
+    geometry.setAttribute('aTaper', new THREE.Float32BufferAttribute(tapers, 1));
+    geometry.setIndex(indices);
 
-    // 创建单个材质
     const material = new THREE.ShaderMaterial({
-        vertexShader: lightsaberVertexShader,
-        fragmentShader: lightsaberFragmentShader,
+        vertexShader: lightsaberBillboardVertexShader,
+        fragmentShader: lightsaberBillboardFragmentShader,
         uniforms: {
             uTime: { value: 0 },
-            uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
-            uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
-            uCoreWidth: { value: settings.coreWidth ?? 0.4 },
-            uGlowIntensity: { value: settings.glowIntensity ?? 1.5 },
+            uLineWidth: { value: baseLineWidth },
+            uCoreColor: { value: coreColorObj },
+            uGlowColor: { value: glowColorObj },
+            uCoreWidth: { value: settings.coreWidth ?? 0.3 },
+            uGlowIntensity: { value: settings.glowIntensity ?? 1.0 },
             uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
-            uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
-            uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
-            uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
-            // 法阵级别参数
+            uPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+            uPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+            uPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
+            uFlowEnabled: { value: 1.0 },
             uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
             uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
             uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-            uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-            uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-            uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-            // 染色功能参数
-            uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
-            uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
             uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
             uMCColorMode: { value: mcSettings.colorMode ?? 0 },
-            uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-            uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-            uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+            uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 0, 0) },
+            uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(0, 1, 0) },
+            uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(0, 0, 1) },
             uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-            uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+            uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 },
+            uMCBaseHue: { value: mcSettings.baseHue ?? 0 },
+            uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
         },
         transparent: true,
-        depthTest: false,
-        depthWrite: false,
         blending: THREE.AdditiveBlending,
+        depthWrite: false,
         side: THREE.DoubleSide,
-        polygonOffset: true,
-        polygonOffsetFactor: 1,
-        polygonOffsetUnits: 1
     });
 
-    // 创建单个Mesh（替代之前的多个Mesh）
-    const mesh = new THREE.Mesh(mergedGeometry, material);
-    mesh.renderOrder = 53;
     lightsaberMaterials.push(material);
+
+    const mesh = new THREE.Mesh(geometry, material);
     group.add(mesh);
 
-    // 存储材质引用用于动画更新
     (group as any).__lightsaberMaterials = lightsaberMaterials;
 
     return group;
@@ -2116,8 +1954,8 @@ export function createLineStrokeMesh(
         // 只对基础路径生成几何体，不应用对称变换
         const curvePoints = basePath.map(p => new THREE.Vector3(p.x, p.y, 0));
         const curve = new THREE.CatmullRomCurve3(curvePoints);
-        const tubularSegments = Math.max(16, basePath.length * 3);
-        const radialSegments = 8;
+        const tubularSegments = Math.max(8, basePath.length * 2);
+        const radialSegments = 6;
         const baseGeometry = new THREE.TubeGeometry(curve, tubularSegments, baseLineWidth, radialSegments, false);
 
         // 创建InstancedMesh
@@ -2201,8 +2039,8 @@ export function createLineStrokeMesh(
             // 非压感模式：使用连续管道，提取顶点数据
             const curvePoints = path.map(p => new THREE.Vector3(p.x, p.y, p.z));
             const curve = new THREE.CatmullRomCurve3(curvePoints);
-            const tubularSegments = Math.max(16, path.length * 3);
-            const radialSegments = 8;
+            const tubularSegments = Math.max(8, path.length * 2);
+            const radialSegments = 6;
             const tubeGeometry = new THREE.TubeGeometry(curve, tubularSegments, baseLineWidth, radialSegments, false);
 
             // 提取并合并顶点数据
