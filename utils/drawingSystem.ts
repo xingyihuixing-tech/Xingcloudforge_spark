@@ -1344,13 +1344,150 @@ export function createLightsaberStrokeMesh(
 
     // 应用对称（注意Y轴翻转，与粒子画笔一致）
     const basePath = smoothedPoints.map(p => ({ x: p.x - 0.5, y: 0.5 - p.y, pressure: p.pressure }));
-    const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
 
     // 端点渐变参数（从settings读取）
     const taperLength = settings.taperLength ?? 0.15;
 
+    // ==================== GPU实例化优化决策 ====================
+    const fractalLevels = symmetryParams?.fractalLevels ?? symmetryParams?.starburstFractalLevels ?? 1;
+    const symmetryMatrices = computeSymmetryMatrices(symmetryMode, symmetryDivisions, symmetryParams);
+    const canUseInstancing = fractalLevels === 1 && symmetryMatrices.length > 0;
+
+    if (canUseInstancing && pressureMode === 'none') {
+        // ========== GPU实例化路径（最优）==========
+        // 计算基础路径总长度
+        let totalLength = 0;
+        for (let i = 1; i < basePath.length; i++) {
+            const dx = basePath[i].x - basePath[i - 1].x;
+            const dy = basePath[i].y - basePath[i - 1].y;
+            totalLength += Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // 端点渐变半径函数
+        const getRadiusAtDistance = (dist: number): number => {
+            const t = dist / totalLength;
+            let radiusFactor = 1.0;
+            if (t < taperLength) {
+                radiusFactor = t / taperLength;
+            } else if (t > 1 - taperLength) {
+                radiusFactor = (1 - t) / taperLength;
+            }
+            return baseLineWidth * Math.max(0.1, Math.pow(radiusFactor, 0.5));
+        };
+
+        // 创建可变半径管道几何体（只处理基础路径，无对称变换）
+        const curvePoints = basePath.map(p => new THREE.Vector3(p.x, p.y, 0));
+        const curve = new THREE.CatmullRomCurve3(curvePoints);
+        const tubularSegments = Math.max(16, basePath.length * 3);
+        const radialSegments = 8;
+
+        const frames = curve.computeFrenetFrames(tubularSegments, false);
+        const vertices: number[] = [];
+        const normals: number[] = [];
+        const uvs: number[] = [];
+        const indices: number[] = [];
+
+        for (let i = 0; i <= tubularSegments; i++) {
+            const t = i / tubularSegments;
+            const P = curve.getPointAt(t);
+            const N = frames.normals[i];
+            const B = frames.binormals[i];
+            const currentDist = t * totalLength;
+            const currentRadius = getRadiusAtDistance(currentDist);
+
+            for (let j = 0; j <= radialSegments; j++) {
+                const v = j / radialSegments * Math.PI * 2;
+                const sin = Math.sin(v);
+                const cos = Math.cos(v);
+
+                const normal = new THREE.Vector3(
+                    cos * N.x + sin * B.x,
+                    cos * N.y + sin * B.y,
+                    cos * N.z + sin * B.z
+                ).normalize();
+
+                vertices.push(
+                    P.x + currentRadius * normal.x,
+                    P.y + currentRadius * normal.y,
+                    P.z + currentRadius * normal.z
+                );
+                normals.push(normal.x, normal.y, normal.z);
+                uvs.push(i / tubularSegments, j / radialSegments);
+            }
+        }
+
+        for (let i = 0; i < tubularSegments; i++) {
+            for (let j = 0; j < radialSegments; j++) {
+                const a = i * (radialSegments + 1) + j;
+                const b = (i + 1) * (radialSegments + 1) + j;
+                const c = (i + 1) * (radialSegments + 1) + (j + 1);
+                const d = i * (radialSegments + 1) + (j + 1);
+                indices.push(a, b, d, b, c, d);
+            }
+        }
+
+        const baseGeometry = new THREE.BufferGeometry();
+        baseGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        baseGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+        baseGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        baseGeometry.setIndex(indices);
+
+        const material = new THREE.ShaderMaterial({
+            vertexShader: lightsaberVertexShader,
+            fragmentShader: lightsaberFragmentShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
+                uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
+                uCoreWidth: { value: settings.coreWidth ?? 0.4 },
+                uGlowIntensity: { value: settings.glowIntensity ?? 1.5 },
+                uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
+                uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
+                uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
+                uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
+                uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+                uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+                uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+                uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+                uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+                uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
+                uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+                uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+                uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+                uMCColorMode: { value: mcSettings.colorMode ?? 0 },
+                uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+                uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+                uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+                uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+                uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+            },
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1
+        });
+
+        const instancedMesh = new THREE.InstancedMesh(baseGeometry, material, symmetryMatrices.length);
+        for (let i = 0; i < symmetryMatrices.length; i++) {
+            instancedMesh.setMatrixAt(i, symmetryMatrices[i]);
+        }
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.renderOrder = 53;
+
+        lightsaberMaterials.push(material);
+        group.add(instancedMesh);
+        (group as any).__lightsaberMaterials = lightsaberMaterials;
+        return group;
+    }
+
+    // ========== 回退路径：合并几何体方案 ==========
+    const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
+
     // ==================== 几何体合并优化 ====================
-    // 合并所有对称路径的顶点数据到单个BufferGeometry，减少Draw Call
     const mergedPositions: number[] = [];
     const mergedNormals: number[] = [];
     const mergedUvs: number[] = [];
@@ -1653,6 +1790,79 @@ export function createLightsaberStrokeMesh(
     return group;
 }
 
+// ==================== GPU实例化对称矩阵计算 ====================
+
+/**
+ * 计算对称变换矩阵，用于InstancedMesh
+ * 仅支持非分形情况（fractalLevels = 1）
+ */
+export function computeSymmetryMatrices(
+    symmetryMode: SymmetryMode,
+    divisions: number,
+    params?: SymmetryParams
+): THREE.Matrix4[] {
+    const matrices: THREE.Matrix4[] = [];
+
+    if (symmetryMode === 'none') {
+        matrices.push(new THREE.Matrix4().identity());
+        return matrices;
+    }
+
+    const angleStep = (Math.PI * 2) / divisions;
+
+    if (symmetryMode === 'radial') {
+        // 径向对称：旋转复制
+        const phaseOffset = ((params?.radialPhaseOffset ?? 0) / 180) * Math.PI;
+        const scaleVariation = params?.radialScaleVariation ?? 0;
+
+        for (let i = 0; i < divisions; i++) {
+            const angle = angleStep * i + phaseOffset;
+            const scale = 1.0 + ((i % 2 === 0) ? scaleVariation : -scaleVariation);
+            const matrix = new THREE.Matrix4()
+                .makeRotationZ(angle)
+                .scale(new THREE.Vector3(scale, scale, 1));
+            matrices.push(matrix);
+        }
+    } else if (symmetryMode === 'kaleidoscope') {
+        // 万花筒：旋转+镜像
+        const mirrorAngle = ((params?.kaleidoscopeMirrorAngle ?? 0) / 180) * Math.PI;
+
+        for (let i = 0; i < divisions; i++) {
+            const angle = angleStep * i;
+            // 正常旋转
+            matrices.push(new THREE.Matrix4().makeRotationZ(angle));
+            // 镜像旋转（沿镜像轴翻转）
+            const mirrorMatrix = new THREE.Matrix4()
+                .makeRotationZ(mirrorAngle * 2)
+                .multiply(new THREE.Matrix4().makeScale(-1, 1, 1))
+                .premultiply(new THREE.Matrix4().makeRotationZ(angle));
+            matrices.push(mirrorMatrix);
+        }
+    } else if (symmetryMode === 'starburst') {
+        // 星芒模式：奇偶缩放
+        const innerScale = params?.starburstInnerScale ?? 0.5;
+        const outerScale = params?.starburstOuterScale ?? 1.3;
+        const phaseOffset = ((params?.starburstPhaseOffset ?? 0) / 180) * Math.PI;
+
+        for (let i = 0; i < divisions; i++) {
+            const angle = angleStep * i + phaseOffset;
+            const scale = (i % 2 === 0) ? outerScale : innerScale;
+            matrices.push(new THREE.Matrix4()
+                .makeRotationZ(angle)
+                .scale(new THREE.Vector3(scale, scale, 1)));
+        }
+    } else if (symmetryMode === 'prism') {
+        // 棱镜模式：3D旋转（需要特殊处理，暂回退）
+        // InstancedMesh不太适合棱镜的复杂3D变换，返回空以触发回退
+        return [];
+    } else if (symmetryMode === 'sphere') {
+        // 球面模式：同样需要复杂3D变换，返回空以触发回退
+        return [];
+    }
+
+    return matrices;
+}
+
 // 对称路径生成辅助函数
 function applySymmetryToPath(
     basePath: { x: number; y: number; pressure: number }[],
@@ -1888,7 +2098,6 @@ export function createLineStrokeMesh(
 
     const smoothedPoints = points;
 
-    // 为每个对称副本创建线条
     // 生成路径点
     const basePath = smoothedPoints.map(p => ({
         x: p.x - 0.5,
@@ -1896,12 +2105,84 @@ export function createLineStrokeMesh(
         pressure: clamp01(p.pressure ?? 0.5)
     }));
 
-    // 使用统一的对称变换函数
+    // ==================== GPU实例化优化决策 ====================
+    // 检查是否可以使用InstancedMesh（非分形、非3D对称模式）
+    const fractalLevels = symmetryParams?.fractalLevels ?? symmetryParams?.starburstFractalLevels ?? 1;
+    const symmetryMatrices = computeSymmetryMatrices(symmetryMode, symmetryDivisions, symmetryParams);
+    const canUseInstancing = fractalLevels === 1 && symmetryMatrices.length > 0;
+
+    if (canUseInstancing && pressureMode === 'none') {
+        // ========== GPU实例化路径（最优）==========
+        // 只对基础路径生成几何体，不应用对称变换
+        const curvePoints = basePath.map(p => new THREE.Vector3(p.x, p.y, 0));
+        const curve = new THREE.CatmullRomCurve3(curvePoints);
+        const tubularSegments = Math.max(16, basePath.length * 3);
+        const radialSegments = 8;
+        const baseGeometry = new THREE.TubeGeometry(curve, tubularSegments, baseLineWidth, radialSegments, false);
+
+        // 创建InstancedMesh
+        const material = new THREE.ShaderMaterial({
+            vertexShader: silkRingVertexShader,
+            fragmentShader: silkRingFragmentShader,
+            uniforms: {
+                uTime: { value: 0 },
+                uFlowSpeed: { value: settings.flowSpeed ?? 1.0 },
+                uWaveType: { value: settings.waveType === 'sine' ? 1.0 : settings.waveType === 'triangle' ? 2.0 : 0.0 },
+                uWobbleFrequency: { value: settings.wobbleFrequency ?? 10.0 },
+                uWobbleAmplitude: { value: settings.wobbleAmplitude ?? 0.5 },
+                uStrandDensity: { value: settings.strandDensity ?? 30.0 },
+                uSparkleEnabled: { value: settings.sparkleEnabled ? 1.0 : 0.0 },
+                uSparkleThreshold: { value: settings.sparkleThreshold ?? 0.95 },
+                uFresnelPower: { value: settings.fresnelPower ?? 2.0 },
+                uOpacity: { value: settings.opacity ?? 0.85 },
+                uEmissive: { value: settings.emissive ?? 0.9 },
+                uBloomBoost: { value: settings.bloomBoost ?? 0.12 },
+                uColorMode: { value: mcSettings.colorMode ?? 0 },
+                uBaseColor: { value: new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+                uColor1: { value: mcSettings.color1 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+                uColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+                uColor3: { value: mcSettings.color3 ?? new THREE.Vector3(colorObj.r, colorObj.g, colorObj.b) },
+                uColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+                uProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 },
+                uBaseHue: { value: mcSettings.baseHue ?? 200 },
+                uBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+                uSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+                uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+                uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+                uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+                uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+                uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+                uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 }
+            },
+            transparent: true,
+            depthTest: false,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1
+        });
+
+        const instancedMesh = new THREE.InstancedMesh(baseGeometry, material, symmetryMatrices.length);
+        for (let i = 0; i < symmetryMatrices.length; i++) {
+            instancedMesh.setMatrixAt(i, symmetryMatrices[i]);
+        }
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        instancedMesh.renderOrder = 51;
+
+        silkMaterials.push(material);
+        group.add(instancedMesh);
+        group.userData.silkMaterials = silkMaterials;
+        return group;
+    }
+
+    // ========== 回退路径：合并几何体方案 ==========
+    // 用于分形模式、压感模式、3D对称模式（prism/sphere）
     const symmetricPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
     const allPaths = symmetricPaths.map(path => path.map(p => ({ x: p.x, y: p.y, z: p.z ?? 0, pressure: p.pressure })));
 
     // ==================== 几何体合并优化 ====================
-    // 合并所有对称路径的顶点数据到单个BufferGeometry，减少Draw Call
     const mergedPositions: number[] = [];
     const mergedNormals: number[] = [];
     const mergedUvs: number[] = [];
