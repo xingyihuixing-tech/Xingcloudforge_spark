@@ -5,6 +5,7 @@
  * update: 一旦我被更新，务必同步更新本文件头部注释与所属目录的架构 md。
  * 2026-01-16: 粒子环混色模式改为基准色+色相偏移逻辑（proceduralIntensity控制色相跨度，blendStrength控制边界清晰度）
  * 2026-01-19: 自定义法阵丝环/光剑 iPad 自转闪烁修复：保留笔刷内部细粒度 renderOrder，并按 layerIndex 叠加大偏移以稳定透明排序
+ * 2026-02-08: 修复自定义法阵(create*StrokeMesh)调用缺失symmetryParams导致分形失效的问题
  */
 
 import React, { useEffect, useRef, useState } from 'react';
@@ -13095,9 +13096,9 @@ void main() {
               proceduralIntensity: gc?.proceduralIntensity ?? 1.0
             };
             if (stroke.brushType === 'particle') {
-              strokeMesh = createParticleStrokeMesh(stroke.points, stroke.color, stroke.particleRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
+              strokeMesh = createParticleStrokeMesh(stroke.points, stroke.color, stroke.particleRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings, layer.symmetryParams);
             } else if (stroke.brushType === 'lightsaber') {
-              strokeMesh = createLightsaberStrokeMesh(stroke.points, stroke.color, stroke.lightsaberSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
+              strokeMesh = createLightsaberStrokeMesh(stroke.points, stroke.color, stroke.lightsaberSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings, layer.symmetryParams);
             } else if (stroke.brushType === 'web' || (stroke.webSettings && Object.keys(stroke.webSettings).length > 0)) {
               strokeMesh = createWebStrokeMesh(
                 stroke.points,
@@ -13113,7 +13114,7 @@ void main() {
                 stroke.startHue // 使用保存的起始色相
               );
             } else {
-              strokeMesh = createLineStrokeMesh(stroke.points, stroke.color, stroke.silkRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings);
+              strokeMesh = createLineStrokeMesh(stroke.points, stroke.color, stroke.silkRingSettings || {}, layer.symmetryMode, layer.symmetryDivisions, mcSettings, layer.symmetryParams);
             }
             strokeMesh.scale.setScalar(settings.radius);
             layerGroup.add(strokeMesh);  // 添加到图层组而不是根组

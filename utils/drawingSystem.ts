@@ -7,6 +7,7 @@
  * 2026-01-16: 统一粒子画笔与粒子环效果：移除0.05大小系数、随机范围改为1~3、应用brightness参数、光晕采用pow模型、uGlowIntensity默认3
  * 2026-01-27: 修复网格画笔在星芒/漩涡对称模式下的问题：将独立的起点/终点变换改为使用applySymmetryToPath进行路径级别变换，确保线段两端在同一对称轨道上
  * 2026-02-07: 移除流线功能(Streamline)，恢复直接跟随模式
+ * 2026-02-08: 修复丝环/光剑分形参数(symmetryParams)缺失问题；修复丝环shader兼容非实例化渲染(回退路径)；修复光剑坐标偏移
  */
 
 
@@ -838,7 +839,11 @@ void main() {
     pos += normal * wave;
   }
   
-  vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(pos, 1.0);
+  #ifdef USE_INSTANCING
+    vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(pos, 1.0);
+  #else
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  #endif
   vViewPosition = -mvPosition.xyz;
   gl_Position = projectionMatrix * mvPosition;
 }
@@ -985,7 +990,11 @@ void main() {
     pos *= pulse;
   }
   
-  vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  #ifdef USE_INSTANCING
+    vec4 mvPosition = modelViewMatrix * instanceMatrix * vec4(pos, 1.0);
+  #else
+    vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+  #endif
   vViewPosition = -mvPosition.xyz;
   gl_Position = projectionMatrix * mvPosition;
 }
@@ -1585,7 +1594,7 @@ export function createLightsaberStrokeMesh(
     geometry.setIndex(indices);
 
     const material = new THREE.ShaderMaterial({
-        vertexShader: lightsaberBillboardVertexShader,
+        vertexShader: lightsaberVertexShader,
         fragmentShader: lightsaberBillboardFragmentShader,
         uniforms: {
             uTime: { value: 0 },
@@ -1960,6 +1969,7 @@ export function createLineStrokeMesh(
 
         // 创建InstancedMesh
         const material = new THREE.ShaderMaterial({
+            defines: { USE_INSTANCING: '' },
             vertexShader: silkRingVertexShader,
             fragmentShader: silkRingFragmentShader,
             uniforms: {
@@ -2545,7 +2555,9 @@ export function renderStrokesToGroup(
                 stroke.color,
                 stroke.particleRingSettings || {},
                 layer.symmetryMode,
-                layer.symmetryDivisions
+                layer.symmetryDivisions,
+                undefined,
+                layer.symmetryParams
             );
         } else if (stroke.brushType === 'lightsaber') {
             strokeMesh = createLightsaberStrokeMesh(
@@ -2553,7 +2565,9 @@ export function renderStrokesToGroup(
                 stroke.color,
                 stroke.lightsaberSettings || {},
                 layer.symmetryMode,
-                layer.symmetryDivisions
+                layer.symmetryDivisions,
+                undefined,
+                layer.symmetryParams
             );
         } else if (stroke.brushType === 'web' || (stroke.webSettings && Object.keys(stroke.webSettings).length > 0)) {
             // console.log('[DrawingSystem] Rendering Web Stroke:', stroke.id);
@@ -2578,7 +2592,9 @@ export function renderStrokesToGroup(
                 stroke.color,
                 stroke.silkRingSettings || {},
                 layer.symmetryMode,
-                layer.symmetryDivisions
+                layer.symmetryDivisions,
+                undefined,
+                layer.symmetryParams
             );
         }
 

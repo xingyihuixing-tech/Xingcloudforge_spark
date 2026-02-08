@@ -12,7 +12,7 @@
 
 - drawingSystem.ts
   - 地位: 自定义法阵绘图系统工具集
-  - 功能: 创建绘图用 Three.js 场景；将笔画渲染为粒子/丝环/光剑/网格 mesh；支持对称模式（径向/万花筒/星芒/球面），均支持通用分形参数(fractalLevels/fractalScale/fractalAngle)；粒子笔按弧长密度生成并支持压感模式（无/书法/亮度，密度范围100-800）；丝环画笔支持压感模式（无/书法/亮度，书法/亮度为分段生效）；光剑画笔的法阵级染色/饱和度参数使用 uMC* uniforms 命名；网格画笔支持增量确定性重建、历史点连接与彩虹色模式，使用路径级别对称变换（applySymmetryToPath）确保线段两端在同一对称轨道
+  - 功能: 创建绘图用 Three.js 场景；将笔画渲染为粒子/丝环/光剑/网格 mesh；支持对称模式（径向/万花筒/星芒/球面），均支持通用分形参数(fractalLevels/fractalScale/fractalAngle)，并修复了光剑/粒子的分形参数传递；丝环画笔通过Shader宏兼容InstancedMesh与普通Mesh渲染；粒子笔按弧长密度生成并支持压感模式（无/书法/亮度，密度范围100-800）；丝环画笔支持压感模式（无/书法/亮度，书法/亮度为分段生效）；光剑画笔的法阵级染色/饱和度参数使用 uMC* uniforms 命名，并修正了坐标偏移问题；网格画笔支持增量确定性重建、历史点连接与彩虹色模式，使用路径级别对称变换（applySymmetryToPath）确保线段两端在同一对称轨道
 
 
 - normalizePlanetSettings.ts
