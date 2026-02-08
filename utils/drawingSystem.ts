@@ -1346,14 +1346,20 @@ export function createLightsaberStrokeMesh(
     const basePath = smoothedPoints.map(p => ({ x: p.x - 0.5, y: 0.5 - p.y, pressure: p.pressure }));
     const allPaths = applySymmetryToPath(basePath, symmetryMode, symmetryDivisions, symmetryParams);
 
-    const baseRenderOrder = 53;
-
     // 端点渐变参数（从settings读取）
     const taperLength = settings.taperLength ?? 0.15;
 
+    // ==================== 几何体合并优化 ====================
+    // 合并所有对称路径的顶点数据到单个BufferGeometry，减少Draw Call
+    const mergedPositions: number[] = [];
+    const mergedNormals: number[] = [];
+    const mergedUvs: number[] = [];
+    const mergedIndices: number[] = [];
+    let indexOffset = 0;
+
+    // 遍历所有对称路径收集几何体数据
     for (let pathIndex = 0; pathIndex < allPaths.length; pathIndex++) {
         const path = allPaths[pathIndex];
-        const pathRenderOrder = baseRenderOrder + pathIndex;
         if (path.length < 2) continue;
 
         // 计算路径总长度
@@ -1441,57 +1447,21 @@ export function createLightsaberStrokeMesh(
                 }
             }
 
-            const tubeGeometry = new THREE.BufferGeometry();
-            tubeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-            tubeGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-            tubeGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-            tubeGeometry.setIndex(indices);
+            // 将顶点数据合并到全局数组（索引需要偏移）
+            for (let vi = 0; vi < vertices.length; vi += 3) {
+                mergedPositions.push(vertices[vi], vertices[vi + 1], vertices[vi + 2]);
+            }
+            for (let ni = 0; ni < normals.length; ni += 3) {
+                mergedNormals.push(normals[ni], normals[ni + 1], normals[ni + 2]);
+            }
+            for (let ui = 0; ui < uvs.length; ui += 2) {
+                mergedUvs.push(uvs[ui], uvs[ui + 1]);
+            }
+            for (let ii = 0; ii < indices.length; ii++) {
+                mergedIndices.push(indices[ii] + indexOffset);
+            }
 
-            const material = new THREE.ShaderMaterial({
-                vertexShader: lightsaberVertexShader,
-                fragmentShader: lightsaberFragmentShader,
-                uniforms: {
-                    uTime: { value: 0 },
-                    uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
-                    uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
-                    uCoreWidth: { value: settings.coreWidth ?? 0.4 },
-                    uGlowIntensity: { value: settings.glowIntensity ?? 1.5 },
-                    uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
-                    uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
-                    uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
-                    uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
-                    // 法阵级别参数
-                    uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
-                    uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
-                    uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-                    uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-                    uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-                    uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                    // 染色功能参数
-                    uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
-                    uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                    uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                    uMCColorMode: { value: mcSettings.colorMode ?? 0 },
-                    uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                    uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                    uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
-                },
-                transparent: true,
-                depthTest: false,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending,
-                side: THREE.DoubleSide,
-                polygonOffset: true,
-                polygonOffsetFactor: 1,
-                polygonOffsetUnits: 1
-            });
-
-            const mesh = new THREE.Mesh(tubeGeometry, material);
-            mesh.renderOrder = pathRenderOrder;
-            lightsaberMaterials.push(material);
-            group.add(mesh);
+            indexOffset += vertices.length / 3;  // 顶点数 = vertices.length / 3
             continue;
         }
 
@@ -1599,65 +1569,83 @@ export function createLightsaberStrokeMesh(
                 indices.push(a, b, d, b, c, d);
             }
         }
+        // 将顶点数据合并到全局数组
+        for (let vi = 0; vi < vertices.length; vi += 3) {
+            mergedPositions.push(vertices[vi], vertices[vi + 1], vertices[vi + 2]);
+        }
+        for (let ni = 0; ni < normals.length; ni += 3) {
+            mergedNormals.push(normals[ni], normals[ni + 1], normals[ni + 2]);
+        }
+        for (let ui = 0; ui < uvs.length; ui += 2) {
+            mergedUvs.push(uvs[ui], uvs[ui + 1]);
+        }
+        for (let ii = 0; ii < indices.length; ii++) {
+            mergedIndices.push(indices[ii] + indexOffset);
+        }
 
-        const tubeGeometry = new THREE.BufferGeometry();
-        tubeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-        tubeGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-        tubeGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
-        tubeGeometry.setIndex(indices);
-
-        // 压感亮度模式：计算平均压力用于整体亮度调整
-        let avgPressure = 0;
-        for (const p of path) avgPressure += p.pressure;
-        avgPressure /= path.length;
-        const intensityScale = pressureMode === 'brightness' ? (0.6 + 0.8 * pressureCurve(avgPressure)) : 1.0;
-
-        const material = new THREE.ShaderMaterial({
-            vertexShader: lightsaberVertexShader,
-            fragmentShader: lightsaberFragmentShader,
-            uniforms: {
-                uTime: { value: 0 },
-                uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
-                uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
-                uCoreWidth: { value: settings.coreWidth ?? 0.4 },
-                uGlowIntensity: { value: (settings.glowIntensity ?? 1.5) * intensityScale },
-                uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
-                uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
-                uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
-                uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
-                // 法阵级别参数
-                uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
-                uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
-                uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
-                uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
-                uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
-                uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
-                // 染色功能参数
-                uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
-                uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
-                uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
-                uMCColorMode: { value: mcSettings.colorMode ?? 0 },
-                uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
-                uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
-                uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
-            },
-            transparent: true,
-            depthTest: false,
-            depthWrite: false,
-            blending: THREE.AdditiveBlending,
-            side: THREE.DoubleSide,
-            polygonOffset: true,
-            polygonOffsetFactor: 1,
-            polygonOffsetUnits: 1
-        });
-
-        const mesh = new THREE.Mesh(tubeGeometry, material);
-        mesh.renderOrder = pathRenderOrder;
-        lightsaberMaterials.push(material);
-        group.add(mesh);
+        indexOffset += vertices.length / 3;
     }
+
+    // 如果没有有效顶点，返回空组
+    if (mergedPositions.length === 0) {
+        (group as any).__lightsaberMaterials = lightsaberMaterials;
+        return group;
+    }
+
+    // 创建合并后的单个几何体
+    const mergedGeometry = new THREE.BufferGeometry();
+    mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(mergedPositions, 3));
+    mergedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(mergedNormals, 3));
+    mergedGeometry.setAttribute('uv', new THREE.Float32BufferAttribute(mergedUvs, 2));
+    mergedGeometry.setIndex(mergedIndices);
+
+    // 创建单个材质
+    const material = new THREE.ShaderMaterial({
+        vertexShader: lightsaberVertexShader,
+        fragmentShader: lightsaberFragmentShader,
+        uniforms: {
+            uTime: { value: 0 },
+            uCoreColor: { value: new THREE.Vector3(coreColorObj.r, coreColorObj.g, coreColorObj.b) },
+            uGlowColor: { value: new THREE.Vector3(glowColorObj.r, glowColorObj.g, glowColorObj.b) },
+            uCoreWidth: { value: settings.coreWidth ?? 0.4 },
+            uGlowIntensity: { value: settings.glowIntensity ?? 1.5 },
+            uGlowFalloff: { value: settings.glowFalloff ?? 2.0 },
+            uPulseEnabled: { value: settings.pulseEnabled ? 1.0 : 0.0 },
+            uPulseSpeed: { value: settings.pulseSpeed ?? 1.0 },
+            uPulseIntensity: { value: settings.pulseIntensity ?? 0.2 },
+            // 法阵级别参数
+            uMCOpacity: { value: mcSettings.opacity ?? 1.0 },
+            uMCHueShift: { value: (mcSettings.hueShift ?? 0) / 360.0 },
+            uMCBrightness: { value: mcSettings.brightness ?? 1.0 },
+            uMCPulseEnabled: { value: mcSettings.pulseEnabled ? 1.0 : 0.0 },
+            uMCPulseSpeed: { value: mcSettings.pulseSpeed ?? 1.0 },
+            uMCPulseIntensity: { value: mcSettings.pulseIntensity ?? 0.3 },
+            // 染色功能参数
+            uMCBaseHue: { value: mcSettings.baseHue ?? 200 },
+            uMCBaseSaturation: { value: mcSettings.baseSaturation ?? 1.0 },
+            uMCSaturationBoost: { value: mcSettings.saturationBoost ?? 1.0 },
+            uMCColorMode: { value: mcSettings.colorMode ?? 0 },
+            uMCColor1: { value: mcSettings.color1 ?? new THREE.Vector3(1, 1, 1) },
+            uMCColor2: { value: mcSettings.color2 ?? new THREE.Vector3(1, 1, 1) },
+            uMCColor3: { value: mcSettings.color3 ?? new THREE.Vector3(1, 1, 1) },
+            uMCColorMidPos: { value: mcSettings.colorMidPos ?? 0.5 },
+            uMCProceduralIntensity: { value: mcSettings.proceduralIntensity ?? 1.0 }
+        },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        side: THREE.DoubleSide,
+        polygonOffset: true,
+        polygonOffsetFactor: 1,
+        polygonOffsetUnits: 1
+    });
+
+    // 创建单个Mesh（替代之前的多个Mesh）
+    const mesh = new THREE.Mesh(mergedGeometry, material);
+    mesh.renderOrder = 53;
+    lightsaberMaterials.push(material);
+    group.add(mesh);
 
     // 存储材质引用用于动画更新
     (group as any).__lightsaberMaterials = lightsaberMaterials;
