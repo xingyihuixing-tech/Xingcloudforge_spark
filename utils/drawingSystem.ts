@@ -1509,7 +1509,6 @@ export function createLightsaberStrokeMesh(
     const sides: number[] = [];
     const progresses: number[] = [];
     const tapers: number[] = [];
-    const uvs: number[] = [];
     const indices: number[] = [];
     let vertexOffset = 0;
 
@@ -1569,13 +1568,11 @@ export function createLightsaberStrokeMesh(
             sides.push(-1);
             progresses.push(progress);
             tapers.push(taper);
-            uvs.push(progress, 0);
 
             positions.push(pt.x - nx * width, pt.y - ny * width, pt.z ?? 0);
             sides.push(1);
             progresses.push(progress);
             tapers.push(taper);
-            uvs.push(progress, 1);
         }
 
         const pathVertexStart = vertexOffset;
@@ -1594,11 +1591,10 @@ export function createLightsaberStrokeMesh(
     geometry.setAttribute('aSide', new THREE.Float32BufferAttribute(sides, 1));
     geometry.setAttribute('aProgress', new THREE.Float32BufferAttribute(progresses, 1));
     geometry.setAttribute('aTaper', new THREE.Float32BufferAttribute(tapers, 1));
-    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
 
     const material = new THREE.ShaderMaterial({
-        vertexShader: lightsaberVertexShader,
+        vertexShader: lightsaberBillboardVertexShader,
         fragmentShader: lightsaberBillboardFragmentShader,
         uniforms: {
             uTime: { value: 0 },

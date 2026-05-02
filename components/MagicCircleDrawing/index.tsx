@@ -358,6 +358,15 @@ export const DrawingCanvasOverlay: React.FC<DrawingCanvasOverlayProps> = ({
                                 }
                             }
                         }
+                        // 更新光剑笔画的uTime (修复光剑无法显示的问题)
+                        if (child instanceof THREE.Group && (child as any).__lightsaberMaterials) {
+                            const materials = (child as any).__lightsaberMaterials as THREE.ShaderMaterial[];
+                            for (const mat of materials) {
+                                if (mat.uniforms && mat.uniforms.uTime) {
+                                    mat.uniforms.uTime.value = elapsed;
+                                }
+                            }
+                        }
                     });
                 }
             }
